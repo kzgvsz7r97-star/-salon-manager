@@ -3,73 +3,114 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111111">
 <title>Salon Manager</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
-:root{--bg:#f6f6f6;--card:#fff;--text:#111;--muted:#777;--line:#e8e8e8}
+:root{--bg:#f6f6f6;--card:#fff;--text:#111;--muted:#777;--line:#e8e8e8;--blue:#0a84ff;--danger:#d33}
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;background:var(--bg);color:var(--text)}
-.app{max-width:560px;margin:auto;min-height:100dvh;padding:18px 14px 96px}
+.app{max-width:560px;margin:auto;min-height:100dvh;padding:18px 14px 104px}
 .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
-.brand{font-weight:800;font-size:22px}.date{font-size:12px;color:var(--muted)}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.card{background:#fff;border-radius:18px;padding:16px}
-.wide{grid-column:1/-1}
-.kpi .l{font-size:12px;color:var(--muted)}.kpi .v{font-weight:800;font-size:25px;margin-top:6px}
+.brand{font-weight:850;font-size:22px}.date{font-size:12px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.card{background:#fff;border-radius:18px;padding:16px}.wide{grid-column:1/-1}
+.kpi .l{font-size:12px;color:var(--muted)}.kpi .v{font-weight:850;font-size:25px;margin-top:6px}
 h2{font-size:18px;margin:22px 4px 10px}
-.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}.row.auto>*{flex:auto}
 .list{display:flex;flex-direction:column;gap:8px}
-.item{background:#fff;border-radius:14px;padding:13px 14px}
-.item .t{font-weight:750}.item .s{font-size:12px;color:var(--muted);margin-top:4px}
+.item{background:#fff;border-radius:14px;padding:13px 14px}.item .t{font-weight:780}.item .s{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.55}
 input,select,textarea{width:100%;padding:12px;border:1px solid #ddd;border-radius:12px;background:#fff;font-size:16px;margin:5px 0 10px}
-textarea{min-height:82px}
-button{border:0;background:#111;color:#fff;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:700}
-.ghost{background:#eee;color:#111}.danger{background:#fff;color:#c33;border:1px solid #ecc}
+textarea{min-height:82px;resize:vertical}
+button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:760;text-align:center}
+.ghost{background:#eee;color:#111}.soft{background:#fff;color:#111;border:1px solid #ddd}.blue{background:var(--blue)}.danger{background:#fff;color:var(--danger);border:1px solid #ecc}
 .progress{height:9px;background:#eee;border-radius:99px;overflow:hidden;margin-top:12px}.progress i{display:block;height:100%;background:#111;width:0}
-.small{font-size:12px;color:#777}.pill{display:inline-block;background:#f0f0f0;border-radius:99px;padding:5px 8px;margin:2px;font-size:11px}
-.money{font-variant-numeric:tabular-nums}
+.small{font-size:12px;color:#777}.money{font-variant-numeric:tabular-nums}
 .section{display:none}.section.active{display:block}.empty{text-align:center;color:#999;font-size:13px;padding:26px 8px}
 .nav{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border-top:1px solid #e5e5e5;display:flex;padding:8px 8px calc(8px + env(safe-area-inset-bottom));z-index:10}
-.nav button{flex:1;background:transparent;color:#888;padding:6px 2px;font-size:11px}.nav button.active{color:#111}
-.ico{display:block;font-size:18px;margin-bottom:2px}
-.fab{position:fixed;right:18px;bottom:88px;width:52px;height:52px;border-radius:50%;font-size:24px}
+.nav button{flex:1;background:transparent;color:#888;padding:6px 2px;font-size:11px}.nav button.active{color:#111}.ico{display:block;font-size:18px;margin-bottom:2px}
+.fab{position:fixed;right:18px;bottom:92px;width:54px;height:54px;border-radius:50%;font-size:24px;z-index:9}
 .hidden{display:none!important}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:20;display:flex;align-items:flex-end}
-.sheet{width:100%;max-width:560px;margin:auto;max-height:88dvh;overflow:auto;background:#f8f8f8;border-radius:24px 24px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:20;display:flex;align-items:flex-end}
+.sheet{width:100%;max-width:560px;margin:auto;max-height:91dvh;overflow:auto;background:#f8f8f8;border-radius:24px 24px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
 .sheet h3{margin:0 0 14px}.actions{display:flex;gap:8px;margin-top:8px}.actions button{flex:1}
+.segment{display:flex;background:#ececec;border-radius:13px;padding:3px;gap:2px}.segment button{background:transparent;color:#777;padding:8px 10px;border-radius:10px}.segment button.active{background:#111;color:#fff}
+.monthbar{display:flex;align-items:center;justify-content:space-between;margin:4px 0 14px}.monthbar button{background:#fff;color:#111;border:1px solid #ddd;padding:8px 12px}.monthtitle{font-size:18px;font-weight:850;text-align:center}
+.calendar{background:#fff;border-radius:18px;padding:10px 8px 14px}.weekdays,.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}.weekdays div{font-size:11px;color:#777;text-align:center;padding:7px 0}.day{min-height:62px;border-radius:12px;padding:7px 4px;text-align:center;position:relative}.day.other{opacity:.24}.day.today{background:#111;color:#fff}.day.selected{outline:2px solid #111}.daynum{font-size:16px;font-weight:800}.daycount{font-size:11px;color:var(--blue);font-weight:750;margin-top:5px}.day.today .daycount{color:#fff}
+.future-card{display:flex;justify-content:space-between;gap:10px;align-items:center;background:#fff;border-radius:14px;padding:13px 14px}.future-card .m{font-weight:800}.future-card .stats{font-size:12px;color:#666;text-align:right;line-height:1.55}
+.source-shaire{border-left:4px solid #111}.source-nailie{border-left:4px solid #ff8bb3}.source-minimo{border-left:4px solid #7e75ff}.source-instagram{border-left:4px solid #f0a040}.source-other{border-left:4px solid #aaa}
+.import-box{background:#fff;border-radius:18px;padding:15px}.drop{display:block;border:1.5px dashed #bbb;border-radius:14px;padding:22px 12px;text-align:center;background:#fafafa}.drop input{display:none}
+.preview{width:100%;border-radius:12px;margin-top:10px;display:none}.status{font-size:12px;color:#666;margin-top:10px;line-height:1.6}.status strong{color:#111}
+.import-row{background:#fff;border-radius:14px;padding:12px;margin:8px 0;border:1px solid #eee}.import-row.warn{border-color:#f0b76a}
+.import-row .mini{font-size:11px;color:#777;margin-bottom:7px}.import-row input,.import-row select{margin:3px 0 7px;padding:9px;font-size:14px}
+.badge{display:inline-block;font-size:10px;padding:4px 7px;border-radius:99px;background:#eee;margin-left:5px}.badge.warn{background:#fff0da;color:#8a5400}
+.note{font-size:12px;color:#666;line-height:1.6}
 </style>
 </head>
 <body>
 <div class="app">
-  <div class="top"><div class="brand">Salon Manager</div><div class="date" id="today"></div></div>
+  <div class="top"><div class="brand">Salon Manager</div><div class="date" id="todayLabel"></div></div>
 
   <section id="home" class="section active">
+    <div class="monthbar">
+      <button onclick="changeHomeMonth(-1)">‹</button>
+      <div class="monthtitle" id="homeMonthTitle"></div>
+      <button onclick="changeHomeMonth(1)">›</button>
+    </div>
+
     <div class="grid">
-      <div class="card kpi"><div class="l">今月売上</div><div class="v money" id="kSales">¥0</div></div>
+      <div class="card kpi"><div class="l">売上</div><div class="v money" id="kSales">¥0</div></div>
       <div class="card kpi"><div class="l">見込み売上</div><div class="v money" id="kForecast">¥0</div></div>
-      <div class="card kpi"><div class="l">客数</div><div class="v" id="kGuests">0</div></div>
+      <div class="card kpi"><div class="l">新規</div><div class="v" id="kNew">0人</div></div>
+      <div class="card kpi"><div class="l">既存</div><div class="v" id="kRepeat">0人</div></div>
+      <div class="card kpi"><div class="l">予約人数</div><div class="v" id="kGuests">0人</div></div>
       <div class="card kpi"><div class="l">平均単価</div><div class="v money" id="kAvg">¥0</div></div>
       <div class="card wide">
-        <div class="row">
-          <div><b>月目標</b><div class="small">売上進捗</div></div>
-          <button class="ghost" onclick="editGoal()">目標変更</button>
-        </div>
+        <div class="row"><div><b>月目標</b><div class="small">売上＋見込みに対する進捗</div></div><button class="ghost" onclick="editGoal()">目標変更</button></div>
         <div class="progress"><i id="goalBar"></i></div>
         <div class="small" style="margin-top:8px" id="goalText"></div>
       </div>
     </div>
-    <h2>今日の予約</h2><div id="todayBookings" class="list"></div>
-    <h2>集客媒体</h2><div id="sourceSummary" class="card"></div>
+
+    <h2>月カレンダー</h2>
+    <div id="homeCalendar" class="calendar"></div>
+
+    <h2>選択日の予約</h2>
+    <div id="homeDayBookings" class="list"></div>
+
+    <h2>今後の予約状況</h2>
+    <div id="futureMonths" class="list"></div>
   </section>
 
   <section id="reservations" class="section">
-    <h2>予約</h2>
-    <div class="row">
-      <input id="bookingFilterDate" type="date" onchange="renderBookings()">
-      <select id="bookingFilterSource" onchange="renderBookings()">
-        <option value="">全媒体</option><option>Nailie</option><option>minimo</option><option>Instagram</option><option>LINE</option><option>SHAIRE</option><option>次回予約</option><option>その他</option>
-      </select>
+    <div class="row auto" style="margin-bottom:12px">
+      <div class="segment" style="flex:1">
+        <button id="viewListBtn" class="active" onclick="setReservationView('list')">一覧</button>
+        <button id="viewCalBtn" onclick="setReservationView('calendar')">カレンダー</button>
+      </div>
+      <button class="blue" onclick="openImport()">SHAiRE取込</button>
     </div>
-    <div id="bookingList" class="list"></div>
+
+    <div id="reservationListView">
+      <div class="row">
+        <input id="bookingFilterDate" type="date" onchange="renderBookings()">
+        <select id="bookingFilterSource" onchange="renderBookings()">
+          <option value="">全媒体</option>
+          <option>SHAiRE</option><option>Nailie</option><option>minimo</option><option>Instagram</option><option>その他</option>
+        </select>
+      </div>
+      <div id="bookingList" class="list"></div>
+    </div>
+
+    <div id="reservationCalendarView" class="hidden">
+      <div class="monthbar">
+        <button onclick="changeReservationMonth(-1)">‹</button>
+        <div class="monthtitle" id="reservationMonthTitle"></div>
+        <button onclick="changeReservationMonth(1)">›</button>
+      </div>
+      <div id="reservationCalendar" class="calendar"></div>
+      <h2>この日の予約</h2>
+      <div id="calendarDayBookings" class="list"></div>
+    </div>
   </section>
 
   <section id="customers" class="section">
@@ -106,71 +147,105 @@ button{border:0;background:#111;color:#fff;border-radius:12px;padding:12px 14px;
 <div id="modal" class="modal hidden" onclick="if(event.target===this)closeModal()"><div class="sheet" id="sheet"></div></div>
 
 <script>
-const KEY='salonManagerV1';
-const initial={goal:1000000,customers:[],bookings:[],sales:[],products:[
-{name:'リケラエマルジョン',price:0,stock:0},
-{name:'オルキデ ヘアミルク',price:0,stock:0},
-{name:'HITA オイル',price:0,stock:0}
+const KEY='salonManagerV2';
+const initial={goals:{},customers:[],bookings:[],sales:[],products:[
+{name:'リケラエマルジョン',price:0,stock:0},{name:'オルキデ ヘアミルク',price:0,stock:0},{name:'HITA オイル',price:0,stock:0}
 ],retail:[]};
-let db=JSON.parse(localStorage.getItem(KEY)||'null')||initial;
+
+const pad=n=>String(n).padStart(2,'0');
+const localISO=(d=new Date())=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const monthKey=d=>(d||'').slice(0,7);
+const todayISO=localISO();
+let db=JSON.parse(localStorage.getItem(KEY)||'null');
+if(!db){
+  const old=JSON.parse(localStorage.getItem('salonManagerV1')||'null');
+  db=old?{...initial,...old,goals:{[monthKey(todayISO)]:Number(old.goal||1000000)}}:structuredClone(initial);
+}
+if(!db.goals)db.goals={};if(!db.bookings)db.bookings=[];if(!db.customers)db.customers=[];if(!db.sales)db.sales=[];if(!db.retail)db.retail=[];if(!db.products)db.products=initial.products;
 
 const $=id=>document.getElementById(id);
 const yen=n=>'¥'+Number(n||0).toLocaleString('ja-JP');
-const todayISO=()=>new Date().toISOString().slice(0,10);
-const monthKey=d=>(d||'').slice(0,7);
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-$('today').textContent=new Intl.DateTimeFormat('ja-JP',{month:'long',day:'numeric',weekday:'short'}).format(new Date());
-const currentMonth=monthKey(todayISO());
+const uid=()=>crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);
+const normalizeName=s=>String(s||'').replace(/\s+/g,'').replace(/[・･]/g,'').toLowerCase();
+$('todayLabel').textContent=new Intl.DateTimeFormat('ja-JP',{month:'long',day:'numeric',weekday:'short'}).format(new Date());
+
+let homeMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
+let homeSelectedDate=todayISO;
+let reservationMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
+let reservationSelectedDate=todayISO;
+let reservationView='list';
+let importDraft=[],importImageFile=null,importImageDataURL='';
 
 function save(){localStorage.setItem(KEY,JSON.stringify(db));renderAll()}
 function go(id,btn){
-  document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));
-  $(id).classList.add('active');
-  document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));
-  btn.classList.add('active');
-  $('fab').classList.toggle('hidden',id==='sales');
-  renderAll();
+  document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));$(id).classList.add('active');
+  document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));btn.classList.add('active');
+  $('fab').classList.toggle('hidden',id==='sales');renderAll();
 }
 function empty(t){return '<div class="empty">'+t+'</div>'}
+function sourceClass(s){return s==='SHAiRE'?'source-shaire':s==='Nailie'?'source-nailie':s==='minimo'?'source-minimo':s==='Instagram'?'source-instagram':'source-other'}
 function bookingHTML(x){
-  return `<div class="item" onclick="editBooking('${x.id}')">
-    <div class="t">${esc(x.time)} ${esc(x.customer||'未登録')}</div>
-    <div class="s">${esc(x.menu)} ・ ${yen(x.price)} ・ ${esc(x.source)} ${x.newGuest?'・ 新規':'・ 再来'}</div>
-  </div>`;
+  const end=x.end?`〜${esc(x.end)}`:'';
+  return `<div class="item ${sourceClass(x.source)}" onclick="editBooking('${x.id}')"><div class="t">${esc(x.date)}　${esc(x.time)}${end}　${esc(x.customer||'未登録')}</div><div class="s">${esc(x.menu||'メニュー未入力')} ・ ${yen(x.price)} ・ ${esc(x.source||'その他')} ・ ${x.newGuest?'新規':'既存'}${x.paymentComplete?' ・ 決済完了':''}</div></div>`;
+}
+function monthLabel(d){return `${d.getFullYear()}年${d.getMonth()+1}月`}
+function monthString(d){return `${d.getFullYear()}-${pad(d.getMonth()+1)}`}
+function addMonths(d,n){return new Date(d.getFullYear(),d.getMonth()+n,1)}
+function getGoal(m){return Number(db.goals[m]||1000000)}
+function bookingsForMonth(m){return db.bookings.filter(x=>monthKey(x.date)===m&&x.status!=='cancelled')}
+function salesForMonth(m){return db.sales.filter(x=>monthKey(x.date)===m)}
+function retailForMonth(m){return db.retail.filter(x=>monthKey(x.date)===m)}
+function monthStats(m){
+  const b=bookingsForMonth(m);
+  const tech=salesForMonth(m).reduce((a,x)=>a+Number(x.amount||0),0),retail=retailForMonth(m).reduce((a,x)=>a+Number(x.amount||0),0),sales=tech+retail;
+  const upcoming=b.filter(x=>x.date>=todayISO).reduce((a,x)=>a+Number(x.price||0),0),forecast=sales+upcoming;
+  const newCount=b.filter(x=>x.newGuest).length,repeatCount=b.filter(x=>!x.newGuest).length,avg=b.length?Math.round(b.reduce((a,x)=>a+Number(x.price||0),0)/b.length):0;
+  return {sales,forecast,newCount,repeatCount,count:b.length,avg};
 }
 function renderHome(){
-  const tech=db.sales.filter(x=>monthKey(x.date)===currentMonth).reduce((a,b)=>a+Number(b.amount||0),0);
-  const retail=db.retail.filter(x=>monthKey(x.date)===currentMonth).reduce((a,b)=>a+Number(b.amount||0),0);
-  const actual=tech+retail;
-  const future=db.bookings.filter(x=>monthKey(x.date)===currentMonth&&x.date>=todayISO()).reduce((a,b)=>a+Number(b.price||0),0);
-  const guests=db.sales.filter(x=>monthKey(x.date)===currentMonth).length;
-  $('kSales').textContent=yen(actual);
-  $('kForecast').textContent=yen(actual+future);
-  $('kGuests').textContent=guests;
-  $('kAvg').textContent=yen(guests?Math.round(tech/guests):0);
-  $('goalBar').style.width=Math.min(100,actual/(db.goal||1)*100)+'%';
-  $('goalText').textContent=`${yen(actual)} / ${yen(db.goal)}`;
-  const tb=db.bookings.filter(x=>x.date===todayISO()).sort((a,b)=>a.time.localeCompare(b.time));
-  $('todayBookings').innerHTML=tb.length?tb.map(bookingHTML).join(''):empty('今日の予約はまだありません');
-  const c={};db.bookings.filter(x=>monthKey(x.date)===currentMonth).forEach(x=>c[x.source]=(c[x.source]||0)+1);
-  $('sourceSummary').innerHTML=Object.keys(c).length?Object.entries(c).map(([k,v])=>`<span class="pill">${esc(k)} ${v}件</span>`).join(''):'<span class="small">今月の予約データなし</span>';
+  const m=monthString(homeMonth),st=monthStats(m),goal=getGoal(m);
+  $('homeMonthTitle').textContent=monthLabel(homeMonth);$('kSales').textContent=yen(st.sales);$('kForecast').textContent=yen(st.forecast);
+  $('kNew').textContent=st.newCount+'人';$('kRepeat').textContent=st.repeatCount+'人';$('kGuests').textContent=st.count+'人';$('kAvg').textContent=yen(st.avg);
+  $('goalBar').style.width=Math.min(100,st.forecast/(goal||1)*100)+'%';$('goalText').textContent=`${yen(st.forecast)} / ${yen(goal)}`;
+  $('homeCalendar').innerHTML=calendarHTML(homeMonth,homeSelectedDate,'selectHomeDate');renderHomeDay();
+  let fut='';for(let i=0;i<6;i++){const d=addMonths(homeMonth,i),mm=monthString(d),s=monthStats(mm);fut+=`<div class="future-card" onclick="jumpHomeMonth('${mm}')"><div class="m">${d.getMonth()+1}月</div><div class="stats">見込 ${yen(s.forecast)}<br>新規 ${s.newCount}｜既存 ${s.repeatCount}｜予約 ${s.count}</div></div>`}
+  $('futureMonths').innerHTML=fut;
+}
+function renderHomeDay(){const a=db.bookings.filter(x=>x.date===homeSelectedDate&&x.status!=='cancelled').sort((x,y)=>x.time.localeCompare(y.time));$('homeDayBookings').innerHTML=a.length?a.map(bookingHTML).join(''):empty('この日の予約はありません')}
+function changeHomeMonth(n){homeMonth=addMonths(homeMonth,n);homeSelectedDate=monthString(homeMonth)+'-01';renderHome()}
+function jumpHomeMonth(m){const [y,mo]=m.split('-').map(Number);homeMonth=new Date(y,mo-1,1);homeSelectedDate=m+'-01';renderHome()}
+function selectHomeDate(d){homeSelectedDate=d;renderHome()}
+function editGoal(){const m=monthString(homeMonth),v=prompt(`${monthLabel(homeMonth)}の売上目標`,getGoal(m));if(v!==null&&!isNaN(+v)){db.goals[m]=+v;save()}}
+
+function calendarHTML(monthDate,selected,handler){
+  const y=monthDate.getFullYear(),mo=monthDate.getMonth(),first=new Date(y,mo,1),start=new Date(y,mo,1-first.getDay()),wd=['日','月','火','水','木','金','土'];
+  let html='<div class="weekdays">'+wd.map(x=>`<div>${x}</div>`).join('')+'</div><div class="calgrid">';
+  for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);const iso=localISO(d),same=d.getMonth()===mo,count=db.bookings.filter(x=>x.date===iso&&x.status!=='cancelled').length;
+    const cls=['day',same?'':'other',iso===todayISO?'today':'',iso===selected?'selected':''].filter(Boolean).join(' ');
+    html+=`<div class="${cls}" onclick="${handler}('${iso}')"><div class="daynum">${d.getDate()}</div>${count?`<div class="daycount">${count}人</div>`:''}</div>`}
+  return html+'</div>';
+}
+function setReservationView(v){
+  reservationView=v;$('viewListBtn').classList.toggle('active',v==='list');$('viewCalBtn').classList.toggle('active',v==='calendar');
+  $('reservationListView').classList.toggle('hidden',v!=='list');$('reservationCalendarView').classList.toggle('hidden',v!=='calendar');renderReservationCalendar();
 }
 function renderBookings(){
-  let a=[...db.bookings],d=$('bookingFilterDate').value,s=$('bookingFilterSource').value;
-  if(d)a=a.filter(x=>x.date===d);
-  if(s)a=a.filter(x=>x.source===s);
-  a.sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
-  $('bookingList').innerHTML=a.length?a.map(bookingHTML).join(''):empty('予約はまだありません');
+  let a=[...db.bookings],d=$('bookingFilterDate').value,s=$('bookingFilterSource').value;if(d)a=a.filter(x=>x.date===d);if(s)a=a.filter(x=>x.source===s);
+  a.sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));$('bookingList').innerHTML=a.length?a.map(bookingHTML).join(''):empty('予約はまだありません');
+}
+function changeReservationMonth(n){reservationMonth=addMonths(reservationMonth,n);reservationSelectedDate=monthString(reservationMonth)+'-01';renderReservationCalendar()}
+function selectReservationDate(d){reservationSelectedDate=d;renderReservationCalendar()}
+function renderReservationCalendar(){
+  $('reservationMonthTitle').textContent=monthLabel(reservationMonth);$('reservationCalendar').innerHTML=calendarHTML(reservationMonth,reservationSelectedDate,'selectReservationDate');
+  const a=db.bookings.filter(x=>x.date===reservationSelectedDate&&x.status!=='cancelled').sort((x,y)=>x.time.localeCompare(y.time));$('calendarDayBookings').innerHTML=a.length?a.map(bookingHTML).join(''):empty('この日の予約はありません');
 }
 function renderCustomers(){
-  const q=($('customerSearch').value||'').toLowerCase();
-  let a=db.customers.filter(x=>(x.name||'').toLowerCase().includes(q));
-  a.sort((x,y)=>(y.lastVisit||'').localeCompare(x.lastVisit||''));
+  const q=($('customerSearch').value||'').toLowerCase();let a=db.customers.filter(x=>(x.name||'').toLowerCase().includes(q));a.sort((x,y)=>(y.lastVisit||'').localeCompare(x.lastVisit||''));
   $('customerList').innerHTML=a.length?a.map(x=>`<div class="item" onclick="editCustomer('${x.id}')"><div class="t">${esc(x.name)}</div><div class="s">${esc(x.note||'メモなし')}${x.lastVisit?' ・ 最終来店 '+esc(x.lastVisit):''}</div></div>`).join(''):empty('顧客を追加するとここに表示されます');
 }
 function renderSales(){
-  const t=db.sales.filter(x=>monthKey(x.date)===currentMonth).reduce((a,b)=>a+Number(b.amount||0),0);
-  const r=db.retail.filter(x=>monthKey(x.date)===currentMonth).reduce((a,b)=>a+Number(b.amount||0),0);
+  const m=monthString(homeMonth),t=salesForMonth(m).reduce((a,b)=>a+Number(b.amount||0),0),r=retailForMonth(m).reduce((a,b)=>a+Number(b.amount||0),0);
   $('techSales').textContent=yen(t);$('retailSales').textContent=yen(r);$('totalSales').textContent=yen(t+r);
   const all=[...db.sales.map(x=>({...x,type:'技術'})),...db.retail.map(x=>({...x,type:'店販'}))].sort((a,b)=>b.date.localeCompare(a.date));
   $('salesList').innerHTML=all.length?all.map(x=>`<div class="item"><div class="t">${esc(x.date)} ${yen(x.amount)}</div><div class="s">${esc(x.type)} ・ ${esc(x.customer||x.product||'')}</div></div>`).join(''):empty('売上データはまだありません');
@@ -179,91 +254,124 @@ function renderRetail(){
   $('productList').innerHTML=db.products.length?db.products.map((x,i)=>`<div class="item" onclick="productForm(${i})"><div class="t">${esc(x.name)}</div><div class="s">販売価格 ${yen(x.price)} ・ 在庫 ${Number(x.stock||0)}</div></div>`).join(''):empty('商品を追加してください');
   $('retailHistory').innerHTML=db.retail.length?[...db.retail].sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<div class="item"><div class="t">${esc(x.product)} ${yen(x.amount)}</div><div class="s">${esc(x.date)} ・ ${esc(x.customer||'顧客未指定')}</div></div>`).join(''):empty('販売履歴はまだありません');
 }
-function renderAll(){renderHome();renderBookings();renderCustomers();renderSales();renderRetail()}
-function modal(h){$('sheet').innerHTML=h;$('modal').classList.remove('hidden')}
-function closeModal(){$('modal').classList.add('hidden')}
+function renderAll(){renderHome();renderBookings();renderReservationCalendar();renderCustomers();renderSales();renderRetail()}
+function modal(h){$('sheet').innerHTML=h;$('modal').classList.remove('hidden')}function closeModal(){$('modal').classList.add('hidden')}
 function currentTab(){return document.querySelector('.nav button.active').dataset.tab}
-function openAdd(){
-  const t=currentTab();
-  if(t==='reservations')return bookingForm();
-  if(t==='customers')return customerForm();
-  if(t==='retail')return retailChooser();
-  return quickChooser();
-}
-function quickChooser(){
-  modal('<h3>追加</h3><div class="list"><button onclick="bookingForm()">予約を追加</button><button onclick="customerForm()">顧客を追加</button><button onclick="saleForm()">売上を追加</button><button onclick="retailChooser()">店販を追加</button></div>');
-}
+function openAdd(){const t=currentTab();if(t==='reservations')return bookingForm();if(t==='customers')return customerForm();if(t==='retail')return retailChooser();return quickChooser()}
+function quickChooser(){modal('<h3>追加</h3><div class="list"><button onclick="bookingForm()">予約を追加</button><button onclick="customerForm()">顧客を追加</button><button onclick="saleForm()">売上を追加</button><button onclick="retailChooser()">店販を追加</button></div>')}
+
 function bookingForm(x={}){
-  modal(`<h3>${x.id?'予約を編集':'予約を追加'}</h3>
-  <label>日付</label><input id="fDate" type="date" value="${esc(x.date||todayISO())}">
-  <label>時間</label><input id="fTime" type="time" value="${esc(x.time||'11:00')}">
-  <label>顧客名</label><input id="fCustomer" value="${esc(x.customer||'')}">
-  <label>メニュー</label><input id="fMenu" value="${esc(x.menu||'カット+カラー')}">
-  <label>料金</label><input id="fPrice" type="number" value="${Number(x.price||0)}">
-  <label>予約媒体</label><select id="fSource">${['Nailie','minimo','Instagram','LINE','SHAIRE','次回予約','その他'].map(s=>`<option ${x.source===s?'selected':''}>${s}</option>`).join('')}</select>
-  <label><input id="fNew" type="checkbox" style="width:auto" ${x.newGuest?'checked':''}> 新規</label>
-  <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveBooking('${x.id||''}')">保存</button></div>
-  ${x.id?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteBooking('${x.id}')">削除</button>`:''}`);
+  modal(`<h3>${x.id?'予約を編集':'予約を追加'}</h3><label>日付</label><input id="fDate" type="date" value="${esc(x.date||todayISO)}">
+  <div class="row"><div><label>開始</label><input id="fTime" type="time" value="${esc(x.time||'11:00')}"></div><div><label>終了</label><input id="fEnd" type="time" value="${esc(x.end||'13:00')}"></div></div>
+  <label>予約名</label><input id="fCustomer" value="${esc(x.customer||'')}"><label>メニュー</label><input id="fMenu" value="${esc(x.menu||'カット+カラー')}"><label>料金</label><input id="fPrice" type="number" value="${Number(x.price||0)}">
+  <label>予約媒体</label><select id="fSource">${['SHAiRE','Nailie','minimo','Instagram','その他'].map(s=>`<option ${x.source===s?'selected':''}>${s}</option>`).join('')}</select>
+  <label>新規 / 既存</label><select id="fNew"><option value="new" ${x.newGuest?'selected':''}>新規</option><option value="repeat" ${x.newGuest===false?'selected':''}>既存</option></select>
+  <label><input id="fPaid" type="checkbox" style="width:auto" ${x.paymentComplete?'checked':''}> 決済完了</label>
+  <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveBooking('${x.id||''}')">保存</button></div>${x.id?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteBooking('${x.id}')">削除</button>`:''}`);
 }
 function saveBooking(id){
-  const o={id:id||crypto.randomUUID(),date:$('fDate').value,time:$('fTime').value,customer:$('fCustomer').value.trim(),menu:$('fMenu').value.trim(),price:+$('fPrice').value||0,source:$('fSource').value,newGuest:$('fNew').checked};
-  if(id)db.bookings=db.bookings.map(x=>x.id===id?o:x);else db.bookings.push(o);
-  if(o.customer&&!db.customers.some(c=>c.name===o.customer))db.customers.push({id:crypto.randomUUID(),name:o.customer,note:'',lastVisit:''});
-  save();closeModal();
+  const o={id:id||uid(),date:$('fDate').value,time:$('fTime').value,end:$('fEnd').value,customer:$('fCustomer').value.trim(),menu:$('fMenu').value.trim(),price:+$('fPrice').value||0,source:$('fSource').value,newGuest:$('fNew').value==='new',paymentComplete:$('fPaid').checked,status:'booked'};
+  if(id)db.bookings=db.bookings.map(x=>x.id===id?{...x,...o}:x);else db.bookings.push(o);upsertCustomerFromBooking(o);save();closeModal();
 }
 function editBooking(id){bookingForm(db.bookings.find(x=>x.id===id)||{})}
 function deleteBooking(id){db.bookings=db.bookings.filter(x=>x.id!==id);save();closeModal()}
+function upsertCustomerFromBooking(o){if(!o.customer)return;let c=db.customers.find(x=>normalizeName(x.name)===normalizeName(o.customer));if(!c)db.customers.push({id:uid(),name:o.customer,note:'',lastVisit:''})}
+function inferNewGuest(name,date){
+  const n=normalizeName(name);if(!n)return true;const priorBooking=db.bookings.some(x=>normalizeName(x.customer)===n&&x.date<date);const cust=db.customers.find(x=>normalizeName(x.name)===n);
+  return !(priorBooking||(cust&&cust.lastVisit&&cust.lastVisit<date));
+}
 function customerForm(x={}){
-  modal(`<h3>${x.id?'顧客を編集':'顧客を追加'}</h3>
-  <label>名前</label><input id="cName" value="${esc(x.name||'')}">
-  <label>最終来店</label><input id="cLast" type="date" value="${esc(x.lastVisit||'')}">
-  <label>メモ</label><textarea id="cNote">${esc(x.note||'')}</textarea>
-  <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveCustomer('${x.id||''}')">保存</button></div>
-  ${x.id?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteCustomer('${x.id}')">削除</button>`:''}`);
+  modal(`<h3>${x.id?'顧客を編集':'顧客を追加'}</h3><label>名前</label><input id="cName" value="${esc(x.name||'')}"><label>最終来店</label><input id="cLast" type="date" value="${esc(x.lastVisit||'')}"><label>メモ</label><textarea id="cNote">${esc(x.note||'')}</textarea><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveCustomer('${x.id||''}')">保存</button></div>${x.id?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteCustomer('${x.id}')">削除</button>`:''}`);
 }
-function saveCustomer(id){
-  const o={id:id||crypto.randomUUID(),name:$('cName').value.trim(),lastVisit:$('cLast').value,note:$('cNote').value};
-  if(!o.name)return;
-  if(id)db.customers=db.customers.map(x=>x.id===id?o:x);else db.customers.push(o);
-  save();closeModal();
-}
+function saveCustomer(id){const o={id:id||uid(),name:$('cName').value.trim(),lastVisit:$('cLast').value,note:$('cNote').value};if(!o.name)return;if(id)db.customers=db.customers.map(x=>x.id===id?o:x);else db.customers.push(o);save();closeModal()}
 function editCustomer(id){customerForm(db.customers.find(x=>x.id===id)||{})}
 function deleteCustomer(id){db.customers=db.customers.filter(x=>x.id!==id);save();closeModal()}
-function saleForm(){
-  modal(`<h3>売上を追加</h3><label>日付</label><input id="sDate" type="date" value="${todayISO()}"><label>顧客名</label><input id="sCustomer"><label>金額</label><input id="sAmount" type="number"><label>メニュー</label><input id="sMenu"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveSale()">保存</button></div>`);
+function saleForm(){modal(`<h3>売上を追加</h3><label>日付</label><input id="sDate" type="date" value="${todayISO}"><label>顧客名</label><input id="sCustomer"><label>金額</label><input id="sAmount" type="number"><label>メニュー</label><input id="sMenu"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveSale()">保存</button></div>`)}
+function saveSale(){db.sales.push({id:uid(),date:$('sDate').value,customer:$('sCustomer').value.trim(),amount:+$('sAmount').value||0,menu:$('sMenu').value.trim()});const c=db.customers.find(x=>normalizeName(x.name)===normalizeName($('sCustomer').value));if(c)c.lastVisit=$('sDate').value;save();closeModal()}
+function retailChooser(){modal('<h3>店販</h3><button style="width:100%;margin-bottom:8px" onclick="retailSaleForm()">販売を記録</button><button class="ghost" style="width:100%" onclick="productForm()">商品を追加</button>')}
+function productForm(i){const x=Number.isInteger(i)?db.products[i]:{};modal(`<h3>商品</h3><label>商品名</label><input id="pName" value="${esc(x.name||'')}"><label>販売価格</label><input id="pPrice" type="number" value="${Number(x.price||0)}"><label>在庫</label><input id="pStock" type="number" value="${Number(x.stock||0)}"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveProduct(${Number.isInteger(i)?i:-1})">保存</button></div>`)}
+function saveProduct(i){const o={name:$('pName').value.trim(),price:+$('pPrice').value||0,stock:+$('pStock').value||0};if(!o.name)return;if(i>=0)db.products[i]=o;else db.products.push(o);save();closeModal()}
+function retailSaleForm(){modal(`<h3>店販を記録</h3><label>日付</label><input id="rDate" type="date" value="${todayISO}"><label>商品</label><select id="rProduct">${db.products.map(x=>`<option>${esc(x.name)}</option>`).join('')}</select><label>顧客名</label><input id="rCustomer"><label>金額</label><input id="rAmount" type="number"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveRetail()">保存</button></div>`)}
+function saveRetail(){const name=$('rProduct').value,p=db.products.find(x=>x.name===name);db.retail.push({id:uid(),date:$('rDate').value,product:name,customer:$('rCustomer').value.trim(),amount:+$('rAmount').value||0});if(p&&p.stock>0)p.stock--;save();closeModal()}
+
+/* SHAiRE screenshot import */
+function openImport(){
+  importDraft=[];importImageFile=null;importImageDataURL='';
+  modal(`<h3>SHAiREスクショ取込</h3><div class="import-box"><label class="drop">📷 SHAiREの週表示スクショを選択<input id="importFile" type="file" accept="image/*" onchange="handleImportFile(event)"></label><img id="importPreview" class="preview"><div id="importStatus" class="status">週表示のスクショから、<strong>予約名・日付・開始/終了時間・決済完了</strong>を読み取ります。読み取り後に修正してから統合できます。</div></div><div id="importResults"></div><div id="importActions" class="hidden"><button class="soft" style="width:100%;margin-top:10px" onclick="addImportRow()">＋ 予約を追加</button><button class="blue" style="width:100%;margin-top:8px" onclick="mergeImport()">確認して統合</button></div><div class="note" style="margin-top:12px">※ 画像解析は端末内で行います。SHAiREの表示位置が大きく変わると時間判定にズレが出ることがあるため、統合前に確認してください。</div>`);
 }
-function saveSale(){
-  db.sales.push({id:crypto.randomUUID(),date:$('sDate').value,customer:$('sCustomer').value.trim(),amount:+$('sAmount').value||0,menu:$('sMenu').value.trim()});
-  const c=db.customers.find(x=>x.name===$('sCustomer').value.trim());if(c)c.lastVisit=$('sDate').value;
-  save();closeModal();
+function handleImportFile(e){
+  const f=e.target.files&&e.target.files[0];if(!f)return;importImageFile=f;const reader=new FileReader();
+  reader.onload=ev=>{importImageDataURL=ev.target.result;$('importPreview').src=importImageDataURL;$('importPreview').style.display='block';analyzeShaireScreenshot()};reader.readAsDataURL(f);
 }
-function retailChooser(){
-  modal('<h3>店販</h3><button style="width:100%;margin-bottom:8px" onclick="retailSaleForm()">販売を記録</button><button class="ghost" style="width:100%" onclick="productForm()">商品を追加</button>');
+async function analyzeShaireScreenshot(){
+  const st=$('importStatus');st.innerHTML='画像を解析中… <strong>最初は30秒前後かかることがあります</strong>';
+  try{
+    const img=await loadImage(importImageDataURL),blocks=detectBookingBlocks(img);let ocr={data:{text:'',lines:[],words:[]}};
+    if(window.Tesseract)ocr=await Tesseract.recognize(importImageFile,'jpn+eng',{logger:m=>{if(m.status==='recognizing text')st.textContent=`文字を読み取り中… ${Math.round((m.progress||0)*100)}%`}});
+    const items=(ocr.data.lines&&ocr.data.lines.length)?ocr.data.lines:(ocr.data.words||[]);
+    const weekStart=parseWeekStart(ocr.data.text)||guessWeekStartFromToday();
+    importDraft=blocks.map((b,i)=>blockToDraft(b,items,weekStart,i)).filter(x=>x.customer||x.paymentComplete);
+    if(!importDraft.length){
+      const names=extractLikelyNames(ocr.data.text);
+      importDraft=names.map((name,i)=>{const d=new Date(weekStart);d.setDate(weekStart.getDate()+Math.min(i,6));const date=localISO(d);return{id:uid(),date,time:'11:00',end:'13:00',customer:name,menu:'',price:0,source:'SHAiRE',newGuest:inferNewGuest(name,date),paymentComplete:false,conflict:false,mergeAction:'add'}});
+    }
+    markImportConflicts();st.innerHTML=`解析完了：<strong>${importDraft.length}件</strong>。名前・時間を確認して、間違いがあればここで直してください。`;renderImportResults();$('importActions').classList.remove('hidden');
+  }catch(err){
+    console.error(err);st.innerHTML='自動解析でエラーが出ました。下の「予約を追加」から手動で入れて、そのまま統合できます。';importDraft=[];renderImportResults();$('importActions').classList.remove('hidden');
+  }
 }
-function productForm(i){
-  const x=Number.isInteger(i)?db.products[i]:{};
-  modal(`<h3>商品</h3><label>商品名</label><input id="pName" value="${esc(x.name||'')}"><label>販売価格</label><input id="pPrice" type="number" value="${Number(x.price||0)}"><label>在庫</label><input id="pStock" type="number" value="${Number(x.stock||0)}"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveProduct(${Number.isInteger(i)?i:-1})">保存</button></div>`);
+function loadImage(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=src})}
+function detectBookingBlocks(img){
+  const c=document.createElement('canvas'),ctx=c.getContext('2d');c.width=img.naturalWidth;c.height=img.naturalHeight;ctx.drawImage(img,0,0);
+  const W=c.width,H=c.height,gridL=Math.round(W*.102),gridR=Math.round(W*.995),gridT=Math.round(H*.203),gridB=Math.round(H*.851),colW=(gridR-gridL)/7;
+  const data=ctx.getImageData(gridL,gridT,gridR-gridL,gridB-gridT).data,gw=gridR-gridL,gh=gridB-gridT,blocks=[];
+  for(let col=0;col<7;col++){
+    const x0=Math.floor(col*colW),x1=Math.floor((col+1)*colW),sampleL=Math.floor(x0+colW*.12),sampleR=Math.floor(x1-colW*.12);let on=[],stepY=3;
+    for(let y=0;y<gh;y+=stepY){let good=0,total=0;for(let x=sampleL;x<sampleR;x+=5){const k=(y*gw+x)*4,r=data[k],g=data[k+1],b=data[k+2];total++;if(r>175&&g>155&&b<225&&(Math.max(r,g,b)-Math.min(r,g,b)>18))good++}on.push(good/Math.max(1,total)>.22)}
+    let s=null;for(let i=0;i<=on.length;i++){if(i<on.length&&on[i]&&s===null)s=i;const ending=(i===on.length)||(!on[i]&&s!==null);if(ending){const e=i-1;if((e-s+1)*stepY>34){const y0=gridT+s*stepY,y1=gridT+(e+1)*stepY;blocks.push({col,x0:gridL+x0,x1:gridL+x1,y0,y1,W,H,gridT,gridB})}s=null}}
+  }
+  return mergeCloseBlocks(blocks);
 }
-function saveProduct(i){
-  const o={name:$('pName').value.trim(),price:+$('pPrice').value||0,stock:+$('pStock').value||0};
-  if(!o.name)return;
-  if(i>=0)db.products[i]=o;else db.products.push(o);
-  save();closeModal();
+function mergeCloseBlocks(blocks){return blocks.sort((a,b)=>a.col-b.col||a.y0-b.y0).reduce((out,b)=>{const p=out[out.length-1];if(p&&p.col===b.col&&b.y0-p.y1<10){p.y1=b.y1;return out}out.push({...b});return out},[])}
+function snap30(m){return Math.round(m/30)*30}
+function minToTime(m){m=Math.max(0,Math.min(1439,m));return `${pad(Math.floor(m/60))}:${pad(m%60)}`}
+function yToTime(y,b){return minToTime(snap30(7*60+((y-b.gridT)/(b.gridB-b.gridT))*16*60))}
+function parseWeekStart(text){
+  const t=String(text||'').replace(/\s/g,'');let m=t.match(/(20\d{2})年(\d{1,2})月(\d{1,2})日?[-ー〜~](?:20\d{2}年)?(\d{1,2})月(\d{1,2})日?/);
+  if(m)return new Date(+m[1],+m[2]-1,+m[3]);m=t.match(/(20\d{2})年(\d{1,2})月(\d{1,2})日?/);if(m)return new Date(+m[1],+m[2]-1,+m[3]);return null;
 }
-function retailSaleForm(){
-  modal(`<h3>店販を記録</h3><label>日付</label><input id="rDate" type="date" value="${todayISO()}"><label>商品</label><select id="rProduct">${db.products.map(x=>`<option>${esc(x.name)}</option>`).join('')}</select><label>顧客名</label><input id="rCustomer"><label>金額</label><input id="rAmount" type="number"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveRetail()">保存</button></div>`);
+function guessWeekStartFromToday(){const d=new Date(),day=d.getDay(),diff=day===0?-6:1-day;d.setDate(d.getDate()+diff);d.setHours(0,0,0,0);return d}
+function blockToDraft(b,items,weekStart,i){
+  const inside=items.filter(l=>{const bb=l.bbox||{},x=((bb.x0||0)+(bb.x1||0))/2,y=((bb.y0||0)+(bb.y1||0))/2;return x>b.x0-4&&x<b.x1+4&&y>b.y0-8&&y<b.y1+8}).map(l=>String(l.text||'').trim()).filter(Boolean);
+  const paymentComplete=inside.some(t=>t.includes('決済完了'));let customer=inside.filter(t=>!t.includes('決済完了')&&!/^\d{1,2}:\d{2}$/.test(t)&&t.length<18).join(' ').replace(/\s+/g,' ').replace(/決済完了/g,'').trim();
+  const d=new Date(weekStart);d.setDate(weekStart.getDate()+b.col);const date=localISO(d),time=yToTime(b.y0,b),end=yToTime(b.y1,b);
+  return{id:uid(),date,time,end,customer,menu:'',price:0,source:'SHAiRE',newGuest:inferNewGuest(customer,date),paymentComplete,conflict:false,mergeAction:'add'};
 }
-function saveRetail(){
-  const name=$('rProduct').value,p=db.products.find(x=>x.name===name);
-  db.retail.push({id:crypto.randomUUID(),date:$('rDate').value,product:name,customer:$('rCustomer').value.trim(),amount:+$('rAmount').value||0});
-  if(p&&p.stock>0)p.stock--;
-  save();closeModal();
+function extractLikelyNames(text){
+  const bad=/決済|完了|売上|見込|新規|既存|今週|来週|先週|予約|顧客|設定|メッセージ|お知らせ|履歴|月|火|水|木|金|土|日|年|人|¥|\d{1,2}:\d{2}/;
+  return String(text||'').split(/\n+/).map(x=>x.trim()).filter(x=>x&&x.length>=2&&x.length<=12&&!bad.test(x)&&/[ぁ-んァ-ヶ一-龠]/.test(x)).slice(0,30);
 }
-function editGoal(){
-  const v=prompt('月の売上目標',db.goal);
-  if(v!==null&&!isNaN(+v)){db.goal=+v;save()}
+function markImportConflicts(){importDraft.forEach(x=>{const same=db.bookings.find(b=>b.date===x.date&&b.time===x.time);x.conflict=!!same;x.existingId=same?same.id:null;x.mergeAction=same?'update':'add'})}
+function renderImportResults(){
+  const host=$('importResults');if(!host)return;if(!importDraft.length){host.innerHTML=empty('読み取り結果なし。必要なら下から手動追加できます。');return}
+  host.innerHTML='<h3 style="margin-top:16px">読み取り結果</h3>'+importDraft.map((x,i)=>`<div class="import-row ${x.conflict?'warn':''}"><div class="mini">${x.conflict?'<span class="badge warn">同じ時間に既存予約あり</span>':''}</div><div class="row"><input type="date" value="${esc(x.date)}" onchange="updateImport(${i},'date',this.value)"><input type="time" value="${esc(x.time)}" onchange="updateImport(${i},'time',this.value)"><input type="time" value="${esc(x.end)}" onchange="updateImport(${i},'end',this.value)"></div><input value="${esc(x.customer)}" placeholder="予約名" onchange="updateImport(${i},'customer',this.value)"><div class="row"><select onchange="updateImport(${i},'newGuest',this.value==='new')"><option value="new" ${x.newGuest?'selected':''}>新規</option><option value="repeat" ${!x.newGuest?'selected':''}>既存</option></select><select onchange="updateImport(${i},'paymentComplete',this.value==='paid')"><option value="open" ${!x.paymentComplete?'selected':''}>未決済</option><option value="paid" ${x.paymentComplete?'selected':''}>決済完了</option></select></div><input type="number" inputmode="numeric" value="${Number(x.price||0)}" placeholder="料金（任意）" onchange="updateImport(${i},'price',+this.value||0)">${x.conflict?`<select onchange="updateImport(${i},'mergeAction',this.value)"><option value="update" ${x.mergeAction==='update'?'selected':''}>既存予約を更新</option><option value="add" ${x.mergeAction==='add'?'selected':''}>別予約として追加</option><option value="skip" ${x.mergeAction==='skip'?'selected':''}>スキップ</option></select>`:''}<button class="danger" style="width:100%" onclick="removeImport(${i})">この予約を除外</button></div>`).join('');
 }
-renderAll();
+function updateImport(i,k,v){importDraft[i][k]=v;if(['date','time'].includes(k)){markImportConflicts();renderImportResults()}}
+function removeImport(i){importDraft.splice(i,1);renderImportResults()}
+function addImportRow(){importDraft.push({id:uid(),date:todayISO,time:'11:00',end:'13:00',customer:'',menu:'',price:0,source:'SHAiRE',newGuest:true,paymentComplete:false,conflict:false,mergeAction:'add'});renderImportResults()}
+function mergeImport(){
+  let added=0,updated=0,skipped=0;
+  importDraft.forEach(x=>{
+    if(x.mergeAction==='skip'){skipped++;return}
+    const base={date:x.date,time:x.time,end:x.end,customer:x.customer.trim(),menu:x.menu||'',price:Number(x.price||0),source:'SHAiRE',newGuest:!!x.newGuest,paymentComplete:!!x.paymentComplete,status:'booked',importedFrom:'SHAiRE screenshot'};
+    if(x.mergeAction==='update'&&x.existingId){db.bookings=db.bookings.map(b=>b.id===x.existingId?{...b,...base}:b);updated++}
+    else{const exact=db.bookings.find(b=>b.date===base.date&&b.time===base.time&&normalizeName(b.customer)===normalizeName(base.customer));if(exact){db.bookings=db.bookings.map(b=>b.id===exact.id?{...b,...base}:b);updated++}else{db.bookings.push({id:uid(),...base});added++}}
+    upsertCustomerFromBooking(base);
+  });
+  save();closeModal();alert(`統合完了：追加 ${added}件 / 更新 ${updated}件 / スキップ ${skipped}件`);
+}
+
+renderAll();setReservationView('list');
 </script>
 </body>
 </html>
