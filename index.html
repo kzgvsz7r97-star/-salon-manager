@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Salon Manager</title>
+<style>
+:root{--bg:#f6f6f6;--card:#fff;--text:#111;--muted:#777;--line:#e8e8e8}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;background:var(--bg);color:var(--text)}
+.app{max-width:560px;margin:auto;min-height:100dvh;padding:18px 14px 96px}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.brand{font-weight:800;font-size:22px}.date{font-size:12px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{background:#fff;border-radius:18px;padding:16px}
+.wide{grid-column:1/-1}
+.kpi .l{font-size:12px;color:var(--muted)}.kpi .v{font-weight:800;font-size:25px;margin-top:6px}
+h2{font-size:18px;margin:22px 4px 10px}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}
+.list{display:flex;flex-direction:column;gap:8px}
+.item{background:#fff;border-radius:14px;padding:13px 14px}
+.item .t{font-weight:750}.item .s{font-size:12px;color:var(--muted);margin-top:4px}
+input,select,textarea{width:100%;padding:12px;border:1px solid #ddd;border-radius:12px;background:#fff;font-size:16px;margin:5px 0 10px}
+textarea{min-height:82px}
+button{border:0;background:#111;color:#fff;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:700}
+.ghost{background:#eee;color:#111}.danger{background:#fff;color:#c33;border:1px solid #ecc}
+.progress{height:9px;background:#eee;border-radius:99px;overflow:hidden;margin-top:12px}.progress i{display:block;height:100%;background:#111;width:0}
+.small{font-size:12px;color:#777}.pill{display:inline-block;background:#f0f0f0;border-radius:99px;padding:5px 8px;margin:2px;font-size:11px}
+.money{font-variant-numeric:tabular-nums}
+.section{display:none}.section.active{display:block}.empty{text-align:center;color:#999;font-size:13px;padding:26px 8px}
+.nav{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border-top:1px solid #e5e5e5;display:flex;padding:8px 8px calc(8px + env(safe-area-inset-bottom));z-index:10}
+.nav button{flex:1;background:transparent;color:#888;padding:6px 2px;font-size:11px}.nav button.active{color:#111}
+.ico{display:block;font-size:18px;margin-bottom:2px}
+.fab{position:fixed;right:18px;bottom:88px;width:52px;height:52px;border-radius:50%;font-size:24px}
+.hidden{display:none!important}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:20;display:flex;align-items:flex-end}
+.sheet{width:100%;max-width:560px;margin:auto;max-height:88dvh;overflow:auto;background:#f8f8f8;border-radius:24px 24px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+.sheet h3{margin:0 0 14px}.actions{display:flex;gap:8px;margin-top:8px}.actions button{flex:1}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top"><div class="brand">Salon Manager</div><div class="date" id="today"></div></div>
+
+  <section id="home" class="section active">
+    <div class="grid">
+      <div class="card kpi"><div class="l">今月売上</div><div class="v money" id="kSales">¥0</div></div>
+      <div class="card kpi"><div class="l">見込み売上</div><div class="v money" id="kForecast">¥0</div></div>
+      <div class="card kpi"><div class="l">客数</div><div class="v" id="kGuests">0</div></div>
+      <div class="card kpi"><div class="l">平均単価</div><div class="v money" id="kAvg">¥0</div></div>
+      <div class="card wide">
+        <div class="row">
+          <div><b>月目標</b><div class="small">売上進捗</div></div>
+          <button class="ghost" onclick="editGoal()">目標変更</button>
+        </div>
+        <div class="progress"><i id="goalBar"></i></div>
+        <div class="small" style="margin-top:8px" id="goalText"></div>
+      </div>
+    </div>
+    <h2>今日の予約</h2><div id="todayBookings" class="list"></div>
+    <h2>集客媒体</h2><div id="sourceSummary" class="card"></div>
+  </section>
+
+  <section id="reservations" class="section">
+    <h2>予約</h2>
+    <div class="row">
+      <input id="bookingFilterDate" type="date" onchange="renderBookings()">
+      <select id="bookingFilterSource" onchange="renderBookings()">
+        <option value="">全媒体</option><option>Nailie</option><option>minimo</option><option>Instagram</option><option>LINE</option><option>SHAIRE</option><option>次回予約</option><option>その他</option>
+      </select>
+    </div>
+    <div id="bookingList" class="list"></div>
+  </section>
+
+  <section id="customers" class="section">
+    <h2>顧客</h2>
+    <input id="customerSearch" placeholder="名前で検索" oninput="renderCustomers()">
+    <div id="customerList" class="list"></div>
+  </section>
+
+  <section id="sales" class="section">
+    <h2>売上</h2>
+    <div class="grid">
+      <div class="card kpi"><div class="l">技術売上</div><div class="v money" id="techSales">¥0</div></div>
+      <div class="card kpi"><div class="l">店販売上</div><div class="v money" id="retailSales">¥0</div></div>
+      <div class="card wide kpi"><div class="l">合計</div><div class="v money" id="totalSales">¥0</div></div>
+    </div>
+    <h2>売上履歴</h2><div id="salesList" class="list"></div>
+  </section>
+
+  <section id="retail" class="section">
+    <h2>店販</h2><div id="productList" class="list"></div>
+    <h2>販売履歴</h2><div id="retailHistory" class="list"></div>
+  </section>
+</div>
+
+<button id="fab" class="fab" onclick="openAdd()">＋</button>
+<nav class="nav">
+  <button class="active" data-tab="home" onclick="go('home',this)"><span class="ico">⌂</span>ホーム</button>
+  <button data-tab="reservations" onclick="go('reservations',this)"><span class="ico">◷</span>予約</button>
+  <button data-tab="customers" onclick="go('customers',this)"><span class="ico">♙</span>顧客</button>
+  <button data-tab="sales" onclick="go('sales',this)"><span class="ico">¥</span>売上</button>
+  <button data-tab="retail" onclick="go('retail',this)"><span class="ico">◇</span>店販</button>
+</nav>
+
+<div id="modal" class="modal hidden" onclick="if(event.target===this)closeModal()"><div class="sheet" id="sheet"></div></div>
+
+<script>
+const KEY='salonManagerV1';
+const initial={goal:1000000,customers:[],bookings:[],sales:[],products:[
+{name:'リケラエマルジョン',price:0,stock:0},
+{name:'オルキデ ヘアミルク',price:0,stock:0},
+{name:'HITA オイル',price:0,stock:0}
+],retail:[]};
+let db=JSON.parse(localStorage.getItem(KEY)||'null')||initial;
+
+const $=id=>document.getElementById(id);
+const yen=n=>'¥'+Number(n||0).toLocaleString('ja-JP');
+const todayISO=()=>new Date().toISOString().slice(0,10);
+const monthKey=d=>(d||'').slice(0,7);
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+$('today').textContent=new Intl.DateTimeFormat('ja-JP',{month:'long',day:'numeric',weekday:'short'}).format(new Date());
+const currentMonth=monthKey(todayISO());
+
+function save(){localStorage.setItem(KEY,JSON.stringify(db));renderAll()}
+function go(id,btn){
+  document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));
+  $(id).classList.add('active');
+  document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));
+  btn.classList.add('active');
+  $('fab').classList.toggle('hidden',id==='sales');
+  renderAll();
+}
+function empty(t){return '<div class="empty">'+t+'</div>'}
+function bookingHTML(x){
+  return `<div class="item" onclick="editBooking('${x.id}')">
+    <div class="t">${esc(x.time)} ${esc(x.customer||'未登録')}</div>
+    <div class="s">${esc(x.menu)} ・ ${yen(x.price)} ・ ${esc(x.source)} ${x.newGuest?'・ 新規':'・ 再来'}</div>
+  </div>`;
+}
+function renderHome(){
+  const tech=db.sales.filter(x=>monthKey(x.date)===currentMonth).reduce((a,b)=>a+Number(b.amount||0),0);
+  const retail=db.retail.filter(x=>monthKey(x.date)===currentMonth).reduce((a,b)=>a+Number(b.amount||0),0);
+  const actual=tech+retail;
+  const future=db.bookings.filter(x=>monthKey(x.date)===currentMonth&&x.date>=todayISO()).reduce((a,b)=>a+Number(b.price||0),0);
+  const guests=db.sales.filter(x=>monthKey(x.date)===currentMonth).length;
+  $('kSales').textContent=yen(actual);
+  $('kForecast').textContent=yen(actual+future);
+  $('kGuests').textContent=guests;
+  $('kAvg').textContent=yen(guests?Math.round(tech/guests):0);
+  $('goalBar').style.width=Math.min(100,actual/(db.goal||1)*100)+'%';
+  $('goalText').textContent=`${yen(actual)} / ${yen(db.goal)}`;
+  const tb=db.bookings.filter(x=>x.date===todayISO()).sort((a,b)=>a.time.localeCompare(b.time));
+  $('todayBookings').innerHTML=tb.length?tb.map(bookingHTML).join(''):empty('今日の予約はまだありません');
+  const c={};db.bookings.filter(x=>monthKey(x.date)===currentMonth).forEach(x=>c[x.source]=(c[x.source]||0)+1);
+  $('sourceSummary').innerHTML=Object.keys(c).length?Object.entries(c).map(([k,v])=>`<span class="pill">${esc(k)} ${v}件</span>`).join(''):'<span class="small">今月の予約データなし</span>';
+}
+function renderBookings(){
+  let a=[...db.bookings],d=$('bookingFilterDate').value,s=$('bookingFilterSource').value;
+  if(d)a=a.filter(x=>x.date===d);
+  if(s)a=a.filter(x=>x.source===s);
+  a.sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
+  $('bookingList').innerHTML=a.length?a.map(bookingHTML).join(''):empty('予約はまだありません');
+}
+function renderCustomers(){
+  const q=($('customerSearch').value||'').toLowerCase();
+  let a=db.customers.filter(x=>(x.name||'').toLowerCase().includes(q));
+  a.sort((x,y)=>(y.lastVisit||'').localeCompare(x.lastVisit||''));
+  $('customerList').innerHTML=a.length?a.map(x=>`<div class="item" onclick="editCustomer('${x.id}')"><div class="t">${esc(x.name)}</div><div class="s">${esc(x.note||'メモなし')}${x.lastVisit?' ・ 最終来店 '+esc(x.lastVisit):''}</div></div>`).join(''):empty('顧客を追加するとここに表示されます');
+}
+function renderSales(){
+  const t=db.sales.filter(x=>monthKey(x.date)===currentMonth).reduce((a,b)=>a+Number(b.amount||0),0);
+  const r=db.retail.filter(x=>monthKey(x.date)===currentMonth).reduce((a,b)=>a+Number(b.amount||0),0);
+  $('techSales').textContent=yen(t);$('retailSales').textContent=yen(r);$('totalSales').textContent=yen(t+r);
+  const all=[...db.sales.map(x=>({...x,type:'技術'})),...db.retail.map(x=>({...x,type:'店販'}))].sort((a,b)=>b.date.localeCompare(a.date));
+  $('salesList').innerHTML=all.length?all.map(x=>`<div class="item"><div class="t">${esc(x.date)} ${yen(x.amount)}</div><div class="s">${esc(x.type)} ・ ${esc(x.customer||x.product||'')}</div></div>`).join(''):empty('売上データはまだありません');
+}
+function renderRetail(){
+  $('productList').innerHTML=db.products.length?db.products.map((x,i)=>`<div class="item" onclick="productForm(${i})"><div class="t">${esc(x.name)}</div><div class="s">販売価格 ${yen(x.price)} ・ 在庫 ${Number(x.stock||0)}</div></div>`).join(''):empty('商品を追加してください');
+  $('retailHistory').innerHTML=db.retail.length?[...db.retail].sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<div class="item"><div class="t">${esc(x.product)} ${yen(x.amount)}</div><div class="s">${esc(x.date)} ・ ${esc(x.customer||'顧客未指定')}</div></div>`).join(''):empty('販売履歴はまだありません');
+}
+function renderAll(){renderHome();renderBookings();renderCustomers();renderSales();renderRetail()}
+function modal(h){$('sheet').innerHTML=h;$('modal').classList.remove('hidden')}
+function closeModal(){$('modal').classList.add('hidden')}
+function currentTab(){return document.querySelector('.nav button.active').dataset.tab}
+function openAdd(){
+  const t=currentTab();
+  if(t==='reservations')return bookingForm();
+  if(t==='customers')return customerForm();
+  if(t==='retail')return retailChooser();
+  return quickChooser();
+}
+function quickChooser(){
+  modal('<h3>追加</h3><div class="list"><button onclick="bookingForm()">予約を追加</button><button onclick="customerForm()">顧客を追加</button><button onclick="saleForm()">売上を追加</button><button onclick="retailChooser()">店販を追加</button></div>');
+}
+function bookingForm(x={}){
+  modal(`<h3>${x.id?'予約を編集':'予約を追加'}</h3>
+  <label>日付</label><input id="fDate" type="date" value="${esc(x.date||todayISO())}">
+  <label>時間</label><input id="fTime" type="time" value="${esc(x.time||'11:00')}">
+  <label>顧客名</label><input id="fCustomer" value="${esc(x.customer||'')}">
+  <label>メニュー</label><input id="fMenu" value="${esc(x.menu||'カット+カラー')}">
+  <label>料金</label><input id="fPrice" type="number" value="${Number(x.price||0)}">
+  <label>予約媒体</label><select id="fSource">${['Nailie','minimo','Instagram','LINE','SHAIRE','次回予約','その他'].map(s=>`<option ${x.source===s?'selected':''}>${s}</option>`).join('')}</select>
+  <label><input id="fNew" type="checkbox" style="width:auto" ${x.newGuest?'checked':''}> 新規</label>
+  <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveBooking('${x.id||''}')">保存</button></div>
+  ${x.id?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteBooking('${x.id}')">削除</button>`:''}`);
+}
+function saveBooking(id){
+  const o={id:id||crypto.randomUUID(),date:$('fDate').value,time:$('fTime').value,customer:$('fCustomer').value.trim(),menu:$('fMenu').value.trim(),price:+$('fPrice').value||0,source:$('fSource').value,newGuest:$('fNew').checked};
+  if(id)db.bookings=db.bookings.map(x=>x.id===id?o:x);else db.bookings.push(o);
+  if(o.customer&&!db.customers.some(c=>c.name===o.customer))db.customers.push({id:crypto.randomUUID(),name:o.customer,note:'',lastVisit:''});
+  save();closeModal();
+}
+function editBooking(id){bookingForm(db.bookings.find(x=>x.id===id)||{})}
+function deleteBooking(id){db.bookings=db.bookings.filter(x=>x.id!==id);save();closeModal()}
+function customerForm(x={}){
+  modal(`<h3>${x.id?'顧客を編集':'顧客を追加'}</h3>
+  <label>名前</label><input id="cName" value="${esc(x.name||'')}">
+  <label>最終来店</label><input id="cLast" type="date" value="${esc(x.lastVisit||'')}">
+  <label>メモ</label><textarea id="cNote">${esc(x.note||'')}</textarea>
+  <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveCustomer('${x.id||''}')">保存</button></div>
+  ${x.id?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteCustomer('${x.id}')">削除</button>`:''}`);
+}
+function saveCustomer(id){
+  const o={id:id||crypto.randomUUID(),name:$('cName').value.trim(),lastVisit:$('cLast').value,note:$('cNote').value};
+  if(!o.name)return;
+  if(id)db.customers=db.customers.map(x=>x.id===id?o:x);else db.customers.push(o);
+  save();closeModal();
+}
+function editCustomer(id){customerForm(db.customers.find(x=>x.id===id)||{})}
+function deleteCustomer(id){db.customers=db.customers.filter(x=>x.id!==id);save();closeModal()}
+function saleForm(){
+  modal(`<h3>売上を追加</h3><label>日付</label><input id="sDate" type="date" value="${todayISO()}"><label>顧客名</label><input id="sCustomer"><label>金額</label><input id="sAmount" type="number"><label>メニュー</label><input id="sMenu"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveSale()">保存</button></div>`);
+}
+function saveSale(){
+  db.sales.push({id:crypto.randomUUID(),date:$('sDate').value,customer:$('sCustomer').value.trim(),amount:+$('sAmount').value||0,menu:$('sMenu').value.trim()});
+  const c=db.customers.find(x=>x.name===$('sCustomer').value.trim());if(c)c.lastVisit=$('sDate').value;
+  save();closeModal();
+}
+function retailChooser(){
+  modal('<h3>店販</h3><button style="width:100%;margin-bottom:8px" onclick="retailSaleForm()">販売を記録</button><button class="ghost" style="width:100%" onclick="productForm()">商品を追加</button>');
+}
+function productForm(i){
+  const x=Number.isInteger(i)?db.products[i]:{};
+  modal(`<h3>商品</h3><label>商品名</label><input id="pName" value="${esc(x.name||'')}"><label>販売価格</label><input id="pPrice" type="number" value="${Number(x.price||0)}"><label>在庫</label><input id="pStock" type="number" value="${Number(x.stock||0)}"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveProduct(${Number.isInteger(i)?i:-1})">保存</button></div>`);
+}
+function saveProduct(i){
+  const o={name:$('pName').value.trim(),price:+$('pPrice').value||0,stock:+$('pStock').value||0};
+  if(!o.name)return;
+  if(i>=0)db.products[i]=o;else db.products.push(o);
+  save();closeModal();
+}
+function retailSaleForm(){
+  modal(`<h3>店販を記録</h3><label>日付</label><input id="rDate" type="date" value="${todayISO()}"><label>商品</label><select id="rProduct">${db.products.map(x=>`<option>${esc(x.name)}</option>`).join('')}</select><label>顧客名</label><input id="rCustomer"><label>金額</label><input id="rAmount" type="number"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveRetail()">保存</button></div>`);
+}
+function saveRetail(){
+  const name=$('rProduct').value,p=db.products.find(x=>x.name===name);
+  db.retail.push({id:crypto.randomUUID(),date:$('rDate').value,product:name,customer:$('rCustomer').value.trim(),amount:+$('rAmount').value||0});
+  if(p&&p.stock>0)p.stock--;
+  save();closeModal();
+}
+function editGoal(){
+  const v=prompt('月の売上目標',db.goal);
+  if(v!==null&&!isNaN(+v)){db.goal=+v;save()}
+}
+renderAll();
+</script>
+</body>
+</html>
