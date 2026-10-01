@@ -660,9 +660,7 @@ function saveCustomerLineId(id){
 
   alert('LINE連携IDを保存しました');
 }
-      <div class="meta">${yen(b.price)} ・ ${esc(b.source||'その他')}${b.isModel?' ・ モデル':''}${b.paymentComplete?' ・ 決済済み':''}<br>${b.formula?`薬剤：${esc(b.formula)}<br>`:''}${b.visitNote?`施術メモ：${esc(b.visitNote)}`:''}</div>
-    </div>`).join(''):empty('履歴はありません')}`);
-}
+    
 function changeAnalysisMonth(n){analysisMonth=addMonths(analysisMonth,n);renderSales()}
 function analysisStats(m){
   const all=db.bookings.filter(x=>monthKey(x.date)===m&&!x.isModel);
