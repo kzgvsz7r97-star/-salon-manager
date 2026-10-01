@@ -6,8 +6,20 @@ export const config = {
   }
 };
 
-function readRawBody(req) {
-  return new Promise((resolve, reject) => {
+async function getRawBody(req) {
+  if (Buffer.isBuffer(req.body)) {
+    return req.body;
+  }
+
+  if (typeof req.body === 'string') {
+    return Buffer.from(req.body);
+  }
+
+  if (req.body && typeof req.body === 'object') {
+    return Buffer.from(JSON.stringify(req.body));
+  }
+
+  return await new Promise((resolve, reject) => {
     const chunks = [];
 
     req.on('data', chunk => {
@@ -40,25 +52,22 @@ function validSignature(raw, signature, secret) {
 }
 
 async function replyMessage(replyToken, text, token) {
-  return fetch(
-    'https://api.line.me/v2/bot/message/reply',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        replyToken,
-        messages: [
-          {
-            type: 'text',
-            text
-          }
-        ]
-      })
-    }
-  );
+  return fetch('https://api.line.me/v2/bot/message/reply', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages: [
+        {
+          type: 'text',
+          text
+        }
+      ]
+    })
+  });
 }
 
 export default async function handler(req, res) {
@@ -77,7 +86,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const raw = await readRawBody(req);
+    const raw = await getRawBody(req);
     const signature = req.headers['x-line-signature'];
 
     if (!validSignature(raw, signature, secret)) {
@@ -107,9 +116,7 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.status(200).json({
-      ok: true
-    });
+    return res.status(200).json({ ok: true });
 
   } catch (e) {
     console.error(e);
