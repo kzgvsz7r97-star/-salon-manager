@@ -562,19 +562,91 @@ function openCustomerChart(id){
   const visits=hist.filter(isVisitedBooking);
   const paid=hist.filter(x=>x.paymentComplete&&isActiveBooking(x));
   const spend=paid.reduce((a,x)=>a+Number(x.price||0),0);
-  const future=hist.filter(x=>isActiveBooking(x)&&x.date>=todayISO).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time))[0];
+  const future=hist.filter(x=>isActiveBooking(x)&&x.date>=todayISO).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
   const last=visits[0]?.date||c.lastVisit||'—';
-  modal(`<div class="chart-head"><div><h3 style="margin:0">${esc(c.name)}</h3><div class="small" style="margin-top:4px">${esc(c.note||'メモなし')}</div></div><button class="ghost" onclick="customerForm(db.customers.find(x=>x.id==='${id}')||{})">編集</button></div>
-    <div class="chart-stats">
-      <div class="chart-stat"><div class="l">来店回数</div><div class="v">${visits.length}回</div></div>
-      <div class="chart-stat"><div class="l">累計決済</div><div class="v">${yen(spend)}</div></div>
-      <div class="chart-stat"><div class="l">最終来店</div><div class="v" style="font-size:14px">${esc(last)}</div></div>
-      <div class="chart-stat"><div class="l">次回予約</div><div class="v" style="font-size:14px">${future?esc(future.date):'なし'}</div></div>
+
+  modal(`
+    <div class="chart-head">
+      <div>
+        <h3 style="margin:0">${esc(c.name)}</h3>
+        <div class="small" style="margin-top:4px">顧客カルテ</div>
+      </div>
     </div>
-    <button class="blue" style="width:100%;margin-bottom:12px" onclick="bookingForm({customer:'${esc(c.name).replace(/'/g,"&#39;")}',newGuest:false})">このお客様の予約を追加</button>
+
+    <div class="chart-stats">
+      <div class="chart-stat">
+        <div class="l">来店回数</div>
+        <div class="v">${visits.length}回</div>
+      </div>
+
+      <div class="chart-stat">
+        <div class="l">累計決済</div>
+        <div class="v">${yen(spend)}</div>
+      </div>
+
+      <div class="chart-stat">
+        <div class="l">最終来店</div>
+        <div class="v" style="font-size:14px">${esc(last)}</div>
+      </div>
+
+      <div class="chart-stat">
+        <div class="l">次回予約</div>
+        <div class="v" style="font-size:14px">${future?esc(future[0]?.date||'—'):'—'}</div>
+      </div>
+    </div>
+
+    <div style="margin:14px 0">
+      <div class="small" style="margin-bottom:6px">LINE連携ID</div>
+      <input
+        id="customerLineId"
+        type="text"
+        value="${esc(c.lineUserId||'')}"
+        placeholder="Uから始まるLINE連携ID"
+      >
+      <button
+        class="blue"
+        style="width:100%;margin-top:8px"
+        onclick="saveCustomerLineId('${c.id}')"
+      >
+        LINE連携IDを保存
+      </button>
+    </div>
+
+    <button
+      class="blue"
+      style="width:100%;margin-bottom:12px"
+      onclick="bookingForm({customer:'${esc(c.name)}'})"
+    >
+      この顧客で予約を追加
+    </button>
+
     <h3 style="margin-top:14px">来店・予約履歴</h3>
-    ${hist.length?hist.map(b=>`<div class="history-row" onclick="editBooking('${b.id}')">
-      <div class="title">${esc(b.date)} ${esc(b.time)} ・ ${esc(b.menu||'メニュー未入力')} <span class="status-badge ${statusClass(b)}">${statusLabel(b)}</span></div>
+
+    ${hist.length?hist.map(b=>`
+      <div class="history-row" onclick="editBooking('${b.id}')">
+        <div class="title">
+          ${esc(b.date)} ${esc(b.time)} ・ ${esc(b.menu||'メニュー未入力')}
+        </div>
+        <div class="meta">
+          ${yen(b.price)} ・ ${esc(b.source||'その他')}
+        </div>
+      </div>
+    `).join(''):empty('履歴はありません')}
+  `);
+}
+
+function saveCustomerLineId(id){
+  const c=db.customers.find(x=>x.id===id);
+  if(!c)return;
+
+  const input=document.getElementById('customerLineId');
+  const lineUserId=(input?.value||'').trim();
+
+  c.lineUserId=lineUserId;
+  save();
+
+  alert('LINE連携IDを保存しました');
+}
       <div class="meta">${yen(b.price)} ・ ${esc(b.source||'その他')}${b.isModel?' ・ モデル':''}${b.paymentComplete?' ・ 決済済み':''}<br>${b.formula?`薬剤：${esc(b.formula)}<br>`:''}${b.visitNote?`施術メモ：${esc(b.visitNote)}`:''}</div>
     </div>`).join(''):empty('履歴はありません')}`);
 }
