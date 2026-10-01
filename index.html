@@ -71,6 +71,40 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
 .story-chiprow{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px}
 .story-chiprow button{padding:8px 10px;background:#eee;color:#111}
 
+
+.backup-box{background:#fff;border-radius:18px;padding:15px;margin-top:12px}
+.backup-box .backup-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.backup-box .backup-actions button{width:100%}
+.backup-status{font-size:12px;color:#666;line-height:1.55;margin-top:8px}
+
+
+.filter-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.filter-grid .wide{grid-column:1/-1}
+.filter-grid input,.filter-grid select{margin:0}
+.status-badge{display:inline-block;font-size:10px;padding:4px 7px;border-radius:99px;margin-left:5px;background:#eee}
+.status-visited{background:#e8f7ee;color:#16733c}
+.status-cancelled{background:#f3f3f3;color:#777}
+.status-noshow{background:#fdeaea;color:#b52626}
+.status-booked{background:#eaf3ff;color:#1765b5}
+.follow-box{background:#fff;border-radius:16px;padding:13px 14px}
+.follow-box .head{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.follow-box .meta{font-size:12px;color:#666;line-height:1.55;margin-top:4px}
+.follow-flags{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+.follow-flag{font-size:10px;padding:4px 7px;border-radius:99px;background:#eee;color:#666}
+.follow-flag.done{background:#e8f7ee;color:#16733c}
+.chart-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:12px}
+.chart-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.chart-stat{background:#fff;border-radius:13px;padding:10px}
+.chart-stat .l{font-size:10px;color:#777}.chart-stat .v{font-size:17px;font-weight:850;margin-top:3px}
+.history-row{background:#fff;border-radius:14px;padding:12px;margin:8px 0}
+.history-row .title{font-weight:800}.history-row .meta{font-size:12px;color:#666;line-height:1.55;margin-top:4px}
+.analysis-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 14px}
+.analysis-card{background:#fff;border-radius:14px;padding:12px}
+.analysis-card .l{font-size:11px;color:#777}.analysis-card .v{font-size:19px;font-weight:850;margin-top:4px}
+.analysis-source{background:#fff;border-radius:13px;padding:10px 12px;margin:6px 0}
+.check-card{background:#fff;border-radius:14px;padding:11px 12px;margin:8px 0}
+.check-card label{display:block;margin:7px 0;font-size:14px}
+
 </style>
 </head>
 <body>
@@ -105,8 +139,23 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
     <h2>選択日の予約</h2>
     <div id="homeDayBookings" class="list"></div>
 
+    <h2>フォロー管理</h2>
+    <div id="followupQueue" class="list"></div>
+
     <h2>再来リマインド</h2>
     <div id="returnReminders" class="list"></div>
+
+    <h2>データ管理</h2>
+    <div class="backup-box">
+      <div><b>バックアップ</b></div>
+      <div class="small" style="margin-top:4px">予約・顧客・売上・店販データを保存 / 復元できます。</div>
+      <div class="backup-actions">
+        <button onclick="exportBackup()">バックアップ保存</button>
+        <button class="soft" onclick="document.getElementById('backupImportFile').click()">バックアップ復元</button>
+      </div>
+      <input id="backupImportFile" type="file" accept=".json,application/json" style="display:none" onchange="importBackup(event)">
+      <div id="backupStatus" class="backup-status">機種変更やホーム画面の入れ直し前に保存しておくと安心です。</div>
+    </div>
 
     <h2>今後の予約状況</h2>
     <div id="futureMonths" class="list"></div>
@@ -125,12 +174,27 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
     <div id="reservationListView">
       <div id="reservationTotals"></div>
       <div id="reservationSourceSummary"></div>
-      <div class="row">
-        <input id="bookingFilterDate" type="date" onchange="renderBookings()">
+      <div class="filter-grid">
+        <input id="bookingFilterName" class="wide" placeholder="名前で検索" oninput="renderBookings()">
+        <input id="bookingFilterFrom" type="date" onchange="renderBookings()">
+        <input id="bookingFilterTo" type="date" onchange="renderBookings()">
         <select id="bookingFilterSource" onchange="renderBookings()">
           <option value="">全媒体</option>
           <option>SHAiRE</option><option>Nailie</option><option>minimo</option><option>Instagram</option><option>その他</option>
         </select>
+        <select id="bookingFilterType" onchange="renderBookings()">
+          <option value="">通常＋モデル</option><option value="normal">通常客</option><option value="model">モデル</option>
+        </select>
+        <select id="bookingFilterStatus" onchange="renderBookings()">
+          <option value="">全ステータス</option><option value="booked">予約中</option><option value="visited">来店済み</option><option value="cancelled">キャンセル</option><option value="noshow">無断キャンセル</option>
+        </select>
+        <select id="bookingFilterPayment" onchange="renderBookings()">
+          <option value="">決済すべて</option><option value="paid">決済済み</option><option value="unpaid">未決済</option>
+        </select>
+        <select id="bookingFilterNext" onchange="renderBookings()">
+          <option value="">次回予約すべて</option><option value="taken">次回予約あり</option><option value="missing">次回予約なし</option>
+        </select>
+        <button class="ghost" onclick="resetBookingFilters()">絞り込み解除</button>
       </div>
       <div id="bookingList" class="list"></div>
     </div>
@@ -154,6 +218,11 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
   </section>
 
   <section id="sales" class="section">
+    <div class="monthbar">
+      <button onclick="changeAnalysisMonth(-1)">‹</button>
+      <div class="monthtitle" id="analysisMonthTitle"></div>
+      <button onclick="changeAnalysisMonth(1)">›</button>
+    </div>
     <h2>売上</h2>
     <div class="note" style="margin:0 4px 10px">予約売上は「決済完了」にした分だけ確定売上に反映されます。</div>
     <div class="grid">
@@ -161,6 +230,10 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
       <div class="card kpi"><div class="l">店販売上</div><div class="v money" id="retailSales">¥0</div></div>
       <div class="card wide kpi"><div class="l">合計</div><div class="v money" id="totalSales">¥0</div></div>
     </div>
+    <h2>月次分析</h2>
+    <div id="monthlyAnalysis"></div>
+    <h2>媒体別</h2>
+    <div id="analysisSources"></div>
     <h2>売上履歴</h2><div id="salesList" class="list"></div>
   </section>
 
@@ -206,8 +279,13 @@ const normalizeName=s=>String(s||'').replace(/\s+/g,'').replace(/[・･]/g,'').
 
 const dateOnly=s=>{const [y,m,d]=String(s||'').split('-').map(Number);return y&&m&&d?new Date(y,m-1,d,12):null};
 const daysBetween=(a,b)=>Math.floor((dateOnly(b)-dateOnly(a))/86400000);
-function activeBookings(){return db.bookings.filter(x=>x.status!=='cancelled')}
-function customerBookingsByName(name){const n=normalizeName(name);return activeBookings().filter(x=>normalizeName(x.customer)===n)}
+function bookingStatus(b){return b&&b.status?b.status:'booked'}
+function isActiveBooking(b){const s=bookingStatus(b);return s!=='cancelled'&&s!=='noshow'}
+function isVisitedBooking(b){return bookingStatus(b)==='visited'||(bookingStatus(b)==='booked'&&b.date<todayISO&&!!b.paymentComplete)}
+function statusLabel(b){const s=bookingStatus(b);return s==='visited'?'来店済み':s==='cancelled'?'キャンセル':s==='noshow'?'無断キャンセル':'予約中'}
+function statusClass(b){const s=bookingStatus(b);return s==='visited'?'status-visited':s==='cancelled'?'status-cancelled':s==='noshow'?'status-noshow':'status-booked'}
+function activeBookings(){return db.bookings.filter(isActiveBooking)}
+function customerBookingsByName(name){const n=normalizeName(name);return db.bookings.filter(x=>normalizeName(x.customer)===n)}
 function hasLaterBooking(name,afterDate){
   const n=normalizeName(name);
   return activeBookings().some(x=>normalizeName(x.customer)===n&&x.date>afterDate);
@@ -224,7 +302,7 @@ function reminderCandidates(){
   const now=todayISO;
   return db.customers.map(c=>{
     const own=customerBookingsByName(c.name);
-    const past=own.filter(b=>b.date<=now).sort((a,b)=>b.date.localeCompare(a.date));
+    const past=own.filter(b=>b.date<=now&&isVisitedBooking(b)).sort((a,b)=>b.date.localeCompare(a.date));
     const lastFromBookings=past[0]?.date||'';
     const last=[c.lastVisit||'',lastFromBookings].sort().pop();
     if(!last)return null;
@@ -247,6 +325,7 @@ let homeMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
 let homeSelectedDate=todayISO;
 let reservationMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
 let reservationSelectedDate=todayISO;
+let analysisMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
 let reservationView='list';
 let importDraft=[],importImageFile=null,importImageDataURL='';
 
@@ -262,13 +341,22 @@ function bookingHTML(x){
   const end=x.end?`〜${esc(x.end)}`:'';
   const next=nextBookingTakenForBooking(x)?'<span class="next-ok">次回✓</span>':'<span class="next-ng">次回未</span>';
   const model=x.isModel?' ・ <b>モデル</b>':'';
-  return `<div class="item ${sourceClass(x.source)}" onclick="editBooking('${x.id}')"><div class="t">${esc(x.date)}　${esc(x.time)}${end}　${esc(x.customer||'未登録')}${model}</div><div class="s">${esc(x.menu||'メニュー未入力')} ・ ${yen(x.price)} ・ ${esc(x.source||'その他')} ・ ${x.newGuest?'新規':'既存'} ・ ${next}${x.paymentComplete?' ・ 決済完了':''}</div></div>`;
+  const flags=[
+    x.followAftercare?'アフター✓':'アフター−',
+    x.followWeek?'1週前✓':'1週前−',
+    x.follow2Days?'2日前✓':'2日前−'
+  ];
+  return `<div class="item ${sourceClass(x.source)}" onclick="editBooking('${x.id}')">
+    <div class="t">${esc(x.date)}　${esc(x.time)}${end}　${esc(x.customer||'未登録')}${model}<span class="status-badge ${statusClass(x)}">${statusLabel(x)}</span></div>
+    <div class="s">${esc(x.menu||'メニュー未入力')} ・ ${yen(x.price)} ・ ${esc(x.source||'その他')} ・ ${x.newGuest?'新規':'既存'} ・ ${next}${x.paymentComplete?' ・ 決済完了':''}</div>
+    <div class="follow-flags">${flags.map((f,i)=>`<span class="follow-flag ${[x.followAftercare,x.followWeek,x.follow2Days][i]?'done':''}">${f}</span>`).join('')}</div>
+  </div>`;
 }
 function monthLabel(d){return `${d.getFullYear()}年${d.getMonth()+1}月`}
 function monthString(d){return `${d.getFullYear()}-${pad(d.getMonth()+1)}`}
 function addMonths(d,n){return new Date(d.getFullYear(),d.getMonth()+n,1)}
 function getGoal(m){return Number(db.goals[m]||1000000)}
-function bookingsForMonth(m){return db.bookings.filter(x=>monthKey(x.date)===m&&x.status!=='cancelled')}
+function bookingsForMonth(m){return db.bookings.filter(x=>monthKey(x.date)===m&&isActiveBooking(x))}
 function salesForMonth(m){return db.sales.filter(x=>monthKey(x.date)===m)}
 function retailForMonth(m){return db.retail.filter(x=>monthKey(x.date)===m)}
 function monthStats(m){
@@ -296,8 +384,44 @@ function renderHome(){
   $('homeCalendar').innerHTML=calendarHTML(homeMonth,homeSelectedDate,'selectHomeDate');renderHomeDay();
   let fut='';for(let i=0;i<6;i++){const d=addMonths(homeMonth,i),mm=monthString(d),s=monthStats(mm);fut+=`<div class="future-card" onclick="jumpHomeMonth('${mm}')"><div class="m">${d.getMonth()+1}月</div><div class="stats">見込 ${yen(s.forecast)}<br>新規 ${s.newCount}｜既存 ${s.repeatCount}<br>通常客 ${s.count}｜モデル ${s.modelCount}</div></div>`}
   $('futureMonths').innerHTML=fut;
+  renderFollowupQueue();
   renderReturnReminders();
 }
+
+function followupDueItems(){
+  const out=[];
+  db.bookings.forEach(b=>{
+    const s=bookingStatus(b);
+    if(b.isModel)return;
+    if(isVisitedBooking(b)&&!b.followAftercare){
+      const d=daysBetween(b.date,todayISO);
+      if(d>=0&&d<=7)out.push({id:b.id,type:'aftercare',label:'アフター連絡',booking:b,sort:0});
+    }
+    if(s==='booked'&&b.date>=todayISO){
+      const until=daysBetween(todayISO,b.date);
+      if(until>=5&&until<=8&&!b.followWeek)out.push({id:b.id,type:'week',label:'1週間前連絡',booking:b,sort:1});
+      if(until>=1&&until<=3&&!b.follow2Days)out.push({id:b.id,type:'two',label:'2日前連絡',booking:b,sort:2});
+    }
+  });
+  return out.sort((a,b)=>(a.booking.date+a.booking.time).localeCompare(b.booking.date+b.booking.time)||a.sort-b.sort);
+}
+function markFollowupDone(id,type){
+  const b=db.bookings.find(x=>x.id===id);if(!b)return;
+  if(type==='aftercare')b.followAftercare=true;
+  if(type==='week')b.followWeek=true;
+  if(type==='two')b.follow2Days=true;
+  save();
+}
+function renderFollowupQueue(){
+  const host=$('followupQueue');if(!host)return;
+  const items=followupDueItems();
+  host.innerHTML=items.length?items.map(x=>`<div class="follow-box">
+    <div class="head"><div><b>${esc(x.booking.customer||'未登録')}</b></div><span class="status-badge status-booked">${esc(x.label)}</span></div>
+    <div class="meta">${esc(x.booking.date)} ${esc(x.booking.time)} ・ ${esc(x.booking.menu||'メニュー未入力')}</div>
+    <div class="actions"><button class="ghost" onclick="editBooking('${x.id}')">予約を見る</button><button onclick="markFollowupDone('${x.id}','${x.type}')">送信済みにする</button></div>
+  </div>`).join(''):empty('今対応するフォローはありません');
+}
+
 function renderReturnReminders(){
   const list=reminderCandidates();
   const host=$('returnReminders');if(!host)return;
@@ -310,7 +434,7 @@ function renderReturnReminders(){
     </div>
   </div>`).join(''):empty('今リマインド対象のお客様はいません');
 }
-function renderHomeDay(){const a=db.bookings.filter(x=>x.date===homeSelectedDate&&x.status!=='cancelled').sort((x,y)=>x.time.localeCompare(y.time));$('homeDayBookings').innerHTML=a.length?a.map(bookingHTML).join(''):empty('この日の予約はありません')}
+function renderHomeDay(){const a=db.bookings.filter(x=>x.date===homeSelectedDate&&isActiveBooking(x)).sort((x,y)=>x.time.localeCompare(y.time));$('homeDayBookings').innerHTML=a.length?a.map(bookingHTML).join(''):empty('この日の予約はありません')}
 function changeHomeMonth(n){homeMonth=addMonths(homeMonth,n);homeSelectedDate=monthString(homeMonth)+'-01';renderHome()}
 function jumpHomeMonth(m){const [y,mo]=m.split('-').map(Number);homeMonth=new Date(y,mo-1,1);homeSelectedDate=m+'-01';renderHome()}
 function selectHomeDate(d){homeSelectedDate=d;renderHome()}
@@ -339,13 +463,33 @@ function setReservationView(v){
   reservationView=v;$('viewListBtn').classList.toggle('active',v==='list');$('viewCalBtn').classList.toggle('active',v==='calendar');
   $('reservationListView').classList.toggle('hidden',v!=='list');$('reservationCalendarView').classList.toggle('hidden',v!=='calendar');renderReservationCalendar();
 }
+function resetBookingFilters(){
+  ['bookingFilterName','bookingFilterFrom','bookingFilterTo'].forEach(id=>{if($(id))$(id).value=''});
+  ['bookingFilterSource','bookingFilterType','bookingFilterStatus','bookingFilterPayment','bookingFilterNext'].forEach(id=>{if($(id))$(id).value=''});
+  renderBookings();
+}
 function renderBookings(){
-  let a=[...activeBookings()],d=$('bookingFilterDate').value,s=$('bookingFilterSource').value;
-  if(d)a=a.filter(x=>x.date===d);
-  if(s)a=a.filter(x=>x.source===s);
+  let a=[...db.bookings];
+  const q=($('bookingFilterName')?.value||'').trim().toLowerCase();
+  const from=$('bookingFilterFrom')?.value||'',to=$('bookingFilterTo')?.value||'';
+  const source=$('bookingFilterSource')?.value||'',type=$('bookingFilterType')?.value||'';
+  const status=$('bookingFilterStatus')?.value||'',payment=$('bookingFilterPayment')?.value||'',next=$('bookingFilterNext')?.value||'';
+
+  if(q)a=a.filter(x=>(x.customer||'').toLowerCase().includes(q));
+  if(from)a=a.filter(x=>x.date>=from);
+  if(to)a=a.filter(x=>x.date<=to);
+  if(source)a=a.filter(x=>x.source===source);
+  if(type==='normal')a=a.filter(x=>!x.isModel);
+  if(type==='model')a=a.filter(x=>x.isModel);
+  if(status)a=a.filter(x=>bookingStatus(x)===status);
+  if(payment==='paid')a=a.filter(x=>!!x.paymentComplete);
+  if(payment==='unpaid')a=a.filter(x=>!x.paymentComplete);
+  if(next==='taken')a=a.filter(x=>nextBookingTakenForBooking(x));
+  if(next==='missing')a=a.filter(x=>!x.isModel&&!nextBookingTakenForBooking(x));
+
   a.sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
 
-  const normal=a.filter(x=>!x.isModel),models=a.filter(x=>x.isModel);
+  const countable=a.filter(isActiveBooking),normal=countable.filter(x=>!x.isModel),models=countable.filter(x=>x.isModel);
   const normalRevenue=normal.reduce((sum,x)=>sum+bookingRevenue(x),0);
   const modelRevenue=models.reduce((sum,x)=>sum+bookingRevenue(x),0);
   const totalRevenue=normalRevenue+modelRevenue;
@@ -359,9 +503,11 @@ function renderBookings(){
   </div>`;
 
   const sources=['SHAiRE','Nailie','minimo','Instagram','その他'];
-  const base=d?activeBookings().filter(x=>x.date===d):activeBookings();
-  const regularBase=base.filter(x=>!x.isModel);
-  const modelBase=base.filter(x=>x.isModel);
+  let sourceBase=db.bookings.filter(isActiveBooking);
+  if(from)sourceBase=sourceBase.filter(x=>x.date>=from);
+  if(to)sourceBase=sourceBase.filter(x=>x.date<=to);
+  const regularBase=sourceBase.filter(x=>!x.isModel);
+  const modelBase=sourceBase.filter(x=>x.isModel);
   const modelSourceRevenue=modelBase.reduce((sum,x)=>sum+bookingRevenue(x),0);
 
   $('reservationSourceSummary').innerHTML=`
@@ -373,12 +519,11 @@ function renderBookings(){
       }).join('')}
     </div>
     <div class="summary-card" style="margin-bottom:14px">
-      <div class="l">モデル</div>
-      <div class="v">${modelBase.length}人</div>
+      <div class="l">モデル</div><div class="v">${modelBase.length}人</div>
       <div class="small" style="margin-top:4px">${yen(modelSourceRevenue)}</div>
     </div>`;
 
-  $('bookingList').innerHTML=a.length?a.map(bookingHTML).join(''):empty('予約はまだありません');
+  $('bookingList').innerHTML=a.length?a.map(bookingHTML).join(''):empty('条件に合う予約はありません');
 }
 function changeReservationMonth(n){reservationMonth=addMonths(reservationMonth,n);reservationSelectedDate=monthString(reservationMonth)+'-01';renderReservationCalendar()}
 function selectReservationDate(d){reservationSelectedDate=d;renderReservationCalendar()}
@@ -396,23 +541,92 @@ function renderReservationCalendar(){
     <div class="summary-card"><div class="l">未取得</div><div class="v">${normal.length-next}人</div></div>
   </div>`+a.map(bookingHTML).join(''):empty('この日の予約はありません'));
 }
+function customerVisitHistory(name){
+  const n=normalizeName(name);
+  return db.bookings.filter(x=>normalizeName(x.customer)===n).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
+}
 function renderCustomers(){
-  const q=($('customerSearch').value||'').toLowerCase();let a=db.customers.filter(x=>(x.name||'').toLowerCase().includes(q));a.sort((x,y)=>(y.lastVisit||'').localeCompare(x.lastVisit||''));
-  $('customerList').innerHTML=a.length?a.map(x=>`<div class="item" onclick="editCustomer('${x.id}')"><div class="t">${esc(x.name)}</div><div class="s">${esc(x.note||'メモなし')}${x.lastVisit?' ・ 最終来店 '+esc(x.lastVisit):''}</div></div>`).join(''):empty('顧客を追加するとここに表示されます');
+  const q=($('customerSearch').value||'').toLowerCase();
+  let a=db.customers.filter(x=>(x.name||'').toLowerCase().includes(q));
+  a.sort((x,y)=>(y.lastVisit||'').localeCompare(x.lastVisit||''));
+  $('customerList').innerHTML=a.length?a.map(x=>{
+    const hist=customerVisitHistory(x.name);
+    const visits=hist.filter(isVisitedBooking);
+    const future=hist.filter(b=>isActiveBooking(b)&&b.date>=todayISO).sort((p,q)=>p.date.localeCompare(q.date))[0];
+    return `<div class="item" onclick="openCustomerChart('${x.id}')"><div class="t">${esc(x.name)}</div><div class="s">来店 ${visits.length}回${x.lastVisit?' ・ 最終 '+esc(x.lastVisit):''}${future?' ・ 次回 '+esc(future.date):''}</div></div>`;
+  }).join(''):empty('顧客を追加するとここに表示されます');
+}
+function openCustomerChart(id){
+  const c=db.customers.find(x=>x.id===id);if(!c)return;
+  const hist=customerVisitHistory(c.name);
+  const visits=hist.filter(isVisitedBooking);
+  const paid=hist.filter(x=>x.paymentComplete&&isActiveBooking(x));
+  const spend=paid.reduce((a,x)=>a+Number(x.price||0),0);
+  const future=hist.filter(x=>isActiveBooking(x)&&x.date>=todayISO).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time))[0];
+  const last=visits[0]?.date||c.lastVisit||'—';
+  modal(`<div class="chart-head"><div><h3 style="margin:0">${esc(c.name)}</h3><div class="small" style="margin-top:4px">${esc(c.note||'メモなし')}</div></div><button class="ghost" onclick="customerForm(db.customers.find(x=>x.id==='${id}')||{})">編集</button></div>
+    <div class="chart-stats">
+      <div class="chart-stat"><div class="l">来店回数</div><div class="v">${visits.length}回</div></div>
+      <div class="chart-stat"><div class="l">累計決済</div><div class="v">${yen(spend)}</div></div>
+      <div class="chart-stat"><div class="l">最終来店</div><div class="v" style="font-size:14px">${esc(last)}</div></div>
+      <div class="chart-stat"><div class="l">次回予約</div><div class="v" style="font-size:14px">${future?esc(future.date):'なし'}</div></div>
+    </div>
+    <button class="blue" style="width:100%;margin-bottom:12px" onclick="bookingForm({customer:'${esc(c.name).replace(/'/g,"&#39;")}',newGuest:false})">このお客様の予約を追加</button>
+    <h3 style="margin-top:14px">来店・予約履歴</h3>
+    ${hist.length?hist.map(b=>`<div class="history-row" onclick="editBooking('${b.id}')">
+      <div class="title">${esc(b.date)} ${esc(b.time)} ・ ${esc(b.menu||'メニュー未入力')} <span class="status-badge ${statusClass(b)}">${statusLabel(b)}</span></div>
+      <div class="meta">${yen(b.price)} ・ ${esc(b.source||'その他')}${b.isModel?' ・ モデル':''}${b.paymentComplete?' ・ 決済済み':''}<br>${b.formula?`薬剤：${esc(b.formula)}<br>`:''}${b.visitNote?`施術メモ：${esc(b.visitNote)}`:''}</div>
+    </div>`).join(''):empty('履歴はありません')}`);
+}
+function changeAnalysisMonth(n){analysisMonth=addMonths(analysisMonth,n);renderSales()}
+function analysisStats(m){
+  const all=db.bookings.filter(x=>monthKey(x.date)===m&&!x.isModel);
+  const visits=all.filter(isVisitedBooking);
+  const newVisits=visits.filter(x=>x.newGuest),repeatVisits=visits.filter(x=>!x.newGuest);
+  const nextTaken=visits.filter(nextBookingTakenForBooking).length;
+  const nextRate=visits.length?Math.round(nextTaken/visits.length*100):0;
+  const paidRevenue=all.filter(x=>x.paymentComplete&&isActiveBooking(x)).reduce((a,x)=>a+Number(x.price||0),0);
+  const avg=visits.length?Math.round(paidRevenue/visits.length):0;
+  const cancels=all.filter(x=>bookingStatus(x)==='cancelled').length;
+  const noshows=all.filter(x=>bookingStatus(x)==='noshow').length;
+
+  const uniqueNew=[...new Map(newVisits.map(x=>[normalizeName(x.customer),x])).values()].filter(x=>normalizeName(x.customer));
+  const secondReturned=uniqueNew.filter(first=>{
+    const n=normalizeName(first.customer);
+    return db.bookings.some(b=>normalizeName(b.customer)===n&&b.date>first.date&&isVisitedBooking(b));
+  }).length;
+  const secondRate=uniqueNew.length?Math.round(secondReturned/uniqueNew.length*100):0;
+  return {visits,newVisits,repeatVisits,nextTaken,nextRate,paidRevenue,avg,cancels,noshows,uniqueNew,secondReturned,secondRate,all};
+}
+function renderMonthlyAnalysis(){
+  const host=$('monthlyAnalysis'),srcHost=$('analysisSources');if(!host||!srcHost)return;
+  const m=monthString(analysisMonth),s=analysisStats(m);
+  host.innerHTML=`<div class="analysis-grid">
+    <div class="analysis-card"><div class="l">実来店</div><div class="v">${s.visits.length}人</div></div>
+    <div class="analysis-card"><div class="l">新規 / 既存</div><div class="v">${s.newVisits.length} / ${s.repeatVisits.length}</div></div>
+    <div class="analysis-card"><div class="l">次回予約率</div><div class="v">${s.nextRate}%</div><div class="small">${s.nextTaken}/${s.visits.length}</div></div>
+    <div class="analysis-card"><div class="l">2回目実来店率</div><div class="v">${s.secondRate}%</div><div class="small">${s.secondReturned}/${s.uniqueNew.length}</div></div>
+    <div class="analysis-card"><div class="l">平均単価</div><div class="v">${yen(s.avg)}</div></div>
+    <div class="analysis-card"><div class="l">キャンセル / 無断</div><div class="v">${s.cancels} / ${s.noshows}</div></div>
+  </div>`;
+  const sources=['SHAiRE','Nailie','minimo','Instagram','その他'];
+  srcHost.innerHTML=sources.map(source=>{
+    const xs=s.visits.filter(x=>x.source===source);
+    const rev=s.all.filter(x=>x.source===source&&x.paymentComplete&&isActiveBooking(x)).reduce((a,x)=>a+Number(x.price||0),0);
+    return `<div class="analysis-source"><b>${source}</b><div class="small" style="margin-top:4px">実来店 ${xs.length}人 ・ 確定売上 ${yen(rev)}</div></div>`;
+  }).join('');
 }
 function renderSales(){
-  const m=monthString(homeMonth);
-  const bookingRows=bookingsForMonth(m).filter(x=>x.paymentComplete);
+  const m=monthString(analysisMonth);
+  $('analysisMonthTitle').textContent=monthLabel(analysisMonth);
+  const bookingRows=bookingsForMonth(m).filter(x=>x.paymentComplete&&isActiveBooking(x));
   const t=bookingRows.reduce((a,b)=>a+Number(b.price||0),0);
   const r=retailForMonth(m).reduce((a,b)=>a+Number(b.amount||0),0);
-
-  $('techSales').textContent=yen(t);
-  $('retailSales').textContent=yen(r);
-  $('totalSales').textContent=yen(t+r);
-
   const extras=salesForMonth(m);
   const extraTotal=extras.reduce((a,b)=>a+Number(b.amount||0),0);
+
   $('techSales').textContent=yen(t+extraTotal);
+  $('retailSales').textContent=yen(r);
   $('totalSales').textContent=yen(t+extraTotal+r);
 
   const all=[
@@ -422,6 +636,7 @@ function renderSales(){
   ].sort((a,b)=>b.date.localeCompare(a.date));
 
   $('salesList').innerHTML=all.length?all.map(x=>`<div class="item"><div class="t">${esc(x.date)} ${yen(x.amount)}</div><div class="s">${esc(x.type)} ・ ${esc(x.customer||x.product||'')}</div></div>`).join(''):empty('売上データはまだありません');
+  renderMonthlyAnalysis();
 }
 function renderRetail(){
   $('productList').innerHTML=db.products.length?db.products.map((x,i)=>`<div class="item" onclick="productForm(${i})"><div class="t">${esc(x.name)}</div><div class="s">販売価格 ${yen(x.price)} ・ 在庫 ${Number(x.stock||0)}</div></div>`).join(''):empty('商品を追加してください');
@@ -566,6 +781,96 @@ async function copyStoryAvailability(){
   }
 }
 
+
+function backupPayload(){
+  return {
+    app:"Salon Manager",
+    version:4,
+    exportedAt:new Date().toISOString(),
+    data:db
+  };
+}
+function backupFileName(){
+  const d=new Date();
+  return `salon-manager-backup-${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}.json`;
+}
+async function exportBackup(){
+  const payload=JSON.stringify(backupPayload(),null,2);
+  const blob=new Blob([payload],{type:'application/json'});
+  const file=new File([blob],backupFileName(),{type:'application/json'});
+  const status=$('backupStatus');
+
+  try{
+    if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({
+        title:'Salon Manager バックアップ',
+        text:'Salon Managerのバックアップデータです。',
+        files:[file]
+      });
+      if(status)status.textContent='バックアップを共有 / 保存しました。';
+      return;
+    }
+  }catch(err){
+    if(err && err.name==='AbortError')return;
+  }
+
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=backupFileName();
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+  if(status)status.textContent='バックアップファイルを保存しました。';
+}
+async function importBackup(event){
+  const file=event.target.files&&event.target.files[0];
+  if(!file)return;
+  const status=$('backupStatus');
+
+  try{
+    const raw=await file.text();
+    const parsed=JSON.parse(raw);
+    const restored=parsed&&parsed.data?parsed.data:parsed;
+
+    if(!restored || typeof restored!=='object' ||
+       !Array.isArray(restored.bookings) ||
+       !Array.isArray(restored.customers)){
+      throw new Error('形式が違います');
+    }
+
+    const bookingCount=restored.bookings.length;
+    const customerCount=restored.customers.length;
+    const ok=confirm(
+      `このバックアップを復元しますか？\n\n予約 ${bookingCount}件\n顧客 ${customerCount}件\n\n現在のデータはバックアップの内容に置き換わります。`
+    );
+    if(!ok){event.target.value='';return;}
+
+    db={
+      ...structuredClone(initial),
+      ...restored,
+      goals:restored.goals||{},
+      bookings:Array.isArray(restored.bookings)?restored.bookings:[],
+      customers:Array.isArray(restored.customers)?restored.customers:[],
+      sales:Array.isArray(restored.sales)?restored.sales:[],
+      retail:Array.isArray(restored.retail)?restored.retail:[],
+      products:Array.isArray(restored.products)&&restored.products.length?restored.products:structuredClone(initial.products)
+    };
+
+    localStorage.setItem(KEY,JSON.stringify(db));
+    renderAll();
+    if(status)status.textContent=`復元完了：予約 ${bookingCount}件 / 顧客 ${customerCount}件`;
+    alert('バックアップを復元しました');
+  }catch(err){
+    console.error(err);
+    if(status)status.textContent='復元できませんでした。Salon ManagerのバックアップJSONを選んでください。';
+    alert('バックアップを読み込めませんでした');
+  }finally{
+    event.target.value='';
+  }
+}
+
 function renderAll(){renderHome();renderBookings();renderReservationCalendar();renderCustomers();renderSales();renderRetail()}
 function modal(h){$('sheet').innerHTML=h;$('modal').classList.remove('hidden')}function closeModal(){$('modal').classList.add('hidden')}
 function currentTab(){return document.querySelector('.nav button.active').dataset.tab}
@@ -573,19 +878,44 @@ function openAdd(){const t=currentTab();if(t==='reservations')return bookingForm
 function quickChooser(){modal('<h3>追加</h3><div class="list"><button onclick="bookingForm()">予約を追加</button><button onclick="customerForm()">顧客を追加</button><button onclick="saleForm()">売上を追加</button><button onclick="retailChooser()">店販を追加</button></div>')}
 
 function bookingForm(x={}){
-  modal(`<h3>${x.id?'予約を編集':'予約を追加'}</h3><label>日付</label><input id="fDate" type="date" value="${esc(x.date||todayISO)}">
+  modal(`<h3>${x.id?'予約を編集':'予約を追加'}</h3>
+  <label>日付</label><input id="fDate" type="date" value="${esc(x.date||todayISO)}">
   <div class="row"><div><label>開始</label><input id="fTime" type="time" value="${esc(x.time||'11:00')}"></div><div><label>終了</label><input id="fEnd" type="time" value="${esc(x.end||'13:00')}"></div></div>
-  <label>予約名</label><input id="fCustomer" value="${esc(x.customer||'')}"><label>メニュー</label><input id="fMenu" value="${esc(x.menu||'カット+カラー')}"><label>料金</label><input id="fPrice" type="number" value="${Number(x.price||0)}">
+  <label>予約名</label><input id="fCustomer" value="${esc(x.customer||'')}">
+  <label>メニュー</label><input id="fMenu" value="${esc(x.menu||'カット+カラー')}">
+  <label>料金</label><input id="fPrice" type="number" value="${Number(x.price||0)}">
   <label>予約媒体</label><select id="fSource">${['SHAiRE','Nailie','minimo','Instagram','その他'].map(s=>`<option ${x.source===s?'selected':''}>${s}</option>`).join('')}</select>
   <label>予約区分</label><select id="fModel"><option value="normal" ${!x.isModel?'selected':''}>通常</option><option value="model" ${x.isModel?'selected':''}>モデル</option></select>
   <label>新規 / 既存</label><select id="fNew"><option value="new" ${x.newGuest?'selected':''}>新規</option><option value="repeat" ${x.newGuest===false?'selected':''}>既存</option></select>
-  <label><input id="fNext" type="checkbox" style="width:auto" ${x.nextBookingTaken?'checked':''}> 次回予約が取れた</label>
+  <label>来店ステータス</label><select id="fStatus">
+    <option value="booked" ${bookingStatus(x)==='booked'?'selected':''}>予約中</option>
+    <option value="visited" ${bookingStatus(x)==='visited'?'selected':''}>来店済み</option>
+    <option value="cancelled" ${bookingStatus(x)==='cancelled'?'selected':''}>キャンセル</option>
+    <option value="noshow" ${bookingStatus(x)==='noshow'?'selected':''}>無断キャンセル</option>
+  </select>
+
+  <div class="check-card">
+    <b>次回予約・フォロー</b>
+    <label><input id="fNext" type="checkbox" style="width:auto" ${x.nextBookingTaken?'checked':''}> 次回予約が取れた</label>
+    <label><input id="fAftercare" type="checkbox" style="width:auto" ${x.followAftercare?'checked':''}> 当日アフター送信済み</label>
+    <label><input id="fWeek" type="checkbox" style="width:auto" ${x.followWeek?'checked':''}> 1週間前連絡済み</label>
+    <label><input id="fTwoDays" type="checkbox" style="width:auto" ${x.follow2Days?'checked':''}> 2日前連絡済み</label>
+  </div>
+
   <label><input id="fPaid" type="checkbox" style="width:auto" ${x.paymentComplete?'checked':''}> 決済完了</label>
-  <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveBooking('${x.id||''}')">保存</button></div>${x.id?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteBooking('${x.id}')">削除</button>`:''}`);
+
+  <h3 style="margin-top:18px">施術カルテ</h3>
+  <label>薬剤 / 配合</label><textarea id="fFormula" placeholder="例：8NB:8MT=1:1 / 3%">${esc(x.formula||'')}</textarea>
+  <label>施術メモ</label><textarea id="fVisitNote" placeholder="髪の状態・カット設計・次回提案など">${esc(x.visitNote||'')}</textarea>
+
+  <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveBooking('${x.id||''}')">保存</button></div>
+  ${x.id?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteBooking('${x.id}')">削除</button>`:''}`);
 }
 function saveBooking(id){
-  const o={id:id||uid(),date:$('fDate').value,time:$('fTime').value,end:$('fEnd').value,customer:$('fCustomer').value.trim(),menu:$('fMenu').value.trim(),price:+$('fPrice').value||0,source:$('fSource').value,isModel:$('fModel').value==='model',newGuest:$('fNew').value==='new',nextBookingTaken:$('fNext').checked,paymentComplete:$('fPaid').checked,status:'booked'};
-  if(id)db.bookings=db.bookings.map(x=>x.id===id?{...x,...o}:x);else db.bookings.push(o);upsertCustomerFromBooking(o);save();closeModal();
+  const prev=id?(db.bookings.find(x=>x.id===id)||{}):{};
+  const o={...prev,id:id||uid(),date:$('fDate').value,time:$('fTime').value,end:$('fEnd').value,customer:$('fCustomer').value.trim(),menu:$('fMenu').value.trim(),price:+$('fPrice').value||0,source:$('fSource').value,isModel:$('fModel').value==='model',newGuest:$('fNew').value==='new',status:$('fStatus').value,nextBookingTaken:$('fNext').checked,followAftercare:$('fAftercare').checked,followWeek:$('fWeek').checked,follow2Days:$('fTwoDays').checked,paymentComplete:$('fPaid').checked,formula:$('fFormula').value.trim(),visitNote:$('fVisitNote').value.trim()};
+  if(id)db.bookings=db.bookings.map(x=>x.id===id?o:x);else db.bookings.push(o);
+  upsertCustomerFromBooking(o);save();closeModal();
 }
 function editBooking(id){bookingForm(db.bookings.find(x=>x.id===id)||{})}
 function deleteBooking(id){db.bookings=db.bookings.filter(x=>x.id!==id);save();closeModal()}
@@ -593,7 +923,7 @@ function upsertCustomerFromBooking(o){
   if(!o.customer)return;
   let c=db.customers.find(x=>normalizeName(x.name)===normalizeName(o.customer));
   if(!c){c={id:uid(),name:o.customer,lastVisit:'',note:''};db.customers.push(c)}
-  if(o.date<=todayISO && (!c.lastVisit||o.date>c.lastVisit))c.lastVisit=o.date;
+  if(isVisitedBooking(o)&&(!c.lastVisit||o.date>c.lastVisit))c.lastVisit=o.date;
   if(hasFutureBooking(o.customer))c.reminderSnoozeUntil='';
 }
 function customerForm(x={}){
@@ -985,7 +1315,7 @@ function mergeImport(){
   let added=0,updated=0,skipped=0;
   importDraft.forEach(x=>{
     if(x.mergeAction==='skip'){skipped++;return}
-    const base={date:x.date,time:x.time,end:x.end,customer:x.customer.trim(),menu:x.menu||'',price:Number(x.price||0),source:'SHAiRE',newGuest:!!x.newGuest,isModel:false,nextBookingTaken:false,paymentComplete:!!x.paymentComplete,status:'booked',importedFrom:'SHAiRE screenshot'};
+    const base={date:x.date,time:x.time,end:x.end,customer:x.customer.trim(),menu:x.menu||'',price:Number(x.price||0),source:'SHAiRE',newGuest:!!x.newGuest,isModel:false,nextBookingTaken:false,followAftercare:false,followWeek:false,follow2Days:false,paymentComplete:!!x.paymentComplete,status:'booked',formula:'',visitNote:'',importedFrom:'SHAiRE screenshot'};
     if(x.mergeAction==='update'&&x.existingId){db.bookings=db.bookings.map(b=>b.id===x.existingId?{...b,...base}:b);updated++}
     else{const exact=db.bookings.find(b=>b.date===base.date&&b.time===base.time&&normalizeName(b.customer)===normalizeName(base.customer));if(exact){db.bookings=db.bookings.map(b=>b.id===exact.id?{...b,...base}:b);updated++}else{db.bookings.push({id:uid(),...base});added++}}
     upsertCustomerFromBooking(base);
