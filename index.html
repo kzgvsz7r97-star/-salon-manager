@@ -362,7 +362,7 @@ function renderBookings(){
   const base=d?activeBookings().filter(x=>x.date===d):activeBookings();
   const regularBase=base.filter(x=>!x.isModel);
   const modelBase=base.filter(x=>x.isModel);
-  const modelRevenue=modelBase.reduce((sum,x)=>sum+bookingRevenue(x),0);
+  const modelSourceRevenue=modelBase.reduce((sum,x)=>sum+bookingRevenue(x),0);
 
   $('reservationSourceSummary').innerHTML=`
     <div class="source-summary">
@@ -375,7 +375,7 @@ function renderBookings(){
     <div class="summary-card" style="margin-bottom:14px">
       <div class="l">モデル</div>
       <div class="v">${modelBase.length}人</div>
-      <div class="small" style="margin-top:4px">${yen(modelRevenue)}</div>
+      <div class="small" style="margin-top:4px">${yen(modelSourceRevenue)}</div>
     </div>`;
 
   $('bookingList').innerHTML=a.length?a.map(bookingHTML).join(''):empty('予約はまだありません');
