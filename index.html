@@ -563,7 +563,7 @@ function openCustomerChart(id){
   const paid=hist.filter(x=>x.paymentComplete&&isActiveBooking(x));
   const spend=paid.reduce((a,x)=>a+Number(x.price||0),0);
   const future=hist.filter(x=>isActiveBooking(x)&&x.date>=todayISO).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
-  const last=visits[0]?.date||c.lastVisit||'—';
+  const last=visits[0]?.date||c.lastVisit||'-';
 
   modal(`
     <div class="chart-head">
@@ -571,6 +571,7 @@ function openCustomerChart(id){
         <h3 style="margin:0">${esc(c.name)}</h3>
         <div class="small" style="margin-top:4px">顧客カルテ</div>
       </div>
+      <button class="ghost" onclick="customerForm(db.customers.find(x=>x.id==='${id}')||{})">編集</button>
     </div>
 
     <div class="chart-stats">
@@ -578,38 +579,50 @@ function openCustomerChart(id){
         <div class="l">来店回数</div>
         <div class="v">${visits.length}回</div>
       </div>
-
       <div class="chart-stat">
         <div class="l">累計決済</div>
         <div class="v">${yen(spend)}</div>
       </div>
-
       <div class="chart-stat">
         <div class="l">最終来店</div>
         <div class="v" style="font-size:14px">${esc(last)}</div>
       </div>
-
       <div class="chart-stat">
         <div class="l">次回予約</div>
-        <div class="v" style="font-size:14px">${future?esc(future[0]?.date||'—'):'—'}</div>
+        <div class="v" style="font-size:14px">${future.length?esc(future[0].date):'なし'}</div>
       </div>
     </div>
 
-    <div style="margin:14px 0">
-      <div class="small" style="margin-bottom:6px">LINE連携ID</div>
+    <div class="card" style="margin-top:14px">
+      <h3 style="margin-top:0">LINE連携</h3>
+      <div class="small" style="margin-bottom:8px">
+        LINEで「連携ID」と送って表示されたIDを貼り付け
+      </div>
+
       <input
         id="customerLineId"
-        type="text"
+        placeholder="LINE連携ID"
         value="${esc(c.lineUserId||'')}"
-        placeholder="Uから始まるLINE連携ID"
       >
+
       <button
         class="blue"
         style="width:100%;margin-top:8px"
-        onclick="saveCustomerLineId('${c.id}')"
+        onclick="saveCustomerLineId('${id}')"
       >
-        LINE連携IDを保存
+        LINE IDを保存
       </button>
+
+      ${c.lineUserId ? `
+        <div class="small" style="margin-top:8px">
+          ✓ LINE連携済み
+        </div>
+      ` : ''}
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h3 style="margin-top:0">メモ</h3>
+      <div class="small">${esc(c.note||'メモなし')}</div>
     </div>
 
     <button
