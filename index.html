@@ -155,6 +155,7 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
 
   <section id="sales" class="section">
     <h2>売上</h2>
+    <div class="note" style="margin:0 4px 10px">予約売上は「決済完了」にした分だけ確定売上に反映されます。</div>
     <div class="grid">
       <div class="card kpi"><div class="l">技術売上</div><div class="v money" id="techSales">¥0</div></div>
       <div class="card kpi"><div class="l">店販売上</div><div class="v money" id="retailSales">¥0</div></div>
@@ -274,8 +275,8 @@ function monthStats(m){
   const b=bookingsForMonth(m);
   const normal=b.filter(x=>!x.isModel),models=b.filter(x=>x.isModel);
 
-  // 予約に入力した料金を売上の基準にする
-  const bookingSales=b.filter(x=>x.date<=todayISO).reduce((a,x)=>a+Number(x.price||0),0);
+  // 売上は決済完了した予約のみ。未決済は見込みに残す
+  const bookingSales=b.filter(x=>x.paymentComplete).reduce((a,x)=>a+Number(x.price||0),0);
   const bookingForecast=b.reduce((a,x)=>a+Number(x.price||0),0);
   const extraSales=salesForMonth(m).reduce((a,x)=>a+Number(x.amount||0),0);
   const retail=retailForMonth(m).reduce((a,x)=>a+Number(x.amount||0),0);
@@ -345,24 +346,37 @@ function renderBookings(){
   a.sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
 
   const normal=a.filter(x=>!x.isModel),models=a.filter(x=>x.isModel);
-  const totalRevenue=a.reduce((sum,x)=>sum+bookingRevenue(x),0);
+  const normalRevenue=normal.reduce((sum,x)=>sum+bookingRevenue(x),0);
+  const modelRevenue=models.reduce((sum,x)=>sum+bookingRevenue(x),0);
+  const totalRevenue=normalRevenue+modelRevenue;
   const nextTaken=normal.filter(nextBookingTakenForBooking).length;
   $('reservationTotals').innerHTML=`<div class="summary-grid">
-    <div class="summary-card"><div class="l">通常客</div><div class="v">${normal.length}人</div></div>
-    <div class="summary-card"><div class="l">モデル</div><div class="v">${models.length}人</div></div>
-    <div class="summary-card wide"><div class="l">合計売上</div><div class="v">${yen(totalRevenue)}</div></div>
+    <div class="summary-card"><div class="l">通常客</div><div class="v">${normal.length}人</div><div class="small">${yen(normalRevenue)}</div></div>
+    <div class="summary-card"><div class="l">モデル</div><div class="v">${models.length}人</div><div class="small">${yen(modelRevenue)}</div></div>
+    <div class="summary-card wide"><div class="l">合計見込み</div><div class="v">${yen(totalRevenue)}</div></div>
     <div class="summary-card"><div class="l">次回予約取得</div><div class="v">${nextTaken}/${normal.length||0}</div></div>
     <div class="summary-card"><div class="l">未取得</div><div class="v">${Math.max(0,normal.length-nextTaken)}人</div></div>
   </div>`;
 
   const sources=['SHAiRE','Nailie','minimo','Instagram','その他'];
   const base=d?activeBookings().filter(x=>x.date===d):activeBookings();
-  $('reservationSourceSummary').innerHTML=`<div class="source-summary">${sources.map(src=>{
-    const xs=base.filter(x=>x.source===src);
-    const rev=xs.reduce((sum,x)=>sum+bookingRevenue(x),0);
-    const regular=xs.filter(x=>!x.isModel).length,model=xs.filter(x=>x.isModel).length;
-    return `<div class="source-box"><div class="name">${src}</div><div class="num">客 ${regular} / モデル ${model}<br>${yen(rev)}</div></div>`;
-  }).join('')}</div>`;
+  const regularBase=base.filter(x=>!x.isModel);
+  const modelBase=base.filter(x=>x.isModel);
+  const modelRevenue=modelBase.reduce((sum,x)=>sum+bookingRevenue(x),0);
+
+  $('reservationSourceSummary').innerHTML=`
+    <div class="source-summary">
+      ${sources.map(src=>{
+        const xs=regularBase.filter(x=>x.source===src);
+        const rev=xs.reduce((sum,x)=>sum+bookingRevenue(x),0);
+        return `<div class="source-box"><div class="name">${src}</div><div class="num">${xs.length}人<br>${yen(rev)}</div></div>`;
+      }).join('')}
+    </div>
+    <div class="summary-card" style="margin-bottom:14px">
+      <div class="l">モデル</div>
+      <div class="v">${modelBase.length}人</div>
+      <div class="small" style="margin-top:4px">${yen(modelRevenue)}</div>
+    </div>`;
 
   $('bookingList').innerHTML=a.length?a.map(bookingHTML).join(''):empty('予約はまだありません');
 }
@@ -372,11 +386,12 @@ function renderReservationCalendar(){
   $('reservationMonthTitle').textContent=monthLabel(reservationMonth);
   $('reservationCalendar').innerHTML=calendarHTML(reservationMonth,reservationSelectedDate,'selectReservationDate');
   const a=activeBookings().filter(x=>x.date===reservationSelectedDate).sort((x,y)=>x.time.localeCompare(y.time));
-  const rev=a.reduce((s,x)=>s+bookingRevenue(x),0),normal=a.filter(x=>!x.isModel),models=a.filter(x=>x.isModel),next=normal.filter(nextBookingTakenForBooking).length;
+  const rev=a.reduce((s,x)=>s+bookingRevenue(x),0),paidRev=a.filter(x=>x.paymentComplete).reduce((s,x)=>s+bookingRevenue(x),0),normal=a.filter(x=>!x.isModel),models=a.filter(x=>x.isModel),next=normal.filter(nextBookingTakenForBooking).length;
   $('calendarDayBookings').innerHTML=(a.length?`<div class="summary-grid">
     <div class="summary-card"><div class="l">通常客</div><div class="v">${normal.length}人</div></div>
     <div class="summary-card"><div class="l">モデル</div><div class="v">${models.length}人</div></div>
-    <div class="summary-card wide"><div class="l">売上</div><div class="v">${yen(rev)}</div></div>
+    <div class="summary-card"><div class="l">確定売上</div><div class="v">${yen(paidRev)}</div></div>
+    <div class="summary-card"><div class="l">見込み</div><div class="v">${yen(rev)}</div></div>
     <div class="summary-card"><div class="l">次回予約</div><div class="v">${next}/${normal.length}</div></div>
     <div class="summary-card"><div class="l">未取得</div><div class="v">${normal.length-next}人</div></div>
   </div>`+a.map(bookingHTML).join(''):empty('この日の予約はありません'));
@@ -387,7 +402,7 @@ function renderCustomers(){
 }
 function renderSales(){
   const m=monthString(homeMonth);
-  const bookingRows=bookingsForMonth(m).filter(x=>x.date<=todayISO);
+  const bookingRows=bookingsForMonth(m).filter(x=>x.paymentComplete);
   const t=bookingRows.reduce((a,b)=>a+Number(b.price||0),0);
   const r=retailForMonth(m).reduce((a,b)=>a+Number(b.amount||0),0);
 
