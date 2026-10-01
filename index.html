@@ -308,9 +308,10 @@ async function analyzeShaireScreenshot(){
   try{
     const img=await loadImage(importImageDataURL),blocks=detectBookingBlocks(img);let ocr={data:{text:'',lines:[],words:[]}};
     if(window.Tesseract)ocr=await Tesseract.recognize(importImageFile,'jpn+eng',{logger:m=>{if(m.status==='recognizing text')st.textContent=`文字を読み取り中… ${Math.round((m.progress||0)*100)}%`}});
-    const items=(ocr.data.lines&&ocr.data.lines.length)?ocr.data.lines:(ocr.data.words||[]);
+    const items=(ocr.data.words&&ocr.data.words.length)?ocr.data.words:(ocr.data.lines||[]);
+    const timeAxis=detectVerticalTimeAxis(items,img.naturalWidth,img.naturalHeight);
     const weekStart=parseWeekStart(ocr.data.text)||guessWeekStartFromToday();
-    importDraft=blocks.map((b,i)=>blockToDraft(b,items,weekStart,i)).filter(x=>x.customer||x.paymentComplete);
+    importDraft=blocks.map((b,i)=>blockToDraft(b,items,weekStart,i,timeAxis)).filter(x=>x.customer||x.paymentComplete);
     if(!importDraft.length){
       const names=extractLikelyNames(ocr.data.text);
       importDraft=names.map((name,i)=>{const d=new Date(weekStart);d.setDate(weekStart.getDate()+Math.min(i,6));const date=localISO(d);return{id:uid(),date,time:'11:00',end:'13:00',customer:name,menu:'',price:0,source:'SHAiRE',newGuest:inferNewGuest(name,date),paymentComplete:false,conflict:false,mergeAction:'add'}});
@@ -333,19 +334,100 @@ function detectBookingBlocks(img){
   return mergeCloseBlocks(blocks);
 }
 function mergeCloseBlocks(blocks){return blocks.sort((a,b)=>a.col-b.col||a.y0-b.y0).reduce((out,b)=>{const p=out[out.length-1];if(p&&p.col===b.col&&b.y0-p.y1<10){p.y1=b.y1;return out}out.push({...b});return out},[])}
-function snap30(m){return Math.round(m/30)*30}
-function minToTime(m){m=Math.max(0,Math.min(1439,m));return `${pad(Math.floor(m/60))}:${pad(m%60)}`}
-function yToTime(y,b){return minToTime(snap30(7*60+((y-b.gridT)/(b.gridB-b.gridT))*16*60))}
-function parseWeekStart(text){
-  const t=String(text||'').replace(/\s/g,'');let m=t.match(/(20\d{2})年(\d{1,2})月(\d{1,2})日?[-ー〜~](?:20\d{2}年)?(\d{1,2})月(\d{1,2})日?/);
-  if(m)return new Date(+m[1],+m[2]-1,+m[3]);m=t.match(/(20\d{2})年(\d{1,2})月(\d{1,2})日?/);if(m)return new Date(+m[1],+m[2]-1,+m[3]);return null;
+function snap30(mins){return Math.round(mins/30)*30}
+function minToTime(mins){mins=Math.max(0,Math.min(1439,mins));return `${pad(Math.floor(mins/60))}:${pad(mins%60)}`}
+
+/* SHAiREの左側の縦軸(07:00,08:00...)をOCRして、画像上のY座標→時刻に変換 */
+function detectVerticalTimeAxis(items,W,H){
+  const pts=[];
+  (items||[]).forEach(it=>{
+    const bb=it.bbox||{};
+    const x=((bb.x0||0)+(bb.x1||0))/2;
+    const y=((bb.y0||0)+(bb.y1||0))/2;
+    if(x>W*.13)return;
+    const raw=String(it.text||'').replace(/\s/g,'').replace(/[Oo]/g,'0');
+    const m=raw.match(/^([0-2]?\d)[:：.]?([0-5]\d)$/);
+    if(!m)return;
+    const h=+m[1],min=+m[2];
+    if(h<6||h>23)return;
+    pts.push({y,mins:h*60+min});
+  });
+  pts.sort((a,b)=>a.y-b.y);
+  if(pts.length>=2){
+    const n=pts.length;
+    const sy=pts.reduce((a,p)=>a+p.y,0), sm=pts.reduce((a,p)=>a+p.mins,0);
+    const syy=pts.reduce((a,p)=>a+p.y*p.y,0), sym=pts.reduce((a,p)=>a+p.y*p.mins,0);
+    const den=n*syy-sy*sy;
+    if(Math.abs(den)>1){
+      const a=(n*sym-sy*sm)/den, c=(sm-a*sy)/n;
+      return {a,c,points:pts};
+    }
+  }
+  return null;
 }
-function guessWeekStartFromToday(){const d=new Date(),day=d.getDay(),diff=day===0?-6:1-day;d.setDate(d.getDate()+diff);d.setHours(0,0,0,0);return d}
-function blockToDraft(b,items,weekStart,i){
-  const inside=items.filter(l=>{const bb=l.bbox||{},x=((bb.x0||0)+(bb.x1||0))/2,y=((bb.y0||0)+(bb.y1||0))/2;return x>b.x0-4&&x<b.x1+4&&y>b.y0-8&&y<b.y1+8}).map(l=>String(l.text||'').trim()).filter(Boolean);
-  const paymentComplete=inside.some(t=>t.includes('決済完了'));let customer=inside.filter(t=>!t.includes('決済完了')&&!/^\d{1,2}:\d{2}$/.test(t)&&t.length<18).join(' ').replace(/\s+/g,' ').replace(/決済完了/g,'').trim();
-  const d=new Date(weekStart);d.setDate(weekStart.getDate()+b.col);const date=localISO(d),time=yToTime(b.y0,b),end=yToTime(b.y1,b);
-  return{id:uid(),date,time,end,customer,menu:'',price:0,source:'SHAiRE',newGuest:inferNewGuest(customer,date),paymentComplete,conflict:false,mergeAction:'add'};
+function yToTime(y,b,axis){
+  let mins;
+  if(axis) mins=axis.a*y+axis.c;
+  else {
+    const frac=(y-b.gridT)/(b.gridB-b.gridT);
+    mins=7*60+frac*16*60;
+  }
+  return minToTime(snap30(mins));
+}
+
+/* 予約ブロック内だけを見て、横書きの名前を1予約単位で組み立てる */
+function nameFromBlock(items,b){
+  const words=(items||[]).map(it=>{
+    const bb=it.bbox||{};
+    return {
+      text:String(it.text||'').trim(),
+      x0:bb.x0||0,x1:bb.x1||0,y0:bb.y0||0,y1:bb.y1||0,
+      cx:((bb.x0||0)+(bb.x1||0))/2,
+      cy:((bb.y0||0)+(bb.y1||0))/2
+    };
+  }).filter(w=>w.text && w.cx>b.x0-3 && w.cx<b.x1+3 && w.cy>b.y0-5 && w.cy<b.y1+5);
+
+  const clean=words.filter(w=>{
+    const t=w.text.replace(/\s/g,'');
+    if(!t)return false;
+    if(t.includes('決済')||t.includes('完了'))return false;
+    if(/^\d{1,2}[:：]\d{2}$/.test(t))return false;
+    return true;
+  }).sort((a,b)=>a.cy-b.cy||a.x0-b.x0);
+
+  if(!clean.length)return '';
+
+  /* 同じ横ラインの文字は横方向に連結、折り返しだけ次ラインとして結合 */
+  const lines=[];
+  clean.forEach(w=>{
+    const h=Math.max(10,w.y1-w.y0);
+    let line=lines.find(l=>Math.abs(l.cy-w.cy)<Math.max(10,h*.7));
+    if(!line){line={cy:w.cy,words:[]};lines.push(line)}
+    line.words.push(w);
+  });
+  lines.sort((a,b)=>a.cy-b.cy);
+  const lineTexts=lines.map(l=>{
+    l.words.sort((a,b)=>a.x0-b.x0);
+    return l.words.map(w=>w.text).join(' ').replace(/\s+/g,' ').trim();
+  }).filter(Boolean);
+
+  /* 例: 「イトウ ア」+「ミ」→「イトウ アミ」、「あや ちゃ」+「ん」→「あや ちゃん」 */
+  return lineTexts.reduce((acc,line,idx)=>{
+    if(idx===0)return line;
+    if(/^[ぁ-んァ-ヶーA-Za-z]{1,3}$/.test(line))return acc+line;
+    return acc+' '+line;
+  },'').replace(/\s+/g,' ').trim();
+}
+
+function blockToDraft(b,items,weekStart,i,timeAxis){
+  const paymentComplete=(items||[]).some(it=>{
+    const bb=it.bbox||{},x=((bb.x0||0)+(bb.x1||0))/2,y=((bb.y0||0)+(bb.y1||0))/2;
+    return x>b.x0-3&&x<b.x1+3&&y>b.y0-5&&y<b.y1+5&&String(it.text||'').includes('決済');
+  });
+  const customer=nameFromBlock(items,b);
+  const d=new Date(weekStart);d.setDate(weekStart.getDate()+b.col);
+  const date=localISO(d),time=yToTime(b.y0,b,timeAxis),end=yToTime(b.y1,b,timeAxis);
+  return {id:uid(),date,time,end,customer,menu:'',price:0,source:'SHAiRE',newGuest:inferNewGuest(customer,date),paymentComplete,conflict:false,mergeAction:'add'};
 }
 function extractLikelyNames(text){
   const bad=/決済|完了|売上|見込|新規|既存|今週|来週|先週|予約|顧客|設定|メッセージ|お知らせ|履歴|月|火|水|木|金|土|日|年|人|¥|\d{1,2}:\d{2}/;
@@ -353,8 +435,35 @@ function extractLikelyNames(text){
 }
 function markImportConflicts(){importDraft.forEach(x=>{const same=db.bookings.find(b=>b.date===x.date&&b.time===x.time);x.conflict=!!same;x.existingId=same?same.id:null;x.mergeAction=same?'update':'add'})}
 function renderImportResults(){
-  const host=$('importResults');if(!host)return;if(!importDraft.length){host.innerHTML=empty('読み取り結果なし。必要なら下から手動追加できます。');return}
-  host.innerHTML='<h3 style="margin-top:16px">読み取り結果</h3>'+importDraft.map((x,i)=>`<div class="import-row ${x.conflict?'warn':''}"><div class="mini">${x.conflict?'<span class="badge warn">同じ時間に既存予約あり</span>':''}</div><div class="row"><input type="date" value="${esc(x.date)}" onchange="updateImport(${i},'date',this.value)"><input type="time" value="${esc(x.time)}" onchange="updateImport(${i},'time',this.value)"><input type="time" value="${esc(x.end)}" onchange="updateImport(${i},'end',this.value)"></div><input value="${esc(x.customer)}" placeholder="予約名" onchange="updateImport(${i},'customer',this.value)"><div class="row"><select onchange="updateImport(${i},'newGuest',this.value==='new')"><option value="new" ${x.newGuest?'selected':''}>新規</option><option value="repeat" ${!x.newGuest?'selected':''}>既存</option></select><select onchange="updateImport(${i},'paymentComplete',this.value==='paid')"><option value="open" ${!x.paymentComplete?'selected':''}>未決済</option><option value="paid" ${x.paymentComplete?'selected':''}>決済完了</option></select></div><input type="number" inputmode="numeric" value="${Number(x.price||0)}" placeholder="料金（任意）" onchange="updateImport(${i},'price',+this.value||0)">${x.conflict?`<select onchange="updateImport(${i},'mergeAction',this.value)"><option value="update" ${x.mergeAction==='update'?'selected':''}>既存予約を更新</option><option value="add" ${x.mergeAction==='add'?'selected':''}>別予約として追加</option><option value="skip" ${x.mergeAction==='skip'?'selected':''}>スキップ</option></select>`:''}<button class="danger" style="width:100%" onclick="removeImport(${i})">この予約を除外</button></div>`).join('');
+  const host=$('importResults');if(!host)return;
+  if(!importDraft.length){host.innerHTML=empty('読み取り結果なし。必要なら下から手動追加できます。');return}
+  const order=[...importDraft.keys()].sort((a,b)=>(importDraft[a].date+importDraft[a].time).localeCompare(importDraft[b].date+importDraft[b].time));
+  let lastDate='';
+  let out='<h3 style="margin-top:16px">読み取り結果</h3>';
+  order.forEach(i=>{
+    const x=importDraft[i];
+    if(x.date!==lastDate){
+      out+=`<div style="font-size:13px;font-weight:800;margin:14px 2px 6px">${esc(x.date)}</div>`;
+      lastDate=x.date;
+    }
+    out+=`<div class="import-row ${x.conflict?'warn':''}">
+      <div class="mini">1予約ずつ確認 ${x.conflict?'<span class="badge warn">同じ時間に既存予約あり</span>':''}</div>
+      <div class="row">
+        <input type="time" value="${esc(x.time)}" onchange="updateImport(${i},'time',this.value)">
+        <input type="time" value="${esc(x.end)}" onchange="updateImport(${i},'end',this.value)">
+      </div>
+      <input type="date" value="${esc(x.date)}" onchange="updateImport(${i},'date',this.value)">
+      <input value="${esc(x.customer)}" placeholder="予約名" onchange="updateImport(${i},'customer',this.value)">
+      <div class="row">
+        <select onchange="updateImport(${i},'newGuest',this.value==='new')"><option value="new" ${x.newGuest?'selected':''}>新規</option><option value="repeat" ${!x.newGuest?'selected':''}>既存</option></select>
+        <select onchange="updateImport(${i},'paymentComplete',this.value==='paid')"><option value="open" ${!x.paymentComplete?'selected':''}>未決済</option><option value="paid" ${x.paymentComplete?'selected':''}>決済完了</option></select>
+      </div>
+      <input type="number" inputmode="numeric" value="${Number(x.price||0)}" placeholder="料金（任意）" onchange="updateImport(${i},'price',+this.value||0)">
+      ${x.conflict?`<select onchange="updateImport(${i},'mergeAction',this.value)"><option value="update" ${x.mergeAction==='update'?'selected':''}>既存予約を更新</option><option value="add" ${x.mergeAction==='add'?'selected':''}>別予約として追加</option><option value="skip" ${x.mergeAction==='skip'?'selected':''}>スキップ</option></select>`:''}
+      <button class="danger" style="width:100%" onclick="removeImport(${i})">この予約を除外</button>
+    </div>`;
+  });
+  host.innerHTML=out;
 }
 function updateImport(i,k,v){importDraft[i][k]=v;if(['date','time'].includes(k)){markImportConflicts();renderImportResults()}}
 function removeImport(i){importDraft.splice(i,1);renderImportResults()}
