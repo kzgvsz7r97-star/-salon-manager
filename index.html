@@ -329,7 +329,92 @@ let analysisMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
 let reservationView='list';
 let importDraft=[],importImageFile=null,importImageDataURL='';
 
-function save(){localStorage.setItem(KEY,JSON.stringify(db));renderAll()}
+const CLOUD_BACKUP_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/backup';
+const CLOUD_BACKUP_KEY_STORAGE='salonManagerCloudBackupKey';
+let cloudBackupTimer=null;
+
+function getCloudBackupKey(){
+  let key=localStorage.getItem(CLOUD_BACKUP_KEY_STORAGE)||'';
+
+  if(key)return key;
+
+  if(sessionStorage.getItem('salonManagerBackupPromptSkipped')){
+    return '';
+  }
+
+  key=(prompt('クラウド自動バックアップ用キーを入力')||'').trim();
+
+  if(!key){
+    sessionStorage.setItem('salonManagerBackupPromptSkipped','1');
+    return '';
+  }
+
+  localStorage.setItem(CLOUD_BACKUP_KEY_STORAGE,key);
+  return key;
+}
+
+function save(){
+  localStorage.setItem(KEY,JSON.stringify(db));
+  renderAll();
+  scheduleCloudBackup();
+}
+
+function scheduleCloudBackup(){
+  const key=getCloudBackupKey();
+  if(!key)return;
+
+  clearTimeout(cloudBackupTimer);
+
+  cloudBackupTimer=setTimeout(()=>{
+    cloudBackup(key);
+  },800);
+}
+
+async function cloudBackup(key=getCloudBackupKey()){
+  if(!key)return false;
+
+  try{
+    const r=await fetch(CLOUD_BACKUP_API,{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'X-Backup-Key':key
+      },
+      body:JSON.stringify({
+        data:db
+      })
+    });
+
+    if(!r.ok){
+      throw new Error(await r.text());
+    }
+
+    localStorage.setItem(
+      'salonManagerLastCloudBackup',
+      new Date().toISOString()
+    );
+
+    const status=$('backupStatus');
+
+    if(status){
+      status.textContent=
+        'クラウド自動バックアップ済み：'+
+        new Date().toLocaleString('ja-JP');
+    }
+
+    return true;
+  }catch(err){
+    console.error('Cloud backup failed:',err);
+
+    const status=$('backupStatus');
+
+    if(status){
+      status.textContent='クラウドバックアップに失敗しました';
+    }
+
+    return false;
+  }
+}
 function go(id,btn){
   document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));$(id).classList.add('active');
   document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));btn.classList.add('active');
