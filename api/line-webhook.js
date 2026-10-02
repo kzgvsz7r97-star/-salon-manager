@@ -52,15 +52,27 @@ export default async function handler(req, res) {
       }
 
       const text = event.message.text?.trim();
-
-      // 「連携ID」と送られた時だけ返信
-      if (text !== "連携ID") {
-        continue;
-      }
-
       const userId = event.source?.userId;
 
-      if (!userId) {
+      let replyText = "";
+
+      // 連携ID
+      if (text === "連携ID") {
+        if (!userId) continue;
+
+        replyText = `LINE連携ID\n${userId}`;
+      }
+
+      // メニュー相談
+      else if (text === "相談") {
+        replyText =
+          "ご相談ありがとうございます☺️\n\n" +
+          "髪型・カラー・メニュー選びなど、気になることをそのまま送ってください！\n\n" +
+          "仕上がりイメージがある場合は、写真も一緒に送っていただけるとスムーズです◎";
+      }
+
+      // それ以外は自動返信しない
+      else {
         continue;
       }
 
@@ -77,7 +89,7 @@ export default async function handler(req, res) {
             messages: [
               {
                 type: "text",
-                text: `LINE連携ID\n${userId}`,
+                text: replyText,
               },
             ],
           }),
