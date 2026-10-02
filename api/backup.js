@@ -70,7 +70,7 @@ export default async function handler(req, res) {
       }
 
       const r = await fetch(
-        `${base}/rest/v1/salon_backups`,
+        `${base}/rest/v1/salon-backups`,
         {
           method: 'POST',
           headers: {
@@ -95,7 +95,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET') {
       const r = await fetch(
-        `${base}/rest/v1/salon_backups?select=id,created_at,data&order=created_at.desc&limit=10`,
+        `${base}/rest/v1/salon-backups?select=id,created_at,data&order=created_at.desc&limit=10`,
         {
           headers: supabaseHeaders()
         }
