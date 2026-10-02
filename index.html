@@ -335,15 +335,11 @@ let cloudBackupTimer=null;
 
 function getCloudBackupKey(){
   let key=localStorage.getItem(CLOUD_BACKUP_KEY_STORAGE)||'';
-
   if(key)return key;
 
-  if(sessionStorage.getItem('salonManagerBackupPromptSkipped')){
-    return '';
-  }
+  if(sessionStorage.getItem('salonManagerBackupPromptSkipped'))return '';
 
   key=(prompt('クラウド自動バックアップ用キーを入力')||'').trim();
-
   if(!key){
     sessionStorage.setItem('salonManagerBackupPromptSkipped','1');
     return '';
@@ -364,10 +360,7 @@ function scheduleCloudBackup(){
   if(!key)return;
 
   clearTimeout(cloudBackupTimer);
-
-  cloudBackupTimer=setTimeout(()=>{
-    cloudBackup(key);
-  },800);
+  cloudBackupTimer=setTimeout(()=>cloudBackup(key),800);
 }
 
 async function cloudBackup(key=getCloudBackupKey()){
@@ -380,42 +373,27 @@ async function cloudBackup(key=getCloudBackupKey()){
         'Content-Type':'application/json',
         'X-Backup-Key':key
       },
-      body:JSON.stringify({
-        data:db
-      })
+      body:JSON.stringify({data:db})
     });
 
     if(!r.ok){
-  if(r.status===401){
-    localStorage.removeItem(CLOUD_BACKUP_KEY_STORAGE);
-    sessionStorage.removeItem('salonManagerBackupPromptSkipped');
-  }
-  throw new Error(await r.text());
-}
-  
-    localStorage.setItem(
-      'salonManagerLastCloudBackup',
-      new Date().toISOString()
-    );
-
-    const status=$('backupStatus');
-
-    if(status){
-      status.textContent=
-        'クラウド自動バックアップ済み：'+
-        new Date().toLocaleString('ja-JP');
+      if(r.status===401){
+        localStorage.removeItem(CLOUD_BACKUP_KEY_STORAGE);
+        sessionStorage.removeItem('salonManagerBackupPromptSkipped');
+      }
+      throw new Error(await r.text());
     }
 
+    localStorage.setItem('salonManagerLastCloudBackup',new Date().toISOString());
+    const status=$('backupStatus');
+    if(status){
+      status.textContent='クラウド自動バックアップ済み：'+new Date().toLocaleString('ja-JP');
+    }
     return true;
   }catch(err){
     console.error('Cloud backup failed:',err);
-
     const status=$('backupStatus');
-
-    if(status){
-      status.textContent='クラウドバックアップに失敗しました';
-    }
-
+    if(status)status.textContent='クラウドバックアップに失敗しました';
     return false;
   }
 }
@@ -652,7 +630,7 @@ function openCustomerChart(id){
   const paid=hist.filter(x=>x.paymentComplete&&isActiveBooking(x));
   const spend=paid.reduce((a,x)=>a+Number(x.price||0),0);
   const future=hist.filter(x=>isActiveBooking(x)&&x.date>=todayISO).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
-  const last=visits[0]?.date||c.lastVisit||'-';
+  const last=visits[0]?.date||c.lastVisit||'—';
 
   modal(`
     <div class="chart-head">
@@ -664,49 +642,18 @@ function openCustomerChart(id){
     </div>
 
     <div class="chart-stats">
-      <div class="chart-stat">
-        <div class="l">来店回数</div>
-        <div class="v">${visits.length}回</div>
-      </div>
-      <div class="chart-stat">
-        <div class="l">累計決済</div>
-        <div class="v">${yen(spend)}</div>
-      </div>
-      <div class="chart-stat">
-        <div class="l">最終来店</div>
-        <div class="v" style="font-size:14px">${esc(last)}</div>
-      </div>
-      <div class="chart-stat">
-        <div class="l">次回予約</div>
-        <div class="v" style="font-size:14px">${future.length?esc(future[0].date):'なし'}</div>
-      </div>
+      <div class="chart-stat"><div class="l">来店回数</div><div class="v">${visits.length}回</div></div>
+      <div class="chart-stat"><div class="l">累計決済</div><div class="v">${yen(spend)}</div></div>
+      <div class="chart-stat"><div class="l">最終来店</div><div class="v" style="font-size:14px">${esc(last)}</div></div>
+      <div class="chart-stat"><div class="l">次回予約</div><div class="v" style="font-size:14px">${future.length?esc(future[0].date):'なし'}</div></div>
     </div>
 
     <div class="card" style="margin-top:14px">
       <h3 style="margin-top:0">LINE連携</h3>
-      <div class="small" style="margin-bottom:8px">
-        LINEで「連携ID」と送って表示されたIDを貼り付け
-      </div>
-
-      <input
-        id="customerLineId"
-        placeholder="LINE連携ID"
-        value="${esc(c.lineUserId||'')}"
-      >
-
-      <button
-        class="blue"
-        style="width:100%;margin-top:8px"
-        onclick="saveCustomerLineId('${id}')"
-      >
-        LINE IDを保存
-      </button>
-
-      ${c.lineUserId ? `
-        <div class="small" style="margin-top:8px">
-          ✓ LINE連携済み
-        </div>
-      ` : ''}
+      <div class="small" style="margin-bottom:8px">LINEで「連携ID」と送って表示されたIDを貼り付け</div>
+      <input id="customerLineId" placeholder="LINE連携ID" value="${esc(c.lineUserId||'')}">
+      <button class="blue" style="width:100%;margin-top:8px" onclick="saveCustomerLineId('${id}')">LINE IDを保存</button>
+      ${c.lineUserId?`<div class="small" style="margin-top:8px">✓ LINE連携済み</div>`:''}
     </div>
 
     <div class="card" style="margin-top:14px">
@@ -714,42 +661,24 @@ function openCustomerChart(id){
       <div class="small">${esc(c.note||'メモなし')}</div>
     </div>
 
-    <button
-      class="blue"
-      style="width:100%;margin-bottom:12px"
-      onclick="bookingForm({customer:'${esc(c.name)}'})"
-    >
-      この顧客で予約を追加
-    </button>
+    <button class="blue" style="width:100%;margin:14px 0 12px" onclick="bookingForm({customer:'${esc(c.name).replace(/'/g,"&#39;")}',newGuest:false})">このお客様の予約を追加</button>
 
     <h3 style="margin-top:14px">来店・予約履歴</h3>
-
-    ${hist.length?hist.map(b=>`
-      <div class="history-row" onclick="editBooking('${b.id}')">
-        <div class="title">
-          ${esc(b.date)} ${esc(b.time)} ・ ${esc(b.menu||'メニュー未入力')}
-        </div>
-        <div class="meta">
-          ${yen(b.price)} ・ ${esc(b.source||'その他')}
-        </div>
-      </div>
-    `).join(''):empty('履歴はありません')}
+    ${hist.length?hist.map(b=>`<div class="history-row" onclick="editBooking('${b.id}')">
+      <div class="title">${esc(b.date)} ${esc(b.time)} ・ ${esc(b.menu||'メニュー未入力')} <span class="status-badge ${statusClass(b)}">${statusLabel(b)}</span></div>
+      <div class="meta">${yen(b.price)} ・ ${esc(b.source||'その他')}${b.isModel?' ・ モデル':''}${b.paymentComplete?' ・ 決済済み':''}<br>${b.formula?`薬剤：${esc(b.formula)}<br>`:''}${b.visitNote?`施術メモ：${esc(b.visitNote)}`:''}</div>
+    </div>`).join(''):empty('履歴はありません')}
   `);
 }
 
 function saveCustomerLineId(id){
-  const c=db.customers.find(x=>x.id===id);
-  if(!c)return;
-
+  const c=db.customers.find(x=>x.id===id);if(!c)return;
   const input=document.getElementById('customerLineId');
-  const lineUserId=(input?.value||'').trim();
-
-  c.lineUserId=lineUserId;
+  c.lineUserId=(input?.value||'').trim();
   save();
-
   alert('LINE連携IDを保存しました');
 }
-    
+
 function changeAnalysisMonth(n){analysisMonth=addMonths(analysisMonth,n);renderSales()}
 function analysisStats(m){
   const all=db.bookings.filter(x=>monthKey(x.date)===m&&!x.isModel);
@@ -1432,6 +1361,24 @@ function paymentInRun(words,run){
     /決済|完了/.test(String(w.text||''))
   );
 }
+function inferNewGuest(name,date){
+  const n=normalizeName(name);
+  if(!n)return true;
+
+  const priorBooking=db.bookings.some(
+    x=>normalizeName(x.customer)===n && x.date<date && isActiveBooking(x)
+  );
+
+  const cust=db.customers.find(
+    x=>normalizeName(x.name)===n
+  );
+
+  return !(
+    priorBooking ||
+    (cust && cust.lastVisit && cust.lastVisit<date)
+  );
+}
+
 function bookingRunToDraft(run,words,weekStart,geom,i){
   const d=new Date(weekStart);
   d.setDate(weekStart.getDate()+run.col);
