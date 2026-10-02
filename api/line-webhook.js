@@ -63,8 +63,11 @@ export default async function handler(req, res) {
         replyText = `LINE連携ID\n${userId}`;
       }
 
-      // メニュー相談
-      else if (text === "相談") {
+      // メニュー診断・相談
+      else if (
+        text === "メニューを相談したいです！" ||
+        text === "相談"
+      ) {
         replyText =
           "ご相談ありがとうございます☺️\n\n" +
           "髪型・カラー・メニュー選びなど、気になることをそのまま送ってください！\n\n" +
