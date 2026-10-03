@@ -63,6 +63,12 @@ export default async function handler(req, res) {
         replyText = `LINE連携ID\n${userId}`;
       }
 
+      // 商品注文（管理画面への保存はお客様専用ページから）
+      else if (text === "商品注文" || text === "商品を注文したいです！" || text === "店販") {
+        const orderUrl = process.env.PUBLIC_ORDER_URL || "https://kzgvsz7r97-star.github.io/-salon-manager/order.html";
+        replyText = "ヘアケア商品のご注文はこちらから☺️\n\n" + orderUrl + "\n\nご来店の7日前までにお申し込みください。ReFaの商品はページ内のB happyからご購入いただけます◎";
+      }
+
       // メニュー診断・相談
       else if (
         text === "メニューを相談したいです！" ||
@@ -118,3 +124,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
