@@ -120,14 +120,14 @@ function responseState(state,profile){
       name:profile.name,
       role:profile.role||'staff',
       sources:Array.isArray(profile.sources)?profile.sources:[],
-      retailProductIds:Array.isArray(profile.retailProductIds)?profile.retailProductIds:[],
+      retailCatalog:Array.isArray(profile.retailCatalog)?profile.retailCatalog:[],
       goals:profile.goals||{}
     },
     bookings,
     customers:staffCustomers(state,bookings),
     sales:staffSales(state,profile.id),
     retail:staffRetail(state,profile.id),
-    products:activeProducts(state)
+    products:[]
   };
 }
 function sanitizeBooking(raw,profile,id){
@@ -267,18 +267,43 @@ async function staffHandler(req,res,session){
   if(action==='updatePreferences'){
     const rawSources=Array.isArray(b.sources)?b.sources:[];
     const sources=[...new Set(rawSources.map(x=>String(x||'').trim().slice(0,80)).filter(Boolean))].slice(0,20);
-    const productIds=[...new Set(
-      (Array.isArray(b.retailProductIds)?b.retailProductIds:[]).map(x=>String(x||'').trim()).filter(Boolean)
-    )].slice(0,100);
     if(!sources.length)return res.status(400).json({ok:false,error:'予約サイトを1つ以上選んでください'});
-    const validProducts=new Set(
-      (state.products||[]).filter(p=>!deleted(state,'products',p.id)).map(p=>String(p.id))
-    );
     profile.sources=sources;
-    profile.retailProductIds=productIds.filter(id=>validProducts.has(id));
     state.staffProfiles=(state.staffProfiles||[]).map(p=>
-      p.id===profile.id?{...p,sources:profile.sources,retailProductIds:profile.retailProductIds}:p
+      p.id===profile.id?{...p,sources:profile.sources}:p
     );
+    await writeState(state);
+    return res.status(200).json({ok:true,...responseState(state,profile)});
+  }
+
+  if(action==='upsertStaffProduct'){
+    const raw=b.product||{};
+    const id=String(raw.id||'').trim();
+    const catalog=Array.isArray(profile.retailCatalog)?profile.retailCatalog:[];
+    const existing=id?catalog.find(x=>String(x.id)===id):null;
+    const name=String(raw.name||'').trim().slice(0,150);
+    const category=String(raw.category||'その他').trim().slice(0,80)||'その他';
+    const url=String(raw.url||'').trim().slice(0,1000);
+    const price=Math.max(0,Math.min(1000000,Math.round(Number(raw.price)||0)));
+    let safeUrl='';
+    try{
+      const u=new URL(url);
+      if(u.protocol==='https:'&&!u.username&&!u.password)safeUrl=u.href;
+    }catch{}
+    if(!name||!safeUrl)return res.status(400).json({ok:false,error:'商品名とhttps://から始まる商品リンクを確認してください'});
+    const clean={id:existing?.id||uid(),name,category,url:safeUrl,price,active:raw.active!==false};
+    profile.retailCatalog=existing?catalog.map(x=>String(x.id)===String(existing.id)?{...x,...clean}:x):[...catalog,clean];
+    state.staffProfiles=(state.staffProfiles||[]).map(p=>p.id===profile.id?{...p,retailCatalog:profile.retailCatalog}:p);
+    await writeState(state);
+    return res.status(200).json({ok:true,...responseState(state,profile)});
+  }
+
+  if(action==='deleteStaffProduct'){
+    const id=String(b.id||'');
+    const catalog=Array.isArray(profile.retailCatalog)?profile.retailCatalog:[];
+    if(!catalog.some(x=>String(x.id)===id))return res.status(404).json({ok:false,error:'商品が見つかりません'});
+    profile.retailCatalog=catalog.filter(x=>String(x.id)!==id);
+    state.staffProfiles=(state.staffProfiles||[]).map(p=>p.id===profile.id?{...p,retailCatalog:profile.retailCatalog}:p);
     await writeState(state);
     return res.status(200).json({ok:true,...responseState(state,profile)});
   }
@@ -319,24 +344,20 @@ async function staffHandler(req,res,session){
 
   if(action==='addRetail'){
     const x=b.retail||{},productId=String(x.productId||'');
-    const product=(state.products||[]).find(p=>String(p.id)===productId&&!deleted(state,'products',p.id));
-    const allowed=new Set(Array.isArray(profile.retailProductIds)?profile.retailProductIds.map(String):[]);
-    const date=String(x.date||'');
-    const quantity=Math.round(Number(x.quantity)||0);
+    const catalog=Array.isArray(profile.retailCatalog)?profile.retailCatalog:[];
+    const product=catalog.find(p=>String(p.id)===productId&&p.active!==false);
+    const date=String(x.date||''),quantity=Math.round(Number(x.quantity)||0);
     const amount=Math.max(0,Math.min(1000000,Math.round(Number(x.amount)||0)));
-    if(!product||!allowed.has(productId))
-      return res.status(400).json({ok:false,error:'使用する店販商品を選択してください'});
+    if(!product)return res.status(400).json({ok:false,error:'登録した商品から選択してください'});
     if(!DATE.test(date)||quantity<1||quantity>100)
       return res.status(400).json({ok:false,error:'日付と数量を確認してください'});
     const row={
       id:uid(),date,product:product.name,productId:product.id,
-      category:product.category||'その他',quantity,
+      productUrl:product.url||'',category:product.category||'その他',quantity,
       customer:String(x.customer||'').trim().slice(0,100),
       amount,staffId:profile.id
     };
     state.retail=[...(state.retail||[]),row];
-    if((product.fulfillment||'salon')!=='external')
-      product.stock=Math.max(0,Number(product.stock||0)-quantity);
     await writeState(state);
     return res.status(200).json({ok:true,...responseState(state,profile)});
   }
@@ -347,9 +368,6 @@ async function staffHandler(req,res,session){
     if(!existing)return res.status(404).json({ok:false,error:'店販履歴が見つかりません'});
     state.syncDeleted.retail[id]=Date.now();
     state.retail=(state.retail||[]).filter(x=>x.id!==id);
-    const product=(state.products||[]).find(p=>String(p.id)===String(existing.productId));
-    if(product&&(product.fulfillment||'salon')!=='external')
-      product.stock=Number(product.stock||0)+Number(existing.quantity||1);
     await writeState(state);
     return res.status(200).json({ok:true,...responseState(state,profile)});
   }
