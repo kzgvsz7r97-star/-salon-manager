@@ -118,6 +118,34 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
 .week-booking{margin:1px 2px;border-radius:7px;padding:4px 5px;background:#f2f4f7;border-left:3px solid #777;overflow:hidden;z-index:3;font-size:10px;line-height:1.25;cursor:pointer;min-height:28px}
 .week-booking .wk-name{font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .week-booking .wk-meta{font-size:9px;opacity:.72;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Mobile: 週間カレンダーを横・縦スクロールなしで1画面に収める */
+@media(max-width:600px){
+  #reservationWeekView .monthbar{margin-bottom:4px}
+  #reservationWeekView .row.auto{margin-bottom:4px!important}
+  #reservationWeekView .week-help{display:none}
+  .week-scroll{overflow:hidden;border-radius:12px}
+  .week-grid{
+    width:100%;
+    min-width:0;
+    grid-template-columns:30px repeat(7,minmax(0,1fr));
+    grid-template-rows:34px repeat(24,19px);
+  }
+  .week-corner{font-size:8px}
+  .week-dayhead{font-size:8px;line-height:1.08;letter-spacing:-.2px}
+  .week-time{font-size:7px;padding-top:1px}
+  .week-booking{
+    margin:0 1px;
+    border-radius:4px;
+    padding:1px 2px;
+    border-left-width:2px;
+    font-size:7.5px;
+    line-height:1.08;
+    min-height:17px;
+  }
+  .week-booking .wk-name{font-size:7.5px}
+  .week-booking .wk-meta{display:none}
+}
 .week-booking.source-shaire{border-left-color:#111}.week-booking.source-nailie{border-left-color:#ff8bb3}.week-booking.source-minimo{border-left-color:#7e75ff}.week-booking.source-instagram{border-left-color:#f0a040}.week-booking.source-other{border-left-color:#aaa}
 .week-help{font-size:11px;color:#777;margin:0 4px 8px}
 .product-item{background:#fff;border-radius:14px;padding:10px;display:grid;grid-template-columns:62px minmax(0,1fr) auto;gap:10px;align-items:center}
@@ -244,7 +272,7 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
         <button onclick="changeReservationWeek(1)">›</button>
       </div>
       <div class="row auto" style="margin-bottom:8px">
-        <div class="week-help" style="flex:1">左右にスクロールできます。予約をタップすると編集できます。</div>
+        <div class="week-help" style="flex:1">7日分を1画面表示。予約をタップすると編集できます。</div>
         <button class="ghost" onclick="jumpReservationWeekToday()">今週</button>
       </div>
       <div class="week-scroll"><div id="reservationWeekGrid" class="week-grid"></div></div>
