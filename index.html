@@ -206,7 +206,7 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
     <h2>データ管理</h2>
     <div class="backup-box">
       <div><b>クラウド同期 / バックアップ</b></div>
-      <div class="small" style="margin-top:4px">同じ同期キーを使う端末どうしで自動同期します。片方の端末だけで全データを上書きしない保護モードです。</div>
+      <div class="small" style="margin-top:4px">同じ同期キーを使う端末どうしで自動同期します。片方の端末だけで全データを上書きせず、削除したデータも他端末から復活しない保護モードです。</div>
       <div class="backup-actions">
         <button onclick="exportBackup()">バックアップ保存</button>
         <button class="soft" onclick="document.getElementById('backupImportFile').click()">バックアップ復元</button>
@@ -445,6 +445,13 @@ function normalizedCloudData(restored){
     goalPlans:restored?.goalPlans||{},
     orderSettings:restored?.orderSettings||{},
     seenOrders:Array.isArray(restored?.seenOrders)?restored.seenOrders:[],
+    syncDeleted:{
+      bookings:{...(restored?.syncDeleted?.bookings||{})},
+      customers:{...(restored?.syncDeleted?.customers||{})},
+      products:{...(restored?.syncDeleted?.products||{})},
+      sales:{...(restored?.syncDeleted?.sales||{})},
+      retail:{...(restored?.syncDeleted?.retail||{})}
+    },
     bookings:Array.isArray(restored?.bookings)?restored.bookings:[],
     customers:Array.isArray(restored?.customers)?restored.customers:[],
     sales:Array.isArray(restored?.sales)?restored.sales:[],
@@ -529,10 +536,33 @@ function mergeObjectSafe(localObj,remoteObj,baseObj){
   return out;
 }
 
+function mergeDeletedMaps(localDeleted={},remoteDeleted={}){
+  const out={};
+  const kinds=['bookings','customers','products','sales','retail'];
+  kinds.forEach(kind=>{
+    out[kind]={};
+    const keys=new Set([
+      ...Object.keys(localDeleted?.[kind]||{}),
+      ...Object.keys(remoteDeleted?.[kind]||{})
+    ]);
+    keys.forEach(id=>{
+      out[kind][id]=Math.max(
+        Number(localDeleted?.[kind]?.[id]||0),
+        Number(remoteDeleted?.[kind]?.[id]||0)
+      );
+    });
+  });
+  return out;
+}
+function removeDeletedItems(items,deletedMap){
+  return (items||[]).filter(x=>!x?.id||!deletedMap?.[String(x.id)]);
+}
+
 function mergeDbSafe(localData,remoteData,baseData){
   const local=normalizedCloudData(localData||{});
   const remote=normalizedCloudData(remoteData||{});
   const base=baseData?normalizedCloudData(baseData):null;
+  const syncDeleted=mergeDeletedMaps(local.syncDeleted,remote.syncDeleted);
 
   return {
     ...remote,
@@ -541,11 +571,12 @@ function mergeDbSafe(localData,remoteData,baseData){
     goalPlans:mergeObjectSafe(local.goalPlans,remote.goalPlans,base?.goalPlans),
     orderSettings:mergeObjectSafe(local.orderSettings,remote.orderSettings,base?.orderSettings),
     seenOrders:[...new Set([...(remote.seenOrders||[]),...(local.seenOrders||[])])],
-    bookings:mergeArraySafe(local.bookings,remote.bookings,base?.bookings),
-    customers:mergeArraySafe(local.customers,remote.customers,base?.customers),
-    sales:mergeArraySafe(local.sales,remote.sales,base?.sales),
-    retail:mergeArraySafe(local.retail,remote.retail,base?.retail),
-    products:mergeArraySafe(local.products,remote.products,base?.products)
+    syncDeleted,
+    bookings:removeDeletedItems(mergeArraySafe(local.bookings,remote.bookings,base?.bookings),syncDeleted.bookings),
+    customers:removeDeletedItems(mergeArraySafe(local.customers,remote.customers,base?.customers),syncDeleted.customers),
+    sales:removeDeletedItems(mergeArraySafe(local.sales,remote.sales,base?.sales),syncDeleted.sales),
+    retail:removeDeletedItems(mergeArraySafe(local.retail,remote.retail,base?.retail),syncDeleted.retail),
+    products:removeDeletedItems(mergeArraySafe(local.products,remote.products,base?.products),syncDeleted.products)
   };
 }
 
@@ -1504,7 +1535,17 @@ function saveBooking(id){
   upsertCustomerFromBooking(o);const c=db.customers.find(c=>normalizeName(c.name)===normalizeName(o.customer));if(c&&instagram)c.instagram=instagram;save();closeModal();
 }
 function editBooking(id){bookingForm(db.bookings.find(x=>x.id===id)||{})}
-function deleteBooking(id){db.bookings=db.bookings.filter(x=>x.id!==id);save();closeModal()}
+function markDeleted(kind,id){
+  if(!id)return;
+  db.syncDeleted ||= {bookings:{},customers:{},products:{},sales:{},retail:{}};
+  db.syncDeleted[kind] ||= {};
+  db.syncDeleted[kind][String(id)]=Date.now();
+}
+function deleteBooking(id){
+  markDeleted('bookings',id);
+  db.bookings=db.bookings.filter(x=>x.id!==id);
+  save();closeModal();
+}
 function upsertCustomerFromBooking(o){
   if(!o.customer)return;
   let c=db.customers.find(x=>normalizeName(x.name)===normalizeName(o.customer));
@@ -1518,7 +1559,11 @@ function customerForm(x={}){
 }
 function saveCustomer(id){const prev=db.customers.find(x=>x.id===id)||{};const o={...prev,id:id||uid(),name:$('cName').value.trim(),lastVisit:$('cLast').value,note:$('cNote').value,instagram:$('cInstagram').value.trim(),kana:$('cKana').value.trim()};if(!o.name)return;if(o.instagram&&!instagramURL(o.instagram)){alert('InstagramのプロフィールURLかユーザーネームを確認してください');return;}if(id)db.customers=db.customers.map(x=>x.id===id?o:x);else db.customers.push(o);save();closeModal()}
 function editCustomer(id){customerForm(db.customers.find(x=>x.id===id)||{})}
-function deleteCustomer(id){db.customers=db.customers.filter(x=>x.id!==id);save();closeModal()}
+function deleteCustomer(id){
+  markDeleted('customers',id);
+  db.customers=db.customers.filter(x=>x.id!==id);
+  save();closeModal();
+}
 function saleForm(){modal(`<h3>売上を追加</h3><div class="note" style="margin-bottom:10px">通常の技術売上は予約の料金から自動集計されます。ここは予約外の売上を記録したい時だけ使ってください。</div><label>日付</label><input id="sDate" type="date" value="${todayISO}"><label>顧客名</label><input id="sCustomer"><label>金額</label><input id="sAmount" type="number"><label>メニュー</label><input id="sMenu"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveSale()">保存</button></div>`)}
 function saveSale(){db.sales.push({id:uid(),date:$('sDate').value,customer:$('sCustomer').value.trim(),amount:+$('sAmount').value||0,menu:$('sMenu').value.trim()});const c=db.customers.find(x=>normalizeName(x.name)===normalizeName($('sCustomer').value));if(c)c.lastVisit=$('sDate').value;save();closeModal()}
 function retailChooser(){modal('<h3>店販</h3><button style="width:100%;margin-bottom:8px" onclick="retailSaleForm()">販売を記録</button><button class="ghost" style="width:100%" onclick="productForm()">商品を追加</button>')}
@@ -1567,6 +1612,7 @@ function saveProduct(i){
 function deleteProduct(i){
   const p=db.products[i];if(!p)return;
   if(!confirm(`${p.name}を削除しますか？\n販売履歴は残ります。`))return;
+  markDeleted('products',p.id);
   db.products.splice(i,1);save();closeModal();
 }
 function retailSaleForm(){
@@ -2021,6 +2067,8 @@ const CATALOG_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/catalog'
 let remoteOrders=[],ordersBusy=false,orderNotice='';
 function migrateExtras(){
   db.goalPlans ||= {};db.orderSettings ||= {};db.seenOrders ||= [];
+  db.syncDeleted ||= {bookings:{},customers:{},products:{},sales:{},retail:{}};
+  ['bookings','customers','products','sales','retail'].forEach(k=>db.syncDeleted[k] ||= {});
   db.products.forEach(p=>{p.id ||= uid();p.category ||= /ミルク|エマルジョン/.test(p.name)?'ミルク':/オイル/.test(p.name)?'オイル':/スプレー/.test(p.name)?'スプレー':/シャンプー/.test(p.name)?'シャンプー':/トリートメント/.test(p.name)?'トリートメント':/リファ|ReFa/i.test(p.name)?'ReFa':'その他';p.fulfillment ||= 'salon';});
 }
 function safeHTTPS(value){try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password?u.href:'';}catch{return '';}}
