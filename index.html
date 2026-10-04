@@ -104,10 +104,14 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
 .analysis-source{background:#fff;border-radius:13px;padding:10px 12px;margin:6px 0}
 .check-card{background:#fff;border-radius:14px;padding:11px 12px;margin:8px 0}
 .check-card label{display:block;margin:7px 0;font-size:14px}
+.duplicate-candidate{background:#fff;border-radius:14px;padding:12px;margin:8px 0}
+.duplicate-candidate .names{font-weight:800}
+.duplicate-candidate .reason{font-size:11px;color:#777;margin-top:4px}
+.duplicate-candidate .actions{margin-top:8px}
 
 
 .week-scroll{overflow:auto;-webkit-overflow-scrolling:touch;border-radius:18px;background:#fff}
-.week-grid{display:grid;grid-template-columns:54px repeat(7,minmax(94px,1fr));grid-template-rows:48px repeat(24,32px);min-width:760px;background:#fff;position:relative}
+.week-grid{display:grid;grid-template-columns:54px repeat(7,minmax(94px,1fr));grid-template-rows:48px repeat(30,32px);min-width:760px;background:#fff;position:relative}
 .week-corner,.week-dayhead,.week-time,.week-slot{border-right:1px solid #eee;border-bottom:1px solid #eee}
 .week-corner{grid-column:1;grid-row:1;display:flex;align-items:center;justify-content:center;font-size:10px;color:#888;background:#fafafa;position:sticky;left:0;z-index:5}
 .week-dayhead{display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:800;background:#fafafa;z-index:2}
@@ -129,7 +133,7 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
     width:100%;
     min-width:0;
     grid-template-columns:30px repeat(7,minmax(0,1fr));
-    grid-template-rows:34px repeat(24,19px);
+    grid-template-rows:34px repeat(30,17px);
   }
   .week-corner{font-size:8px}
   .week-dayhead{font-size:8px;line-height:1.08;letter-spacing:-.2px}
@@ -201,14 +205,15 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
 
     <h2>データ管理</h2>
     <div class="backup-box">
-      <div><b>バックアップ</b></div>
-      <div class="small" style="margin-top:4px">予約・顧客・売上・店販データを保存 / 復元できます。</div>
+      <div><b>クラウド同期 / バックアップ</b></div>
+      <div class="small" style="margin-top:4px">同じ同期キーを使う端末どうしで、予約・顧客・売上を自動同期します。</div>
       <div class="backup-actions">
         <button onclick="exportBackup()">バックアップ保存</button>
         <button class="soft" onclick="document.getElementById('backupImportFile').click()">バックアップ復元</button>
       </div>
+      <button class="blue" style="width:100%;margin-top:8px" onclick="manualCloudSync()">今すぐ同期</button>
       <input id="backupImportFile" type="file" accept=".json,application/json" style="display:none" onchange="importBackup(event)">
-      <div id="backupStatus" class="backup-status">機種変更やホーム画面の入れ直し前に保存しておくと安心です。</div>
+      <div id="backupStatus" class="backup-status">クラウド同期を確認中…</div>
     </div>
 
     <h2>今後の予約状況</h2>
@@ -282,6 +287,7 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
   <section id="customers" class="section">
     <h2>顧客</h2>
     <input id="customerSearch" placeholder="名前で検索" oninput="renderCustomers()">
+    <div id="duplicateCandidates"></div>
     <div id="customerList" class="list"></div>
   </section>
 
@@ -404,7 +410,11 @@ let importDraft=[],importImageFile=null,importImageDataURL='';
 
 const CLOUD_BACKUP_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/backup';
 const CLOUD_BACKUP_KEY_STORAGE='salonManagerCloudBackupKey';
+const CLOUD_SYNC_APPLIED_STORAGE='salonManagerCloudAppliedAt';
 let cloudBackupTimer=null;
+let cloudSyncBusy=false;
+let cloudDirty=false;
+let cloudApplying=false;
 
 function getCloudBackupKey(){
   let key=localStorage.getItem(CLOUD_BACKUP_KEY_STORAGE)||'';
@@ -412,7 +422,7 @@ function getCloudBackupKey(){
 
   if(sessionStorage.getItem('salonManagerBackupPromptSkipped'))return '';
 
-  key=(prompt('クラウド自動バックアップ用キーを入力')||'').trim();
+  key=(prompt('クラウド同期キーを入力してください（Mac / iPhoneで同じキーを使います）')||'').trim();
   if(!key){
     sessionStorage.setItem('salonManagerBackupPromptSkipped','1');
     return '';
@@ -422,10 +432,110 @@ function getCloudBackupKey(){
   return key;
 }
 
+function syncStatus(text){
+  const el=$('backupStatus');
+  if(el)el.textContent=text;
+}
+
+function normalizedCloudData(restored){
+  return {
+    ...structuredClone(initial),
+    ...restored,
+    goals:restored?.goals||{},
+    bookings:Array.isArray(restored?.bookings)?restored.bookings:[],
+    customers:Array.isArray(restored?.customers)?restored.customers:[],
+    sales:Array.isArray(restored?.sales)?restored.sales:[],
+    retail:Array.isArray(restored?.retail)?restored.retail:[],
+    products:Array.isArray(restored?.products)&&restored.products.length?restored.products:structuredClone(initial.products)
+  };
+}
+
+async function latestCloudSnapshot(key){
+  const r=await fetch(CLOUD_BACKUP_API,{headers:{'X-Backup-Key':key}});
+  const body=await r.json().catch(()=>({}));
+
+  if(!r.ok){
+    if(r.status===401){
+      localStorage.removeItem(CLOUD_BACKUP_KEY_STORAGE);
+      localStorage.removeItem(CLOUD_SYNC_APPLIED_STORAGE);
+      sessionStorage.removeItem('salonManagerBackupPromptSkipped');
+    }
+    throw new Error(body.error||'同期データを取得できませんでした');
+  }
+
+  return body.backups?.[0]||null;
+}
+
+function applyCloudSnapshot(row,force=false){
+  if(!row?.data||typeof row.data!=='object')return false;
+
+  const created=String(row.created_at||'');
+  const last=
+    localStorage.getItem(CLOUD_SYNC_APPLIED_STORAGE)||
+    localStorage.getItem('salonManagerLastCloudBackup')||
+    '';
+
+  if(!force&&created&&last&&created<=last)return false;
+
+  cloudApplying=true;
+  try{
+    db=normalizedCloudData(row.data);
+    migrateExtras();
+    localStorage.setItem(KEY,JSON.stringify(db));
+    if(created)localStorage.setItem(CLOUD_SYNC_APPLIED_STORAGE,created);
+    renderAll();
+    if(reservationView==='week')renderReservationWeek();
+  }finally{
+    cloudApplying=false;
+  }
+  return true;
+}
+
+async function syncFromCloud(force=false,keyOverride=''){
+  const key=keyOverride||getCloudBackupKey();
+  if(!key||cloudSyncBusy)return false;
+
+  if(cloudDirty&&!force){
+    syncStatus('この端末の変更をクラウドへ保存中…');
+    return false;
+  }
+
+  cloudSyncBusy=true;
+  try{
+    const latest=await latestCloudSnapshot(key);
+    if(!latest){
+      syncStatus('クラウド同期：まだ保存データがありません');
+      return false;
+    }
+
+    const applied=applyCloudSnapshot(latest,force);
+    const when=latest.created_at
+      ?new Date(latest.created_at).toLocaleString('ja-JP')
+      :'';
+
+    syncStatus(
+      applied
+        ?`クラウドから同期しました${when?'：'+when:''}`
+        :`同期済み（最新）${when?'：'+when:''}`
+    );
+    return applied;
+  }catch(err){
+    console.error('Cloud sync failed:',err);
+    syncStatus('クラウド同期に失敗しました。同期キーと通信を確認してください');
+    return false;
+  }finally{
+    cloudSyncBusy=false;
+  }
+}
+
 function save(){
   localStorage.setItem(KEY,JSON.stringify(db));
   renderAll();
-  scheduleCloudBackup();
+
+  if(!cloudApplying){
+    cloudDirty=true;
+    scheduleCloudBackup();
+  }
 }
 
 function scheduleCloudBackup(){
@@ -433,11 +543,13 @@ function scheduleCloudBackup(){
   if(!key)return;
 
   clearTimeout(cloudBackupTimer);
-  cloudBackupTimer=setTimeout(()=>cloudBackup(key),800);
+  cloudBackupTimer=setTimeout(()=>cloudBackup(key),700);
 }
 
 async function cloudBackup(key=getCloudBackupKey()){
   if(!key)return false;
+
+  syncStatus('クラウドへ保存中…');
 
   try{
     const r=await fetch(CLOUD_BACKUP_API,{
@@ -452,23 +564,30 @@ async function cloudBackup(key=getCloudBackupKey()){
     if(!r.ok){
       if(r.status===401){
         localStorage.removeItem(CLOUD_BACKUP_KEY_STORAGE);
+        localStorage.removeItem(CLOUD_SYNC_APPLIED_STORAGE);
         sessionStorage.removeItem('salonManagerBackupPromptSkipped');
       }
       throw new Error(await r.text());
     }
 
+    cloudDirty=false;
     localStorage.setItem('salonManagerLastCloudBackup',new Date().toISOString());
-    const status=$('backupStatus');
-    if(status){
-      status.textContent='クラウド自動バックアップ済み：'+new Date().toLocaleString('ja-JP');
-    }
+    await syncFromCloud(true,key);
     return true;
   }catch(err){
+    cloudDirty=true;
     console.error('Cloud backup failed:',err);
-    const status=$('backupStatus');
-    if(status)status.textContent='クラウドバックアップに失敗しました';
+    syncStatus('クラウド保存に失敗しました。この端末のデータは保持されています');
     return false;
   }
+}
+
+async function manualCloudSync(){
+  const key=getCloudBackupKey();
+  if(!key)return;
+
+  if(cloudDirty)await cloudBackup(key);
+  else await syncFromCloud(true,key);
 }
 function go(id,btn){
   document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));$(id).classList.add('active');
@@ -791,7 +910,7 @@ function renderReservationWeek(){
   const start=dateOnly(reservationWeekStart)||dateOnly(startOfWeekISO(todayISO));
   const days=Array.from({length:7},(_,i)=>{const d=new Date(start);d.setDate(start.getDate()+i);return {date:d,iso:localISO(d)}});
   title.textContent=`${jpShortDate(days[0].iso)} 〜 ${jpShortDate(days[6].iso)}`;
-  const startMin=10*60,endMin=22*60,slot=30,slots=(endMin-startMin)/slot;
+  const startMin=8*60,endMin=23*60,slot=30,slots=(endMin-startMin)/slot;
   let html='<div class="week-corner">時間</div>';
   days.forEach((d,i)=>{
     const wd=['日','月','火','水','木','金','土'][d.date.getDay()];
@@ -824,10 +943,43 @@ function customerVisitHistory(name){
   const n=normalizeName(name);
   return db.bookings.filter(x=>normalizeName(x.customer)===n).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
 }
+function duplicateCustomerPairs(){
+  const out=[];
+  for(let i=0;i<db.customers.length;i++)for(let j=i+1;j<db.customers.length;j++){
+    const a=db.customers[i],b=db.customers[j],reasons=[];
+    const an=normalizeName(a.name),bn=normalizeName(b.name);
+    if(an&&bn){
+      if(an===bn)reasons.push('名前一致');
+      else if(Math.min(an.length,bn.length)>=3&&nameDistance(an,bn)<=1)reasons.push('名前が近い');
+    }
+    const ak=normalizeName(a.kana||''),bk=normalizeName(b.kana||'');
+    if(ak&&bk&&ak===bk)reasons.push('読み仮名一致');
+    if(a.lineUserId&&b.lineUserId&&a.lineUserId===b.lineUserId)reasons.push('LINE ID一致');
+    const ai=instagramURL(a.instagram||''),bi=instagramURL(b.instagram||'');
+    if(ai&&bi&&ai===bi)reasons.push('Instagram一致');
+    if(reasons.length)out.push({a,b,reasons:[...new Set(reasons)]});
+  }
+  return out.sort((x,y)=>{
+    const score=r=>r.reasons.some(v=>/一致/.test(v))?0:1;
+    return score(x)-score(y)||(y.a.lastVisit||'').localeCompare(x.a.lastVisit||'');
+  }).slice(0,20);
+}
+function renderDuplicateCandidates(){
+  const host=$('duplicateCandidates');if(!host)return;
+  const pairs=duplicateCustomerPairs();
+  host.innerHTML=pairs.length?`<h2 style="margin-top:14px">統合候補</h2>
+    <div class="note" style="margin:0 4px 8px">候補だけ表示します。自動では統合しません。</div>
+    ${pairs.map(x=>`<div class="duplicate-candidate">
+      <div class="names">${esc(x.a.name)} ⇄ ${esc(x.b.name)}</div>
+      <div class="reason">${esc(x.reasons.join('・'))}</div>
+      <div class="actions"><button class="ghost" onclick="openCustomerChart('${x.a.id}')">${esc(x.a.name)}を見る</button><button class="ghost" onclick="openCustomerChart('${x.b.id}')">${esc(x.b.name)}を見る</button></div>
+    </div>`).join('')}`:'';
+}
 function renderCustomers(){
   const q=($('customerSearch').value||'').toLowerCase();
   let a=db.customers.filter(x=>(x.name||'').toLowerCase().includes(q));
   a.sort((x,y)=>(y.lastVisit||'').localeCompare(x.lastVisit||''));
+  renderDuplicateCandidates();
   $('customerList').innerHTML=a.length?a.map(x=>{
     const hist=customerVisitHistory(x.name);
     const visits=hist.filter(isVisitedBooking);
@@ -1922,8 +2074,10 @@ async function updateOrderStatus(id,status){
 
 migrateExtras();localStorage.setItem(KEY,JSON.stringify(db));renderAll();setReservationView('list');
 setInterval(()=>{if(!document.hidden)refreshOrders(false);},60000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshOrders(false);});
+setInterval(()=>{if(!document.hidden)syncFromCloud(false);},15000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){refreshOrders(false);syncFromCloud(false);}});
 refreshOrders(false);
+syncFromCloud(false);
 </script>
 </body>
 </html>
