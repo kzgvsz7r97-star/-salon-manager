@@ -102,6 +102,7 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
 .analysis-card{background:#fff;border-radius:14px;padding:12px}
 .analysis-card .l{font-size:11px;color:#777}.analysis-card .v{font-size:19px;font-weight:850;margin-top:4px}
 .analysis-source{background:#fff;border-radius:13px;padding:10px 12px;margin:6px 0}
+.trend-table{width:100%;border-collapse:collapse;background:#fff;border-radius:14px;overflow:hidden;font-size:11px}.trend-table th,.trend-table td{padding:9px 6px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap}.trend-table th:first-child,.trend-table td:first-child{text-align:left}.trend-table tr:last-child td{border-bottom:0}.staff-summary{background:#fff;border-radius:14px;padding:12px;margin:7px 0}.staff-summary .name{font-weight:850}.staff-summary .meta{font-size:11px;color:#777;line-height:1.55;margin-top:4px}.staff-source-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.staff-source-grid label{background:#f6f6f6;border-radius:10px;padding:8px;font-size:12px}.staff-pill{display:inline-block;font-size:10px;padding:4px 7px;border-radius:99px;background:#eee;margin:3px 3px 0 0}
 .check-card{background:#fff;border-radius:14px;padding:11px 12px;margin:8px 0}
 .check-card label{display:block;margin:7px 0;font-size:14px}
 .duplicate-candidate{background:#fff;border-radius:14px;padding:12px;margin:8px 0}
@@ -212,6 +213,7 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
         <button class="soft" onclick="document.getElementById('backupImportFile').click()">バックアップ復元</button>
       </div>
       <button class="blue" style="width:100%;margin-top:8px" onclick="manualCloudSync()">今すぐ同期</button>
+      <button class="soft" style="width:100%;margin-top:8px" onclick="openStaffSettings()">スタッフ・予約設定</button>
       <input id="backupImportFile" type="file" accept=".json,application/json" style="display:none" onchange="importBackup(event)">
       <div id="backupStatus" class="backup-status">クラウド同期を確認中…</div>
     </div>
@@ -245,6 +247,10 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
         <select id="bookingFilterType" onchange="renderBookings()">
           <option value="">通常＋モデル</option><option value="normal">通常客</option><option value="model">モデル</option>
         </select>
+        <select id="bookingFilterBookingType" onchange="renderBookings()">
+          <option value="">フリー/指名すべて</option><option value="free">フリー</option><option value="designated">指名</option><option value="unset">未設定</option>
+        </select>
+        <select id="bookingFilterStaff" onchange="renderBookings()"><option value="">全担当者</option></select>
         <select id="bookingFilterStatus" onchange="renderBookings()">
           <option value="">全ステータス</option><option value="booked">予約中</option><option value="visited">来店済み</option><option value="cancelled">キャンセル</option><option value="noshow">無断キャンセル</option>
         </select>
@@ -306,6 +312,8 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
     </div>
     <h2>月次分析</h2>
     <div id="monthlyAnalysis"></div>
+    <h2>担当者別</h2>
+    <div id="analysisStaff"></div>
     <h2>媒体別</h2>
     <div id="analysisSources"></div>
     <h2>売上履歴</h2><div id="salesList" class="list"></div>
@@ -375,6 +383,11 @@ function nextBookingTakenForBooking(b){
   return !!b.nextBookingTaken || hasLaterBooking(b.customer,b.date);
 }
 function bookingRevenue(b){return Number(b.price||0)}
+function bookingTypeLabel(v){return v==='designated'?'指名':v==='free'?'フリー':'未設定'}
+function ownerStaff(){return (db.staffProfiles||[]).find(x=>x.role==='owner')||(db.staffProfiles||[])[0]||null}
+function staffById(id){return (db.staffProfiles||[]).find(x=>x.id===id)||ownerStaff()}
+function staffName(id){return staffById(id)?.name||'自分'}
+function staffAllowedSources(id){const p=staffById(id);return Array.isArray(p?.sources)&&p.sources.length?p.sources:['SHAiRE','Nailie','minimo','Instagram','その他']}
 function reminderCandidates(){
   const now=todayISO;
   return db.customers.map(c=>{
@@ -445,6 +458,7 @@ function normalizedCloudData(restored){
     goalPlans:restored?.goalPlans||{},
     orderSettings:restored?.orderSettings||{},
     seenOrders:Array.isArray(restored?.seenOrders)?restored.seenOrders:[],
+    staffProfiles:Array.isArray(restored?.staffProfiles)?restored.staffProfiles:[],
     syncDeleted:{
       bookings:{...(restored?.syncDeleted?.bookings||{})},
       customers:{...(restored?.syncDeleted?.customers||{})},
@@ -571,6 +585,7 @@ function mergeDbSafe(localData,remoteData,baseData){
     goalPlans:mergeObjectSafe(local.goalPlans,remote.goalPlans,base?.goalPlans),
     orderSettings:mergeObjectSafe(local.orderSettings,remote.orderSettings,base?.orderSettings),
     seenOrders:[...new Set([...(remote.seenOrders||[]),...(local.seenOrders||[])])],
+    staffProfiles:mergeArraySafe(local.staffProfiles,remote.staffProfiles,base?.staffProfiles),
     syncDeleted,
     bookings:removeDeletedItems(mergeArraySafe(local.bookings,remote.bookings,base?.bookings),syncDeleted.bookings),
     customers:removeDeletedItems(mergeArraySafe(local.customers,remote.customers,base?.customers),syncDeleted.customers),
@@ -749,7 +764,7 @@ function bookingHTML(x){
   ];
   return `<div class="item ${sourceClass(x.source)}" onclick="editBooking('${x.id}')">
     <div class="t">${esc(x.date)}　${esc(x.time)}${end}　${esc(x.customer||'未登録')}${model}<span class="status-badge ${statusClass(x)}">${statusLabel(x)}</span></div>
-    <div class="s">${esc(x.menu||'メニュー未入力')} ・ ${yen(x.price)} ・ ${esc(x.source||'その他')} ・ ${x.newGuest?'新規':'既存'} ・ ${next}${x.paymentComplete?' ・ 決済完了':''}</div>
+    <div class="s">${esc(x.menu||'メニュー未入力')} ・ ${yen(x.price)} ・ ${esc(x.source||'その他')} ・ ${esc(staffName(x.staffId))} ・ ${bookingTypeLabel(x.bookingType)} ・ ${x.newGuest?'新規':'既存'} ・ ${next}${x.paymentComplete?' ・ 決済完了':''}</div>
     <div class="follow-flags">${flags.map((f,i)=>`<span class="follow-flag ${[x.followAftercare,x.followWeek,x.follow2Days][i]?'done':''}">${f}</span>`).join('')}</div>
   </div>`;
 }
@@ -966,7 +981,7 @@ function setReservationView(v){
 }
 function resetBookingFilters(){
   ['bookingFilterName','bookingFilterFrom','bookingFilterTo'].forEach(id=>{if($(id))$(id).value=''});
-  ['bookingFilterSource','bookingFilterType','bookingFilterStatus','bookingFilterPayment','bookingFilterNext'].forEach(id=>{if($(id))$(id).value=''});
+  ['bookingFilterSource','bookingFilterType','bookingFilterBookingType','bookingFilterStaff','bookingFilterStatus','bookingFilterPayment','bookingFilterNext'].forEach(id=>{if($(id))$(id).value=''});
   renderBookings();
 }
 function renderBookings(){
@@ -974,6 +989,7 @@ function renderBookings(){
   const q=($('bookingFilterName')?.value||'').trim().toLowerCase();
   const from=$('bookingFilterFrom')?.value||'',to=$('bookingFilterTo')?.value||'';
   const source=$('bookingFilterSource')?.value||'',type=$('bookingFilterType')?.value||'';
+  const bookingType=$('bookingFilterBookingType')?.value||'',staff=$('bookingFilterStaff')?.value||'';
   const status=$('bookingFilterStatus')?.value||'',payment=$('bookingFilterPayment')?.value||'',next=$('bookingFilterNext')?.value||'';
 
   if(q)a=a.filter(x=>(x.customer||'').toLowerCase().includes(q));
@@ -982,11 +998,18 @@ function renderBookings(){
   if(source)a=a.filter(x=>x.source===source);
   if(type==='normal')a=a.filter(x=>!x.isModel);
   if(type==='model')a=a.filter(x=>x.isModel);
+  if(bookingType==='free')a=a.filter(x=>x.bookingType==='free');
+  if(bookingType==='designated')a=a.filter(x=>x.bookingType==='designated');
+  if(bookingType==='unset')a=a.filter(x=>!x.bookingType);
+  if(staff)a=a.filter(x=>(x.staffId||ownerStaff()?.id)===staff);
   if(status)a=a.filter(x=>bookingStatus(x)===status);
   if(payment==='paid')a=a.filter(x=>!!x.paymentComplete);
   if(payment==='unpaid')a=a.filter(x=>!x.paymentComplete);
   if(next==='taken')a=a.filter(x=>nextBookingTakenForBooking(x));
   if(next==='missing')a=a.filter(x=>!x.isModel&&!nextBookingTakenForBooking(x));
+
+  const staffFilter=$('bookingFilterStaff');
+  if(staffFilter){const current=staffFilter.value;staffFilter.innerHTML='<option value="">全担当者</option>'+ (db.staffProfiles||[]).filter(p=>p.active!==false).map(p=>`<option value="${esc(p.id)}" ${current===p.id?'selected':''}>${esc(p.name)}</option>`).join('');}
 
   a.sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
 
@@ -1001,6 +1024,8 @@ function renderBookings(){
     <div class="summary-card wide"><div class="l">合計見込み</div><div class="v">${yen(totalRevenue)}</div></div>
     <div class="summary-card"><div class="l">次回予約取得</div><div class="v">${nextTaken}/${normal.length||0}</div></div>
     <div class="summary-card"><div class="l">未取得</div><div class="v">${Math.max(0,normal.length-nextTaken)}人</div></div>
+    <div class="summary-card"><div class="l">フリー</div><div class="v">${normal.filter(x=>x.bookingType==='free').length}人</div></div>
+    <div class="summary-card"><div class="l">指名</div><div class="v">${normal.filter(x=>x.bookingType==='designated').length}人</div></div>
   </div>`;
 
   const sources=['SHAiRE','Nailie','minimo','Instagram','その他'];
@@ -1193,10 +1218,16 @@ function analysisStats(m){
   const newVisits=visits.filter(x=>x.newGuest),repeatVisits=visits.filter(x=>!x.newGuest);
   const nextTaken=visits.filter(nextBookingTakenForBooking).length;
   const nextRate=visits.length?Math.round(nextTaken/visits.length*100):0;
+  const newNextTaken=newVisits.filter(nextBookingTakenForBooking).length;
+  const repeatNextTaken=repeatVisits.filter(nextBookingTakenForBooking).length;
+  const newNextRate=newVisits.length?Math.round(newNextTaken/newVisits.length*100):0;
+  const repeatNextRate=repeatVisits.length?Math.round(repeatNextTaken/repeatVisits.length*100):0;
   const paidRevenue=all.filter(x=>x.paymentComplete&&isActiveBooking(x)).reduce((a,x)=>a+Number(x.price||0),0);
   const avg=visits.length?Math.round(paidRevenue/visits.length):0;
   const cancels=all.filter(x=>bookingStatus(x)==='cancelled').length;
   const noshows=all.filter(x=>bookingStatus(x)==='noshow').length;
+  const freeVisits=visits.filter(x=>x.bookingType==='free').length;
+  const designatedVisits=visits.filter(x=>x.bookingType==='designated').length;
 
   const uniqueNew=[...new Map(newVisits.map(x=>[normalizeName(x.customer),x])).values()].filter(x=>normalizeName(x.customer));
   const secondReturned=uniqueNew.filter(first=>{
@@ -1204,25 +1235,48 @@ function analysisStats(m){
     return db.bookings.some(b=>normalizeName(b.customer)===n&&b.date>first.date&&isVisitedBooking(b));
   }).length;
   const secondRate=uniqueNew.length?Math.round(secondReturned/uniqueNew.length*100):0;
-  return {visits,newVisits,repeatVisits,nextTaken,nextRate,paidRevenue,avg,cancels,noshows,uniqueNew,secondReturned,secondRate,all};
+  return {visits,newVisits,repeatVisits,nextTaken,nextRate,newNextTaken,repeatNextTaken,newNextRate,repeatNextRate,paidRevenue,avg,cancels,noshows,freeVisits,designatedVisits,uniqueNew,secondReturned,secondRate,all};
+}
+function recentAnalysisMonths(m,count=4){
+  const [y,mo]=m.split('-').map(Number),base=new Date(y,mo-1,1),out=[];
+  for(let i=count-1;i>=0;i--){const d=new Date(base.getFullYear(),base.getMonth()-i,1);out.push(monthString(d));}
+  return out;
+}
+function renderStaffAnalysis(m){
+  const host=$('analysisStaff');if(!host)return;
+  const rows=(db.staffProfiles||[]).filter(p=>p.active!==false).map(p=>{
+    const bookings=db.bookings.filter(x=>monthKey(x.date)===m&&!x.isModel&&(x.staffId||ownerStaff()?.id)===p.id);
+    const visits=bookings.filter(isVisitedBooking),newCount=visits.filter(x=>x.newGuest).length,repeatCount=visits.filter(x=>!x.newGuest).length;
+    const revenue=bookings.filter(x=>x.paymentComplete&&isActiveBooking(x)).reduce((a,x)=>a+Number(x.price||0),0);
+    const free=visits.filter(x=>x.bookingType==='free').length,designated=visits.filter(x=>x.bookingType==='designated').length;
+    return {p,visits,newCount,repeatCount,revenue,free,designated};
+  });
+  host.innerHTML=rows.length?rows.map(x=>`<div class="staff-summary"><div class="name">${esc(x.p.name)}${x.p.role==='owner'?' <span class="staff-pill">親</span>':''}</div><div class="meta">実来店 ${x.visits.length}人 ・ 新規 ${x.newCount} / 再来 ${x.repeatCount}<br>フリー ${x.free} / 指名 ${x.designated} ・ 確定売上 ${yen(x.revenue)}<br>媒体 ${esc((x.p.sources||[]).join(' / ')||'未設定')}</div></div>`).join(''):empty('スタッフ設定がありません');
 }
 function renderMonthlyAnalysis(){
   const host=$('monthlyAnalysis'),srcHost=$('analysisSources');if(!host||!srcHost)return;
   const m=monthString(analysisMonth),s=analysisStats(m);
+  const months=recentAnalysisMonths(m,4);
   host.innerHTML=`<div class="analysis-grid">
     <div class="analysis-card"><div class="l">実来店</div><div class="v">${s.visits.length}人</div></div>
-    <div class="analysis-card"><div class="l">新規 / 既存</div><div class="v">${s.newVisits.length} / ${s.repeatVisits.length}</div></div>
-    <div class="analysis-card"><div class="l">次回予約率</div><div class="v">${s.nextRate}%</div><div class="small">${s.nextTaken}/${s.visits.length}</div></div>
-    <div class="analysis-card"><div class="l">2回目実来店率</div><div class="v">${s.secondRate}%</div><div class="small">${s.secondReturned}/${s.uniqueNew.length}</div></div>
+    <div class="analysis-card"><div class="l">新規 / 再来</div><div class="v">${s.newVisits.length} / ${s.repeatVisits.length}</div></div>
+    <div class="analysis-card"><div class="l">新規 次回予約率</div><div class="v">${s.newNextRate}%</div><div class="small">${s.newNextTaken}/${s.newVisits.length}</div></div>
+    <div class="analysis-card"><div class="l">再来 次回予約率</div><div class="v">${s.repeatNextRate}%</div><div class="small">${s.repeatNextTaken}/${s.repeatVisits.length}</div></div>
+    <div class="analysis-card"><div class="l">リピート率</div><div class="v">${s.secondRate}%</div><div class="small">新規→2回目 ${s.secondReturned}/${s.uniqueNew.length}</div></div>
     <div class="analysis-card"><div class="l">平均単価</div><div class="v">${yen(s.avg)}</div></div>
+    <div class="analysis-card"><div class="l">フリー / 指名</div><div class="v">${s.freeVisits} / ${s.designatedVisits}</div></div>
     <div class="analysis-card"><div class="l">キャンセル / 無断</div><div class="v">${s.cancels} / ${s.noshows}</div></div>
-  </div>`;
+  </div>
+  <h3 style="margin:16px 4px 8px">3か月前〜今月の推移</h3>
+  <div style="overflow:auto"><table class="trend-table"><thead><tr><th>月</th><th>新規</th><th>リピート率</th><th>新規次回</th><th>再来次回</th></tr></thead><tbody>${months.map(mm=>{const a=analysisStats(mm);return `<tr><td>${Number(mm.slice(5))}月</td><td>${a.newVisits.length}</td><td>${a.secondRate}%</td><td>${a.newNextRate}%</td><td>${a.repeatNextRate}%</td></tr>`}).join('')}</tbody></table></div>
+  <div class="small" style="margin:7px 4px 0">リピート率＝その月の新規が、その後2回目に実来店した割合。</div>`;
   const sources=['SHAiRE','Nailie','minimo','Instagram','その他'];
   srcHost.innerHTML=sources.map(source=>{
     const xs=s.visits.filter(x=>x.source===source);
     const rev=s.all.filter(x=>x.source===source&&x.paymentComplete&&isActiveBooking(x)).reduce((a,x)=>a+Number(x.price||0),0);
     return `<div class="analysis-source"><b>${source}</b><div class="small" style="margin-top:4px">実来店 ${xs.length}人 ・ 確定売上 ${yen(rev)}</div></div>`;
   }).join('');
+  renderStaffAnalysis(m);
 }
 function renderSales(){
   const m=monthString(analysisMonth);
@@ -1499,7 +1553,9 @@ function bookingForm(x={}){
   <label>Instagram（新規登録時・任意）</label><input id="fInstagram" placeholder="@ユーザーネーム / URL" value="${esc(db.customers.find(c=>normalizeName(c.name)===normalizeName(x.customer))?.instagram||'')}">
   <label>メニュー</label><input id="fMenu" value="${esc(x.menu||'カット+カラー')}">
   <label>料金</label><input id="fPrice" type="number" value="${Number(x.price||0)}">
-  <label>予約媒体</label><select id="fSource">${['SHAiRE','Nailie','minimo','Instagram','その他'].map(s=>`<option ${x.source===s?'selected':''}>${s}</option>`).join('')}</select>
+  <label>担当者</label><select id="fStaff" onchange="updateBookingSourceOptions()">${(db.staffProfiles||[]).filter(p=>p.active!==false).map(p=>`<option value="${esc(p.id)}" ${(x.staffId||ownerStaff()?.id)===p.id?'selected':''}>${esc(p.name)}${p.role==='owner'?'（親）':''}</option>`).join('')}</select>
+  <label>フリー / 指名</label><select id="fBookingType"><option value="free" ${x.bookingType==='free'||(!x.id&&!x.bookingType)?'selected':''}>フリー</option><option value="designated" ${x.bookingType==='designated'?'selected':''}>指名</option><option value="" ${x.id&&!x.bookingType?'selected':''}>未設定</option></select>
+  <label>予約媒体</label><select id="fSource">${staffSourceOptions(x.staffId||ownerStaff()?.id,x.source||'SHAiRE')}</select>
   <label>予約区分</label><select id="fModel"><option value="normal" ${!x.isModel?'selected':''}>通常</option><option value="model" ${x.isModel?'selected':''}>モデル</option></select>
   <label>新規 / 既存</label><select id="fNew"><option value="new" ${x.newGuest?'selected':''}>新規</option><option value="repeat" ${x.newGuest===false?'selected':''}>既存</option></select>
   <label>来店ステータス</label><select id="fStatus">
@@ -1526,10 +1582,25 @@ function bookingForm(x={}){
   <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveBooking('${x.id||''}')">保存</button></div>
   ${x.id?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteBooking('${x.id}')">削除</button>`:''}`);
 }
+function staffSourceOptions(staffId,current=''){
+  const all=['SHAiRE','Nailie','minimo','Instagram','その他'];
+  const allowed=staffAllowedSources(staffId);
+  const list=[...allowed];
+  if(current&&!list.includes(current))list.push(current);
+  return list.map(v=>`<option value="${esc(v)}" ${v===current?'selected':''}>${esc(v)}</option>`).join('') || all.map(v=>`<option>${v}</option>`).join('');
+}
+function updateBookingSourceOptions(){
+  const staff=$('fStaff')?.value||ownerStaff()?.id||'';
+  const source=$('fSource');if(!source)return;
+  const current=source.value;
+  source.innerHTML=staffSourceOptions(staff,current);
+  if(!staffAllowedSources(staff).includes(current))source.value=staffAllowedSources(staff)[0]||'その他';
+}
 function saveBooking(id){
   const prev=id?(db.bookings.find(x=>x.id===id)||{}):{};
-  const o={...prev,id:id||uid(),date:$('fDate').value,time:$('fTime').value,end:$('fEnd').value,customer:$('fCustomer').value.trim(),menu:$('fMenu').value.trim(),price:+$('fPrice').value||0,source:$('fSource').value,isModel:$('fModel').value==='model',newGuest:$('fNew').value==='new',status:$('fStatus').value,nextBookingTaken:$('fNext').checked,followAftercare:$('fAftercare').checked,followWeek:$('fWeek').checked,follow2Days:$('fTwoDays').checked,paymentComplete:$('fPaid').checked,formula:$('fFormula').value.trim(),visitNote:$('fVisitNote').value.trim()};
+  const o={...prev,id:id||uid(),date:$('fDate').value,time:$('fTime').value,end:$('fEnd').value,customer:$('fCustomer').value.trim(),menu:$('fMenu').value.trim(),price:+$('fPrice').value||0,source:$('fSource').value,staffId:$('fStaff')?.value||ownerStaff()?.id||'',bookingType:$('fBookingType')?.value||'',isModel:$('fModel').value==='model',newGuest:$('fNew').value==='new',status:$('fStatus').value,nextBookingTaken:$('fNext').checked,followAftercare:$('fAftercare').checked,followWeek:$('fWeek').checked,follow2Days:$('fTwoDays').checked,paymentComplete:$('fPaid').checked,formula:$('fFormula').value.trim(),visitNote:$('fVisitNote').value.trim()};
   if(!o.customer||!o.date||!o.time)return alert('日付・開始時間・予約名を入力してください');
+  if(o.staffId&&!staffAllowedSources(o.staffId).includes(o.source))return alert('この担当者では選べない予約媒体です。スタッフ設定を確認してください');
   const instagram=$('fInstagram').value.trim();if(instagram&&!instagramURL(instagram))return alert('Instagramの入力を確認してください');
   if(id)db.bookings=db.bookings.map(x=>x.id===id?o:x);else db.bookings.push(o);
   upsertCustomerFromBooking(o);const c=db.customers.find(c=>normalizeName(c.name)===normalizeName(o.customer));if(c&&instagram)c.instagram=instagram;save();closeModal();
@@ -2065,10 +2136,37 @@ const PRODUCT_CATEGORIES=['ミルク','オイル','スプレー','シャンプ�
 const ORDER_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/orders';
 const CATALOG_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/catalog';
 let remoteOrders=[],ordersBusy=false,orderNotice='';
+function openStaffSettings(){
+  migrateExtras();
+  modal(`<h3>スタッフ・予約設定</h3><div class="note" style="margin-bottom:10px">親は全担当者の数字を確認できます。ここでは担当者ごとに使う予約媒体を設定します。</div><div id="staffSettingsList" class="list"></div><button class="blue" style="width:100%;margin-top:10px" onclick="staffForm()">＋ スタッフを追加</button><div class="note" style="margin-top:12px">※ スタッフごとの安全な個別ログインは次の段階で設定します。今は担当者別の記録・集計・媒体設定まで対応しています。</div>`);
+  renderStaffSettingsList();
+}
+function renderStaffSettingsList(){
+  const host=$('staffSettingsList');if(!host)return;
+  host.innerHTML=(db.staffProfiles||[]).map(p=>`<div class="item" onclick="staffForm('${p.id}')"><div class="t">${esc(p.name)}${p.role==='owner'?' <span class="staff-pill">親</span>':''}${p.active===false?' <span class="staff-pill">停止中</span>':''}</div><div class="s">${esc((p.sources||[]).join(' / ')||'媒体未設定')}</div></div>`).join('');
+}
+function staffForm(id=''){
+  const p=(db.staffProfiles||[]).find(x=>x.id===id)||{id:'',name:'',role:'staff',active:true,sources:['SHAiRE','Nailie','minimo','Instagram','その他']};
+  const all=['SHAiRE','Nailie','minimo','Instagram','その他'];
+  modal(`<h3>${id?'スタッフを編集':'スタッフを追加'}</h3><label>名前</label><input id="staffName" value="${esc(p.name)}"><label>権限</label><select id="staffRole"><option value="staff" ${p.role!=='owner'?'selected':''}>スタッフ</option><option value="owner" ${p.role==='owner'?'selected':''}>親 / 管理者</option></select><label><input id="staffActive" type="checkbox" style="width:auto" ${p.active!==false?'checked':''}> 利用中</label><label>利用する予約媒体</label><div class="staff-source-grid">${all.map(src=>`<label><input class="staffSource" type="checkbox" style="width:auto" value="${src}" ${(p.sources||[]).includes(src)?'checked':''}> ${src}</label>`).join('')}</div><div class="actions"><button class="ghost" onclick="openStaffSettings()">戻る</button><button onclick="saveStaff('${id}')">保存</button></div>`);
+}
+function saveStaff(id=''){
+  const name=$('staffName').value.trim(),sources=[...document.querySelectorAll('.staffSource:checked')].map(x=>x.value),role=$('staffRole').value,active=$('staffActive').checked;
+  if(!name)return alert('スタッフ名を入力してください');
+  if(!sources.length)return alert('予約媒体を1つ以上選んでください');
+  if(role==='owner'&&(db.staffProfiles||[]).some(x=>x.role==='owner'&&x.id!==id))return alert('親 / 管理者は1人にしてください');
+  const obj={id:id||uid(),name,role,active,sources};
+  if(id)db.staffProfiles=db.staffProfiles.map(x=>x.id===id?{...x,...obj}:x);else db.staffProfiles.push(obj);
+  save();openStaffSettings();
+}
 function migrateExtras(){
   db.goalPlans ||= {};db.orderSettings ||= {};db.seenOrders ||= [];
   db.syncDeleted ||= {bookings:{},customers:{},products:{},sales:{},retail:{}};
   ['bookings','customers','products','sales','retail'].forEach(k=>db.syncDeleted[k] ||= {});
+  if(!Array.isArray(db.staffProfiles)||!db.staffProfiles.length)db.staffProfiles=[{id:'owner',name:'自分',role:'owner',active:true,sources:['SHAiRE','Nailie','minimo','Instagram','その他']}];
+  if(!db.staffProfiles.some(x=>x.role==='owner'))db.staffProfiles[0].role='owner';
+  const ownerId=ownerStaff()?.id||db.staffProfiles[0].id;
+  db.bookings.forEach(b=>{b.staffId ||= ownerId;if(!('bookingType' in b))b.bookingType='';});
   db.products.forEach(p=>{p.id ||= uid();p.category ||= /ミルク|エマルジョン/.test(p.name)?'ミルク':/オイル/.test(p.name)?'オイル':/スプレー/.test(p.name)?'スプレー':/シャンプー/.test(p.name)?'シャンプー':/トリートメント/.test(p.name)?'トリートメント':/リファ|ReFa/i.test(p.name)?'ReFa':'その他';p.fulfillment ||= 'salon';});
 }
 function safeHTTPS(value){try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password?u.href:'';}catch{return '';}}
