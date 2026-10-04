@@ -5,13 +5,69 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111111">
 <title>Salon Manager Staff</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
-:root{--bg:#f6f6f6;--card:#fff;--text:#111;--muted:#777;--blue:#0a84ff;--danger:#c33}
-*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;background:var(--bg);color:var(--text)}
-.app{max-width:560px;margin:auto;min-height:100dvh;padding:18px 14px 96px}.hidden{display:none!important}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.brand{font-weight:850;font-size:21px}.small{font-size:12px;color:#777}.card{background:#fff;border-radius:18px;padding:16px;margin:10px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.kpi .l{font-size:11px;color:#777}.kpi .v{font-size:22px;font-weight:850;margin-top:5px}.wide{grid-column:1/-1}h2{font-size:18px;margin:22px 4px 10px}.item{background:#fff;border-radius:14px;padding:13px 14px;margin:8px 0}.item .t{font-weight:800}.item .s{font-size:12px;color:#666;line-height:1.55;margin-top:4px}input,select,textarea{width:100%;padding:12px;border:1px solid #ddd;border-radius:12px;background:#fff;font-size:16px;margin:5px 0 10px}textarea{min-height:90px}button{border:0;background:#111;color:#fff;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:760}.ghost{background:#eee;color:#111}.soft{background:#fff;color:#111;border:1px solid #ddd}.blue{background:var(--blue)}.danger{background:#fff;color:var(--danger);border:1px solid #ecc}.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}.section{display:none}.section.active{display:block}.nav{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border-top:1px solid #e5e5e5;display:flex;padding:8px 8px calc(8px + env(safe-area-inset-bottom));z-index:10}.nav button{flex:1;background:transparent;color:#888;padding:6px 2px;font-size:11px}.nav button.active{color:#111}.ico{display:block;font-size:18px;margin-bottom:2px}.fab{position:fixed;right:18px;bottom:88px;width:54px;height:54px;border-radius:50%;font-size:24px;z-index:9}.modal{position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:20;display:flex;align-items:flex-end}.sheet{width:100%;max-width:560px;margin:auto;max-height:91dvh;overflow:auto;background:#f8f8f8;border-radius:24px 24px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}.actions{display:flex;gap:8px;margin-top:8px}.actions button{flex:1}.badge{display:inline-block;font-size:10px;padding:4px 7px;border-radius:99px;background:#eee;margin-left:5px}.empty{text-align:center;color:#999;font-size:13px;padding:25px 8px}.login-wrap{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px}.login-card{width:min(420px,100%);background:#fff;border-radius:24px;padding:22px}.login-card h1{font-size:24px;margin:0 0 8px}.login-card button{width:100%;margin-top:8px}.monthbar{display:flex;align-items:center;justify-content:space-between;margin:4px 0 14px}.monthbar button{background:#fff;color:#111;border:1px solid #ddd;padding:8px 12px}.monthtitle{font-size:18px;font-weight:850}.trend{width:100%;border-collapse:collapse;background:#fff;border-radius:14px;overflow:hidden;font-size:11px}.trend td,.trend th{padding:8px 6px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap}.trend td:first-child,.trend th:first-child{text-align:left}.status{font-size:12px;color:#777;margin-top:8px;min-height:18px}
+:root{--bg:#f6f6f6;--card:#fff;--text:#111;--muted:#777;--line:#e8e8e8;--blue:#0a84ff;--danger:#c33}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;background:var(--bg);color:var(--text)}
+.app{max-width:560px;margin:auto;min-height:100dvh;padding:18px 14px 104px}
+.hidden{display:none!important}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px}
+.brand{font-weight:850;font-size:21px}.small{font-size:12px;color:#777;line-height:1.55}
+.card{background:#fff;border-radius:18px;padding:16px;margin:10px 0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.wide{grid-column:1/-1}
+.kpi .l{font-size:11px;color:#777}.kpi .v{font-size:22px;font-weight:850;margin-top:5px}
+h2{font-size:18px;margin:22px 4px 10px}
+.item{background:#fff;border-radius:14px;padding:13px 14px;margin:8px 0}.item .t{font-weight:800}.item .s{font-size:12px;color:#666;line-height:1.55;margin-top:4px}
+input,select,textarea{width:100%;padding:12px;border:1px solid #ddd;border-radius:12px;background:#fff;font-size:16px;margin:5px 0 10px}
+textarea{min-height:90px}
+button{border:0;background:#111;color:#fff;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:760}
+.ghost{background:#eee;color:#111}.soft{background:#fff;color:#111;border:1px solid #ddd}.blue{background:var(--blue)}.danger{background:#fff;color:var(--danger);border:1px solid #ecc}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}.row.auto>*{flex:auto}
+.section{display:none}.section.active{display:block}
+.nav{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border-top:1px solid #e5e5e5;display:flex;padding:8px 8px calc(8px + env(safe-area-inset-bottom));z-index:10}
+.nav button{flex:1;background:transparent;color:#888;padding:6px 2px;font-size:10px}.nav button.active{color:#111}.ico{display:block;font-size:18px;margin-bottom:2px}
+.fab{position:fixed;right:18px;bottom:92px;width:54px;height:54px;border-radius:50%;font-size:24px;z-index:9}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:20;display:flex;align-items:flex-end}
+.sheet{width:100%;max-width:560px;margin:auto;max-height:91dvh;overflow:auto;background:#f8f8f8;border-radius:24px 24px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+.sheet h3{margin:0 0 14px}.actions{display:flex;gap:8px;margin-top:8px}.actions button{flex:1}
+.badge{display:inline-block;font-size:10px;padding:4px 7px;border-radius:99px;background:#eee;margin-left:5px}
+.empty{text-align:center;color:#999;font-size:13px;padding:25px 8px}
+.login-wrap{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px}
+.login-card{width:min(420px,100%);background:#fff;border-radius:24px;padding:22px}.login-card h1{font-size:24px;margin:0 0 8px}.login-card button{width:100%;margin-top:8px}
+.monthbar{display:flex;align-items:center;justify-content:space-between;margin:4px 0 14px}.monthbar button{background:#fff;color:#111;border:1px solid #ddd;padding:8px 12px}.monthtitle{font-size:18px;font-weight:850;text-align:center}
+.status{font-size:12px;color:#777;margin-top:8px;min-height:18px}
+.segment{display:flex;background:#ececec;border-radius:13px;padding:3px;gap:2px}.segment button{background:transparent;color:#777;padding:8px 10px;border-radius:10px}.segment button.active{background:#111;color:#fff}
+.filter-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.filter-grid .wide{grid-column:1/-1}.filter-grid input,.filter-grid select{margin:0}
+.calendar{background:#fff;border-radius:18px;padding:10px 8px 14px}.weekdays,.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.weekdays div{font-size:11px;color:#777;text-align:center;padding:7px 0}.day{min-height:62px;border-radius:12px;padding:7px 4px;text-align:center;position:relative}.day.other{opacity:.24}.day.today{background:#111;color:#fff}.day.selected{outline:2px solid #111}.daynum{font-size:16px;font-weight:800}.daycount{font-size:11px;color:var(--blue);font-weight:750;margin-top:5px}.day.today .daycount{color:#fff}
+.week-scroll{overflow:auto;-webkit-overflow-scrolling:touch;border-radius:18px;background:#fff}
+.week-grid{display:grid;grid-template-columns:54px repeat(7,minmax(94px,1fr));grid-template-rows:44px repeat(30,32px);min-width:760px;background:#fff;position:relative}
+.week-corner,.week-dayhead,.week-time,.week-slot{border-right:1px solid #eee;border-bottom:1px solid #eee}
+.week-corner{grid-column:1;grid-row:1;display:flex;align-items:center;justify-content:center;font-size:10px;color:#888;background:#fafafa;position:sticky;left:0;z-index:5}
+.week-dayhead{display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:800;background:#fafafa;z-index:2}.week-dayhead.today{background:#111;color:#fff}
+.week-time{display:flex;align-items:flex-start;justify-content:center;padding-top:3px;font-size:10px;color:#888;background:#fafafa;position:sticky;left:0;z-index:4}
+.week-slot{background:#fff;min-width:0}.week-booking{margin:1px 2px;border-radius:7px;padding:4px 5px;background:#f2f4f7;border-left:3px solid #777;overflow:hidden;z-index:3;font-size:10px;line-height:1.25;cursor:pointer;min-height:28px}.week-booking .wk-name{font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.week-booking .wk-meta{font-size:9px;opacity:.72;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.note{font-size:12px;color:#666;line-height:1.6}
+.follow-box{background:#fff;border-radius:16px;padding:13px 14px;margin:8px 0}.follow-box .head{display:flex;justify-content:space-between;gap:8px;align-items:center}.follow-box .meta{font-size:12px;color:#666;line-height:1.55;margin-top:4px}
+.reminder-card{background:#fff;border-radius:16px;padding:13px 14px;margin:8px 0}.reminder-card .name{font-weight:850}.reminder-card .meta{font-size:12px;color:#666;margin-top:4px;line-height:1.5}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.chip{background:#eee;color:#111;padding:7px 9px;font-size:11px}
+.check-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.check-grid label{background:#fff;border-radius:11px;padding:9px;font-size:12px}
+.analysis-source{background:#fff;border-radius:13px;padding:10px 12px;margin:6px 0}
+.trend{width:100%;border-collapse:collapse;background:#fff;border-radius:14px;overflow:hidden;font-size:11px}.trend td,.trend th{padding:8px 6px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap}.trend td:first-child,.trend th:first-child{text-align:left}
+.progress{height:10px;background:#eee;border-radius:99px;overflow:hidden;margin-top:10px}.progress i{display:block;height:100%;background:#111;width:0}
+.import-row{background:#fff;border-radius:14px;padding:12px;margin:8px 0;border:1px solid #eee}.import-row input,.import-row select{margin:3px 0 7px;padding:9px;font-size:14px}
+.drop{display:block;border:1.5px dashed #bbb;border-radius:14px;padding:22px 12px;text-align:center;background:#fafafa}.drop input{display:none}.preview{width:100%;border-radius:12px;margin-top:10px;display:none}
+.product-row{background:#fff;border-radius:14px;padding:12px;margin:8px 0;display:flex;justify-content:space-between;gap:10px;align-items:center}.product-row .main{flex:1}.product-row .name{font-weight:800}.product-row .meta{font-size:11px;color:#777;margin-top:3px}
+@media(max-width:600px){
+  .week-scroll{overflow:hidden;border-radius:12px}.week-grid{width:100%;min-width:0;grid-template-columns:30px repeat(7,minmax(0,1fr));grid-template-rows:34px repeat(30,17px)}
+  .week-corner{font-size:8px}.week-dayhead{font-size:8px;line-height:1.08}.week-time{font-size:7px;padding-top:1px}
+  .week-booking{margin:0 1px;border-radius:4px;padding:1px 2px;border-left-width:2px;font-size:7.5px;line-height:1.08;min-height:17px}.week-booking .wk-name{font-size:7.5px}.week-booking .wk-meta{display:none}
+}
 </style>
 </head>
 <body>
+
 <div id="loginView" class="login-wrap">
   <div class="login-card">
     <div class="small">Salon Manager</div><h1>スタッフログイン</h1>
@@ -23,26 +79,85 @@
 </div>
 
 <div id="mainView" class="app hidden">
-  <div class="top"><div><div class="brand">Salon Manager</div><div id="staffLabel" class="small"></div></div><button class="ghost" onclick="logout()">ログアウト</button></div>
+  <div class="top">
+    <div><div class="brand">Salon Manager</div><div id="staffLabel" class="small"></div></div>
+    <div class="row auto"><button class="ghost" onclick="openStaffPreferences()">設定</button><button class="ghost" onclick="logout()">ログアウト</button></div>
+  </div>
 
   <section id="home" class="section active">
     <div class="monthbar"><button onclick="changeMonth(-1)">‹</button><div id="homeMonth" class="monthtitle"></div><button onclick="changeMonth(1)">›</button></div>
     <div id="homeStats" class="grid"></div>
+    <div id="goalCard" class="card"></div>
+    <h2>月カレンダー</h2><div id="homeCalendar" class="calendar"></div>
+    <h2>選択日の予約</h2><div id="homeDayBookings"></div>
+    <h2>フォロー管理</h2><div id="followupQueue"></div>
+    <h2>再来リマインド</h2><div id="returnReminders"></div>
     <h2>この先の予約</h2><div id="upcoming"></div>
   </section>
 
   <section id="reservations" class="section">
-    <div class="monthbar"><button onclick="changeMonth(-1)">‹</button><div id="resMonth" class="monthtitle"></div><button onclick="changeMonth(1)">›</button></div>
-    <div id="bookingList"></div>
+    <div class="row auto" style="margin-bottom:12px">
+      <div class="segment" style="flex:1">
+        <button id="sViewListBtn" class="active" onclick="setReservationView('list')">一覧</button>
+        <button id="sViewCalBtn" onclick="setReservationView('calendar')">月</button>
+        <button id="sViewWeekBtn" onclick="setReservationView('week')">週</button>
+      </div>
+      <button class="blue" onclick="openStaffImport()">予約媒体を読み取る</button>
+    </div>
+    <button class="soft" style="width:100%;margin-bottom:12px" onclick="openStoryAvailability()">ストーリー用 空き枠を作る</button>
+
+    <div id="resListView">
+      <div id="reservationTotals"></div>
+      <div id="reservationSources"></div>
+      <div class="filter-grid">
+        <input id="bookingFilterName" class="wide" placeholder="名前で検索" oninput="renderBookings()">
+        <input id="bookingFilterFrom" type="date" onchange="renderBookings()">
+        <input id="bookingFilterTo" type="date" onchange="renderBookings()">
+        <select id="bookingFilterSource" onchange="renderBookings()"></select>
+        <select id="bookingFilterType" onchange="renderBookings()"><option value="">フリー/指名すべて</option><option value="free">フリー</option><option value="designated">指名</option><option value="unset">未設定</option></select>
+        <select id="bookingFilterStatus" onchange="renderBookings()"><option value="">全ステータス</option><option value="booked">予約中</option><option value="visited">来店済み</option><option value="cancelled">キャンセル</option><option value="noshow">無断キャンセル</option></select>
+        <select id="bookingFilterPayment" onchange="renderBookings()"><option value="">決済すべて</option><option value="paid">決済済み</option><option value="unpaid">未決済</option></select>
+        <select id="bookingFilterNext" onchange="renderBookings()"><option value="">次回予約すべて</option><option value="taken">次回予約あり</option><option value="missing">次回予約なし</option></select>
+        <button class="ghost wide" onclick="resetBookingFilters()">絞り込み解除</button>
+      </div>
+      <div id="bookingList"></div>
+    </div>
+
+    <div id="resCalendarView" class="hidden">
+      <div class="monthbar"><button onclick="changeMonth(-1)">‹</button><div id="resCalMonth" class="monthtitle"></div><button onclick="changeMonth(1)">›</button></div>
+      <div id="reservationCalendar" class="calendar"></div>
+      <h2>この日の予約</h2><div id="calendarDayBookings"></div>
+    </div>
+
+    <div id="resWeekView" class="hidden">
+      <div class="monthbar"><button onclick="changeReservationWeek(-1)">‹</button><div id="weekTitle" class="monthtitle"></div><button onclick="changeReservationWeek(1)">›</button></div>
+      <div class="row auto" style="margin-bottom:8px"><div class="small" style="flex:1">08:00〜23:00 / 7日表示</div><button class="ghost" onclick="jumpWeekToday()">今週</button></div>
+      <div class="week-scroll"><div id="weekGrid" class="week-grid"></div></div>
+    </div>
   </section>
 
   <section id="customers" class="section">
-    <h2>顧客</h2><input id="customerSearch" placeholder="名前で検索" oninput="renderCustomers()"><div id="customerList"></div>
+    <h2>顧客</h2>
+    <input id="customerSearch" placeholder="名前で検索" oninput="renderCustomers()">
+    <div id="duplicateCandidates"></div>
+    <div id="customerList"></div>
   </section>
 
   <section id="sales" class="section">
     <div class="monthbar"><button onclick="changeMonth(-1)">‹</button><div id="salesMonth" class="monthtitle"></div><button onclick="changeMonth(1)">›</button></div>
-    <div id="salesStats" class="grid"></div><h2>3か月前〜今月</h2><div id="trendHost"></div>
+    <div class="row auto"><h2 style="margin:0;flex:1">売上</h2><button onclick="saleForm()">＋ 追加売上</button></div>
+    <div id="salesStats" class="grid" style="margin-top:10px"></div>
+    <h2>媒体別</h2><div id="salesSources"></div>
+    <h2>3か月前〜今月</h2><div id="trendHost"></div>
+    <h2>売上履歴</h2><div id="salesHistory"></div>
+  </section>
+
+  <section id="retail" class="section">
+    <div class="row auto"><h2 style="margin:0;flex:1">店販</h2><button onclick="retailSaleForm()">＋ 販売を記録</button></div>
+    <div id="retailStats" class="grid" style="margin-top:10px"></div>
+    <button class="soft" style="width:100%;margin-top:10px" onclick="openRetailPreferences()">使う店販商品を選ぶ</button>
+    <h2>使用中の商品</h2><div id="retailProductList"></div>
+    <h2>販売履歴</h2><div id="retailHistory"></div>
   </section>
 </div>
 
@@ -52,12 +167,14 @@
   <button data-tab="reservations" onclick="go('reservations',this)"><span class="ico">◷</span>予約</button>
   <button data-tab="customers" onclick="go('customers',this)"><span class="ico">♙</span>顧客</button>
   <button data-tab="sales" onclick="go('sales',this)"><span class="ico">¥</span>売上</button>
+  <button data-tab="retail" onclick="go('retail',this)"><span class="ico">◇</span>店販</button>
 </nav>
 <div id="modal" class="modal hidden" onclick="if(event.target===this)closeModal()"><div id="sheet" class="sheet"></div></div>
 
 <script>
 const STAFF_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/staff';
 const TOKEN_KEY='salonManagerStaffToken';
+const SOURCE_CHOICES=['HOT PEPPER Beauty','楽天ビューティ','minimo','Nailie','OZmall','SHAiRE','Instagram','LINE','Google・自社予約','その他'];
 const pad=n=>String(n).padStart(2,'0');
 const localISO=(d=new Date())=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const todayISO=localISO();
@@ -65,41 +182,470 @@ const monthKey=s=>String(s||'').slice(0,7);
 const yen=n=>'¥'+Number(n||0).toLocaleString('ja-JP');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const normalize=s=>String(s||'').normalize('NFKC').replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60)).replace(/[\s・･]/g,'').toLowerCase();
-let token=localStorage.getItem(TOKEN_KEY)||'',state={profile:null,bookings:[],customers:[]},viewMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1),busy=false;
 const $=id=>document.getElementById(id);
+let token=localStorage.getItem(TOKEN_KEY)||'';
+let state={profile:null,bookings:[],customers:[],sales:[],retail:[],products:[]};
+let viewMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
+let selectedDate=todayISO,reservationView='list',weekStart=mondayOf(new Date()),busy=false,importRows=[];
+
 function monthString(d){return `${d.getFullYear()}-${pad(d.getMonth()+1)}`}
 function monthLabel(d){return `${d.getFullYear()}年${d.getMonth()+1}月`}
 function addMonths(d,n){return new Date(d.getFullYear(),d.getMonth()+n,1)}
+function dateOnly(s){const [y,m,d]=String(s||'').split('-').map(Number);return y&&m&&d?new Date(y,m-1,d,12):null}
+function daysBetween(a,b){return Math.floor((dateOnly(b)-dateOnly(a))/86400000)}
+function addDaysISO(iso,n){const d=dateOnly(iso);d.setDate(d.getDate()+n);return localISO(d)}
+function mondayOf(d){const x=new Date(d);x.setHours(12,0,0,0);const day=x.getDay();x.setDate(x.getDate()+(day===0?-6:1-day));return x}
 function bookingStatus(b){return b.status||'booked'}
 function isActive(b){return !['cancelled','noshow'].includes(bookingStatus(b))}
 function isVisited(b){return bookingStatus(b)==='visited'||(bookingStatus(b)==='booked'&&b.date<todayISO&&b.paymentComplete)}
+function statusLabel(b){return bookingStatus(b)==='visited'?'来店済み':bookingStatus(b)==='cancelled'?'キャンセル':bookingStatus(b)==='noshow'?'無断キャンセル':'予約中'}
+function bookingType(v){return v==='designated'?'指名':v==='free'?'フリー':'未設定'}
+function customerBookings(name){const n=normalize(name);return state.bookings.filter(b=>normalize(b.customer)===n).sort((x,y)=>(y.date+y.time).localeCompare(x.date+x.time))}
 function hasLater(name,date){const n=normalize(name);return state.bookings.some(b=>normalize(b.customer)===n&&b.date>date&&isActive(b))}
+function hasFuture(name){const n=normalize(name);return state.bookings.some(b=>normalize(b.customer)===n&&b.date>=todayISO&&isActive(b))}
 function nextTaken(b){return !!b.nextBookingTaken||hasLater(b.customer,b.date)}
 function modal(h){$('sheet').innerHTML=h;$('modal').classList.remove('hidden')}
 function closeModal(){$('modal').classList.add('hidden')}
-function go(id,btn){document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));btn.classList.add('active');$('fab').classList.toggle('hidden',id!=='reservations');renderAll()}
-function statusLabel(b){return bookingStatus(b)==='visited'?'来店済み':bookingStatus(b)==='cancelled'?'キャンセル':bookingStatus(b)==='noshow'?'無断キャンセル':'予約中'}
-function bookingType(v){return v==='designated'?'指名':v==='free'?'フリー':'未設定'}
-async function api(path='',options={}){const r=await fetch(STAFF_API,{...options,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token,...options.headers}});const body=await r.json().catch(()=>({}));if(r.status===401){logout(false);throw new Error(body.error||'ログインし直してください');}if(!r.ok)throw new Error(body.error||'通信エラー');return body}
-async function login(){const u=$('loginUser').value.trim(),p=$('loginPass').value;$('loginStatus').textContent='ログイン中…';try{const r=await fetch(STAFF_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'login',username:u,password:p})});const b=await r.json();if(!r.ok)throw new Error(b.error||'ログインできません');token=b.token;localStorage.setItem(TOKEN_KEY,token);await loadData();showMain();}catch(e){$('loginStatus').textContent=e.message}}
-function logout(show=true){token='';localStorage.removeItem(TOKEN_KEY);$('mainView').classList.add('hidden');$('nav').classList.add('hidden');$('fab').classList.add('hidden');$('loginView').classList.remove('hidden');if(show)$('loginStatus').textContent='ログアウトしました'}
-async function loadData(){if(!token)return;const b=await api('');state={profile:b.profile,bookings:b.bookings||[],customers:b.customers||[]};renderAll()}
-function showMain(){$('loginView').classList.add('hidden');$('mainView').classList.remove('hidden');$('nav').classList.remove('hidden');$('fab').classList.remove('hidden');$('staffLabel').textContent=(state.profile?.name||'スタッフ')+' ・ '+((state.profile?.sources||[]).join(' / '));renderAll()}
-function changeMonth(n){viewMonth=addMonths(viewMonth,n);renderAll()}
-function monthBookings(m){return state.bookings.filter(b=>monthKey(b.date)===m)}
-function statsFor(m){const all=monthBookings(m),visits=all.filter(isVisited),active=all.filter(isActive),newV=visits.filter(b=>b.newGuest),rep=visits.filter(b=>!b.newGuest),paid=all.filter(b=>b.paymentComplete&&isActive(b)),sales=paid.reduce((a,b)=>a+Number(b.price||0),0),forecast=active.reduce((a,b)=>a+Number(b.price||0),0),avg=visits.length?Math.round(sales/visits.length):0,newNext=newV.filter(nextTaken).length,repNext=rep.filter(nextTaken).length,uniqueNew=[...new Map(newV.map(b=>[normalize(b.customer),b])).values()].filter(b=>normalize(b.customer)),returned=uniqueNew.filter(f=>state.bookings.some(b=>normalize(b.customer)===normalize(f.customer)&&b.date>f.date&&isVisited(b))).length;return{all,visits,active,newV,rep,sales,forecast,avg,newNext,repNext,newNextRate:newV.length?Math.round(newNext/newV.length*100):0,repNextRate:rep.length?Math.round(repNext/rep.length*100):0,repeatRate:uniqueNew.length?Math.round(returned/uniqueNew.length*100):0,free:visits.filter(b=>b.bookingType==='free').length,designated:visits.filter(b=>b.bookingType==='designated').length}}
-function renderAll(){if(!state.profile)return;const m=monthString(viewMonth);$('homeMonth').textContent=$('resMonth').textContent=$('salesMonth').textContent=monthLabel(viewMonth);const s=statsFor(m);$('homeStats').innerHTML=`<div class="card kpi"><div class="l">確定売上</div><div class="v">${yen(s.sales)}</div></div><div class="card kpi"><div class="l">見込み</div><div class="v">${yen(s.forecast)}</div></div><div class="card kpi"><div class="l">新規</div><div class="v">${s.newV.length}人</div></div><div class="card kpi"><div class="l">再来</div><div class="v">${s.rep.length}人</div></div><div class="card kpi"><div class="l">フリー / 指名</div><div class="v">${s.free} / ${s.designated}</div></div><div class="card kpi"><div class="l">平均単価</div><div class="v">${yen(s.avg)}</div></div>`;renderUpcoming();renderBookings();renderCustomers();renderSales()}
-function renderUpcoming(){const a=state.bookings.filter(b=>b.date>=todayISO&&isActive(b)).sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time)).slice(0,8);$('upcoming').innerHTML=a.length?a.map(bookingCard).join(''):'<div class="empty">この先の予約はありません</div>'}
-function bookingCard(b){return `<div class="item" onclick="bookingForm('${b.id}')"><div class="t">${esc(b.date)} ${esc(b.time)} ${esc(b.customer)} <span class="badge">${esc(statusLabel(b))}</span></div><div class="s">${esc(b.menu||'メニュー未入力')} ・ ${yen(b.price)} ・ ${esc(b.source||'')} ・ ${bookingType(b.bookingType)} ・ ${b.newGuest?'新規':'再来'}${b.paymentComplete?' ・ 決済済み':''}</div></div>`}
-function renderBookings(){const m=monthString(viewMonth),a=state.bookings.filter(b=>monthKey(b.date)===m).sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));$('bookingList').innerHTML=a.length?a.map(bookingCard).join(''):'<div class="empty">予約はありません</div>'}
-function customerBookings(name){const n=normalize(name);return state.bookings.filter(b=>normalize(b.customer)===n).sort((x,y)=>(y.date+y.time).localeCompare(x.date+x.time))}
-function renderCustomers(){const q=($('customerSearch')?.value||'').toLowerCase(),a=state.customers.filter(c=>(c.name||'').toLowerCase().includes(q));$('customerList').innerHTML=a.length?a.map(c=>{const h=customerBookings(c.name),v=h.filter(isVisited);return `<div class="item" onclick="openCustomer('${c.id}')"><div class="t">${esc(c.name)}</div><div class="s">来店 ${v.length}回${c.lastVisit?' ・ 最終 '+esc(c.lastVisit):''}</div></div>`}).join(''):'<div class="empty">顧客はまだいません</div>'}
-function renderSales(){const m=monthString(viewMonth),s=statsFor(m);$('salesStats').innerHTML=`<div class="card kpi"><div class="l">確定売上</div><div class="v">${yen(s.sales)}</div></div><div class="card kpi"><div class="l">平均単価</div><div class="v">${yen(s.avg)}</div></div><div class="card kpi"><div class="l">新規 次回予約率</div><div class="v">${s.newNextRate}%</div></div><div class="card kpi"><div class="l">再来 次回予約率</div><div class="v">${s.repNextRate}%</div></div><div class="card wide kpi"><div class="l">リピート率</div><div class="v">${s.repeatRate}%</div></div>`;const months=[];for(let i=3;i>=0;i--){const d=addMonths(viewMonth,-i),mm=monthString(d),x=statsFor(mm);months.push(`<tr><td>${d.getMonth()+1}月</td><td>${x.newV.length}</td><td>${x.repeatRate}%</td><td>${x.newNextRate}%</td><td>${x.repNextRate}%</td></tr>`)}$('trendHost').innerHTML=`<table class="trend"><thead><tr><th>月</th><th>新規</th><th>リピート</th><th>新規次回</th><th>再来次回</th></tr></thead><tbody>${months.join('')}</tbody></table>`}
-function bookingForm(id=''){const b=id?state.bookings.find(x=>x.id===id)||{}:{};const sources=state.profile?.sources||['その他'];modal(`<h3>${id?'予約を編集':'予約を追加'}</h3><label>日付</label><input id="fDate" type="date" value="${esc(b.date||todayISO)}"><div class="row"><div><label>開始</label><input id="fTime" type="time" value="${esc(b.time||'11:00')}"></div><div><label>終了</label><input id="fEnd" type="time" value="${esc(b.end||'13:00')}"></div></div><label>予約名</label><input id="fCustomer" value="${esc(b.customer||'')}"><label>メニュー</label><input id="fMenu" value="${esc(b.menu||'カット+カラー')}"><label>料金</label><input id="fPrice" type="number" value="${Number(b.price||0)}"><label>フリー / 指名</label><select id="fType"><option value="free" ${b.bookingType==='free'||!b.bookingType?'selected':''}>フリー</option><option value="designated" ${b.bookingType==='designated'?'selected':''}>指名</option></select><label>予約媒体</label><select id="fSource">${sources.map(x=>`<option ${b.source===x?'selected':''}>${esc(x)}</option>`).join('')}</select><label>新規 / 再来</label><select id="fNew"><option value="new" ${b.newGuest?'selected':''}>新規</option><option value="repeat" ${b.newGuest===false?'selected':''}>再来</option></select><label>来店ステータス</label><select id="fStatus"><option value="booked" ${bookingStatus(b)==='booked'?'selected':''}>予約中</option><option value="visited" ${bookingStatus(b)==='visited'?'selected':''}>来店済み</option><option value="cancelled" ${bookingStatus(b)==='cancelled'?'selected':''}>キャンセル</option><option value="noshow" ${bookingStatus(b)==='noshow'?'selected':''}>無断キャンセル</option></select><label><input id="fNext" type="checkbox" style="width:auto" ${b.nextBookingTaken?'checked':''}> 次回予約あり</label><label><input id="fPaid" type="checkbox" style="width:auto" ${b.paymentComplete?'checked':''}> 決済完了</label><label>薬剤 / 配合</label><textarea id="fFormula">${esc(b.formula||'')}</textarea><label>施術メモ</label><textarea id="fVisitNote">${esc(b.visitNote||'')}</textarea><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveBooking('${id}')">保存</button></div>${id?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteBooking('${id}')">削除</button>`:''}`)}
-async function saveBooking(id){const b={id:id||'',date:$('fDate').value,time:$('fTime').value,end:$('fEnd').value,customer:$('fCustomer').value.trim(),menu:$('fMenu').value.trim(),price:Number($('fPrice').value)||0,bookingType:$('fType').value,source:$('fSource').value,newGuest:$('fNew').value==='new',status:$('fStatus').value,nextBookingTaken:$('fNext').checked,paymentComplete:$('fPaid').checked,formula:$('fFormula').value,visitNote:$('fVisitNote').value};try{const r=await api('',{method:'POST',body:JSON.stringify({action:'upsertBooking',booking:b})});state={...state,bookings:r.bookings||[],customers:r.customers||[],profile:r.profile};closeModal();renderAll()}catch(e){alert(e.message)}}
-async function deleteBooking(id){if(!confirm('この予約を削除しますか？'))return;try{const r=await api('',{method:'POST',body:JSON.stringify({action:'deleteBooking',id})});state={...state,bookings:r.bookings||[],customers:r.customers||[],profile:r.profile};closeModal();renderAll()}catch(e){alert(e.message)}}
-function openCustomer(id){const c=state.customers.find(x=>x.id===id);if(!c)return;const h=customerBookings(c.name);modal(`<h3>${esc(c.name)}</h3><div class="small">このスタッフの来店・予約のみ表示</div><label>読み仮名</label><input id="cKana" value="${esc(c.kana||'')}"><label>Instagram</label><input id="cInstagram" value="${esc(c.instagram||'')}"><label>メモ</label><textarea id="cNote">${esc(c.note||'')}</textarea><button class="blue" style="width:100%" onclick="saveCustomer('${id}')">顧客メモを保存</button><h2>履歴</h2>${h.length?h.map(bookingCard).join(''):'<div class="empty">履歴なし</div>'}`)}
-async function saveCustomer(id){const c={id,note:$('cNote').value,kana:$('cKana').value,instagram:$('cInstagram').value};try{const r=await api('',{method:'POST',body:JSON.stringify({action:'updateCustomer',customer:c})});state={...state,bookings:r.bookings||[],customers:r.customers||[],profile:r.profile};closeModal();renderAll()}catch(e){alert(e.message)}}
+function go(id,btn){
+  document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));$(id).classList.add('active');
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));btn.classList.add('active');
+  $('fab').classList.toggle('hidden',id!=='reservations');renderAll();
+}
+async function api(options={}){
+  const r=await fetch(STAFF_API,{...options,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token,...options.headers}});
+  const body=await r.json().catch(()=>({}));
+  if(r.status===401){logout(false);throw new Error(body.error||'ログインし直してください')}
+  if(!r.ok)throw new Error(body.error||'通信エラー');
+  return body;
+}
+function applyState(b){
+  state={
+    profile:b.profile||state.profile,
+    bookings:b.bookings||[],
+    customers:b.customers||[],
+    sales:b.sales||[],
+    retail:b.retail||[],
+    products:b.products||[]
+  };
+}
+async function login(){
+  const u=$('loginUser').value.trim(),p=$('loginPass').value;
+  $('loginStatus').textContent='ログイン中…';
+  try{
+    const r=await fetch(STAFF_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'login',username:u,password:p})});
+    const b=await r.json();if(!r.ok)throw new Error(b.error||'ログインできません');
+    token=b.token;localStorage.setItem(TOKEN_KEY,token);await loadData();showMain();
+  }catch(e){$('loginStatus').textContent=e.message}
+}
+function logout(show=true){
+  token='';localStorage.removeItem(TOKEN_KEY);
+  $('mainView').classList.add('hidden');$('nav').classList.add('hidden');$('fab').classList.add('hidden');$('loginView').classList.remove('hidden');
+  if(show)$('loginStatus').textContent='ログアウトしました';
+}
+async function loadData(){if(!token)return;const b=await api();applyState(b);renderAll()}
+function showMain(){
+  $('loginView').classList.add('hidden');$('mainView').classList.remove('hidden');$('nav').classList.remove('hidden');
+  $('staffLabel').textContent=(state.profile?.name||'スタッフ')+' ・ '+((state.profile?.sources||[]).join(' / '));
+  renderAll();
+}
+function changeMonth(n){viewMonth=addMonths(viewMonth,n);selectedDate=monthString(viewMonth)+'-01';renderAll()}
+function statsFor(m){
+  const all=state.bookings.filter(b=>monthKey(b.date)===m),visits=all.filter(isVisited),active=all.filter(isActive);
+  const newV=visits.filter(b=>b.newGuest),rep=visits.filter(b=>!b.newGuest),paid=all.filter(b=>b.paymentComplete&&isActive(b));
+  const bookingSales=paid.reduce((a,b)=>a+Number(b.price||0),0);
+  const extras=state.sales.filter(x=>monthKey(x.date)===m),extraSales=extras.reduce((a,x)=>a+Number(x.amount||0),0);
+  const retail=state.retail.filter(x=>monthKey(x.date)===m),retailSales=retail.reduce((a,x)=>a+Number(x.amount||0),0);
+  const tech=bookingSales+extraSales,total=tech+retailSales;
+  const forecast=active.reduce((a,b)=>a+Number(b.price||0),0)+extraSales+retailSales;
+  const avg=visits.length?Math.round(tech/visits.length):0;
+  const newNext=newV.filter(nextTaken).length,repNext=rep.filter(nextTaken).length;
+  const uniqueNew=[...new Map(newV.map(b=>[normalize(b.customer),b])).values()].filter(b=>normalize(b.customer));
+  const returned=uniqueNew.filter(f=>state.bookings.some(b=>normalize(b.customer)===normalize(f.customer)&&b.date>f.date&&isVisited(b))).length;
+  return {
+    all,visits,active,newV,rep,tech,retailSales,total,forecast,avg,extras,retail,
+    newNextRate:newV.length?Math.round(newNext/newV.length*100):0,
+    repNextRate:rep.length?Math.round(repNext/rep.length*100):0,
+    repeatRate:uniqueNew.length?Math.round(returned/uniqueNew.length*100):0,
+    free:visits.filter(b=>b.bookingType==='free').length,
+    designated:visits.filter(b=>b.bookingType==='designated').length,
+    cancels:all.filter(b=>bookingStatus(b)==='cancelled').length,
+    noshows:all.filter(b=>bookingStatus(b)==='noshow').length
+  };
+}
+function renderAll(){
+  if(!state.profile)return;
+  const m=monthString(viewMonth),label=monthLabel(viewMonth);
+  $('homeMonth').textContent=$('salesMonth').textContent=$('resCalMonth').textContent=label;
+  renderHome();renderBookings();renderReservationCalendar();renderWeek();renderCustomers();renderSales();renderRetail();
+}
+function renderHome(){
+  const m=monthString(viewMonth),s=statsFor(m);
+  $('homeStats').innerHTML=`
+    <div class="card kpi"><div class="l">売上</div><div class="v">${yen(s.total)}</div></div>
+    <div class="card kpi"><div class="l">見込み</div><div class="v">${yen(s.forecast)}</div></div>
+    <div class="card kpi"><div class="l">新規</div><div class="v">${s.newV.length}人</div></div>
+    <div class="card kpi"><div class="l">再来</div><div class="v">${s.rep.length}人</div></div>
+    <div class="card kpi"><div class="l">フリー / 指名</div><div class="v">${s.free} / ${s.designated}</div></div>
+    <div class="card kpi"><div class="l">平均単価</div><div class="v">${yen(s.avg)}</div></div>`;
+  const goal=Number(state.profile?.goals?.[m]||0),pct=goal?Math.min(100,Math.round(s.forecast/goal*100)):0;
+  $('goalCard').innerHTML=`<div class="row"><div><b>月目標</b><div class="small">${goal?yen(goal):'未設定'}</div></div><button class="ghost" onclick="editGoal()">目標変更</button></div><div class="progress"><i style="width:${pct}%"></i></div><div class="small" style="margin-top:8px">${goal?`見込み ${yen(s.forecast)} / ${pct}%`:'目標を設定すると進捗が出ます'}</div>`;
+  renderHomeCalendar();renderFollowups();renderReturnReminders();renderUpcoming();
+}
+function editGoal(){
+  const m=monthString(viewMonth),v=Number(state.profile?.goals?.[m]||0);
+  modal(`<h3>${esc(monthLabel(viewMonth))}の目標</h3><label>売上目標</label><input id="goalAmount" type="number" min="0" value="${v||''}"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveGoal()">保存</button></div>`);
+}
+async function saveGoal(){
+  try{const r=await api({method:'POST',body:JSON.stringify({action:'setGoal',month:monthString(viewMonth),amount:Number($('goalAmount').value)||0})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
+}
+function calendarHTML(month,selected,onClick){
+  const y=month.getFullYear(),mo=month.getMonth(),first=new Date(y,mo,1,12),start=new Date(first);start.setDate(1-first.getDay());
+  let html='<div class="weekdays">'+['日','月','火','水','木','金','土'].map(x=>`<div>${x}</div>`).join('')+'</div><div class="calgrid">';
+  for(let i=0;i<42;i++){
+    const d=new Date(start);d.setDate(start.getDate()+i);const iso=localISO(d),count=state.bookings.filter(b=>b.date===iso&&isActive(b)).length;
+    html+=`<div class="day ${d.getMonth()!==mo?'other':''} ${iso===todayISO?'today':''} ${iso===selected?'selected':''}" onclick="${onClick}('${iso}')"><div class="daynum">${d.getDate()}</div>${count?`<div class="daycount">${count}件</div>`:''}</div>`;
+  }
+  return html+'</div>';
+}
+function renderHomeCalendar(){
+  $('homeCalendar').innerHTML=calendarHTML(viewMonth,selectedDate,'selectHomeDate');
+  const a=state.bookings.filter(b=>b.date===selectedDate).sort((x,y)=>x.time.localeCompare(y.time));
+  $('homeDayBookings').innerHTML=a.length?a.map(bookingCard).join(''):'<div class="empty">予約はありません</div>';
+}
+function selectHomeDate(iso){selectedDate=iso;renderHomeCalendar()}
+function renderUpcoming(){
+  const a=state.bookings.filter(b=>b.date>=todayISO&&isActive(b)).sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time)).slice(0,12);
+  $('upcoming').innerHTML=a.length?a.map(bookingCard).join(''):'<div class="empty">この先の予約はありません</div>';
+}
+function customerForBooking(b){return state.customers.find(c=>normalize(c.name)===normalize(b.customer))}
+function followupDue(){
+  const out=[];
+  state.bookings.forEach(b=>{
+    if(!isActive(b))return;
+    if(isVisited(b)){
+      const d=daysBetween(b.date,todayISO);
+      if(d>=0&&d<=7&&!b.followAftercare)out.push({b,type:'aftercare',label:'当日アフター'});
+    }
+    if(b.date>=todayISO){
+      const d=daysBetween(todayISO,b.date);
+      if(d>=5&&d<=8&&!b.followWeek)out.push({b,type:'week',label:'1週間前'});
+      if(d>=1&&d<=3&&!b.follow2Days)out.push({b,type:'twoDays',label:'2日前'});
+    }
+  });
+  return out.sort((x,y)=>(x.b.date+x.b.time).localeCompare(y.b.date+y.b.time));
+}
+function renderFollowups(){
+  const a=followupDue();
+  $('followupQueue').innerHTML=a.length?a.map(x=>`<div class="follow-box"><div class="head"><div><b>${esc(x.b.customer)}</b><span class="badge">${x.label}</span></div><button class="ghost" onclick="openFollowup('${x.b.id}','${x.type}')">確認</button></div><div class="meta">${esc(x.b.date)} ${esc(x.b.time)} ・ ${esc(x.b.menu||'')}</div></div>`).join(''):'<div class="empty">今送るフォローはありません</div>';
+}
+function followupMessage(b,type){
+  if(type==='aftercare')return `${b.customer}様\n本日はありがとうございました！\nその後、髪の扱いやすさはいかがでしょうか？気になるところがあればいつでもご連絡ください☺️`;
+  if(type==='week')return `${b.customer}様\n次回のご予約が1週間後になりました！\n${b.date} ${b.time}〜でお待ちしております☺️`;
+  return `${b.customer}様\nご予約が近づいてきました！\n${b.date} ${b.time}〜でお待ちしております☺️`;
+}
+function openFollowup(id,type){
+  const b=state.bookings.find(x=>x.id===id);if(!b)return;const c=customerForBooking(b),linked=!!c?.lineUserId;
+  modal(`<h3>フォロー連絡</h3><div class="small">${esc(b.customer)} ・ ${linked?'LINE連携済み':'LINE未連携'}</div><textarea id="followText">${esc(followupMessage(b,type))}</textarea><div class="actions"><button class="ghost" onclick="markFollowup('${id}','${type}')">送信済みにする</button>${linked?`<button class="blue" onclick="sendFollowup('${id}','${type}','${c.id}')">LINEで送信</button>`:''}</div>`);
+}
+async function markFollowup(id,type,keepOpen=false){
+  const b=state.bookings.find(x=>x.id===id);if(!b)return;
+  const next={...b};if(type==='aftercare')next.followAftercare=true;if(type==='week')next.followWeek=true;if(type==='twoDays')next.follow2Days=true;
+  const r=await api({method:'POST',body:JSON.stringify({action:'upsertBooking',booking:next})});applyState(r);if(!keepOpen)closeModal();renderAll();
+}
+async function sendFollowup(id,type,customerId){
+  try{
+    const text=$('followText').value.trim();if(!text)return alert('送信文を入力してください');
+    await api({method:'POST',body:JSON.stringify({action:'sendLine',customerId,text})});
+    await markFollowup(id,type);alert('LINEで送信しました');
+  }catch(e){alert(e.message)}
+}
+function renderReturnReminders(){
+  const rows=state.customers.map(c=>{
+    const past=customerBookings(c.name).filter(isVisited).sort((a,b)=>b.date.localeCompare(a.date));
+    const last=[c.lastVisit||'',past[0]?.date||''].sort().pop();if(!last)return null;
+    const days=daysBetween(last,todayISO);if(days<45||hasFuture(c.name)||(c.reminderSnoozeUntil||'')>todayISO)return null;
+    return {...c,lastComputed:last,days};
+  }).filter(Boolean).sort((a,b)=>b.days-a.days);
+  $('returnReminders').innerHTML=rows.length?rows.map(c=>`<div class="reminder-card"><div class="name">${esc(c.name)}</div><div class="meta">最終来店 ${esc(c.lastComputed)} ・ ${c.days}日経過</div><div class="actions"><button class="ghost" onclick="snoozeCustomer('${c.id}')">1週間後</button><button onclick="openCustomer('${c.id}')">カルテ</button></div></div>`).join(''):'<div class="empty">再来リマインドはありません</div>';
+}
+async function snoozeCustomer(id){
+  const c=state.customers.find(x=>x.id===id);if(!c)return;
+  try{
+    const r=await api({method:'POST',body:JSON.stringify({action:'updateCustomer',customer:{...c,reminderSnoozeUntil:addDaysISO(todayISO,7)}})});applyState(r);renderAll();
+  }catch(e){alert(e.message)}
+}
+function bookingCard(b){
+  return `<div class="item" onclick="bookingForm('${b.id}')"><div class="t">${esc(b.date)} ${esc(b.time)} ${esc(b.customer)} <span class="badge">${esc(statusLabel(b))}</span></div><div class="s">${esc(b.menu||'メニュー未入力')} ・ ${yen(b.price)} ・ ${esc(b.source||'')} ・ ${bookingType(b.bookingType)} ・ ${b.newGuest?'新規':'再来'}${b.paymentComplete?' ・ 決済済み':''}</div></div>`;
+}
+
+function setReservationView(v){
+  reservationView=v;
+  $('resListView').classList.toggle('hidden',v!=='list');$('resCalendarView').classList.toggle('hidden',v!=='calendar');$('resWeekView').classList.toggle('hidden',v!=='week');
+  $('sViewListBtn').classList.toggle('active',v==='list');$('sViewCalBtn').classList.toggle('active',v==='calendar');$('sViewWeekBtn').classList.toggle('active',v==='week');
+  if(v==='calendar')renderReservationCalendar();if(v==='week')renderWeek();
+}
+function filteredBookings(){
+  let a=[...state.bookings],q=($('bookingFilterName')?.value||'').trim().toLowerCase(),from=$('bookingFilterFrom')?.value||'',to=$('bookingFilterTo')?.value||'';
+  const source=$('bookingFilterSource')?.value||'',type=$('bookingFilterType')?.value||'',status=$('bookingFilterStatus')?.value||'',payment=$('bookingFilterPayment')?.value||'',next=$('bookingFilterNext')?.value||'';
+  if(q)a=a.filter(x=>(x.customer||'').toLowerCase().includes(q));
+  if(from)a=a.filter(x=>x.date>=from);if(to)a=a.filter(x=>x.date<=to);if(source)a=a.filter(x=>x.source===source);
+  if(type==='free'||type==='designated')a=a.filter(x=>x.bookingType===type);if(type==='unset')a=a.filter(x=>!x.bookingType);
+  if(status)a=a.filter(x=>bookingStatus(x)===status);if(payment==='paid')a=a.filter(x=>x.paymentComplete);if(payment==='unpaid')a=a.filter(x=>!x.paymentComplete);
+  if(next==='taken')a=a.filter(nextTaken);if(next==='missing')a=a.filter(x=>!nextTaken(x));
+  return a.sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
+}
+function renderBookings(){
+  const src=$('bookingFilterSource');
+  if(src){
+    const cur=src.value;src.innerHTML='<option value="">全媒体</option>'+(state.profile?.sources||[]).map(x=>`<option ${cur===x?'selected':''}>${esc(x)}</option>`).join('');
+  }
+  const a=filteredBookings(),visits=a.filter(isVisited),sales=a.filter(b=>b.paymentComplete&&isActive(b)).reduce((x,b)=>x+Number(b.price||0),0);
+  $('reservationTotals').innerHTML=`<div class="grid"><div class="card kpi"><div class="l">表示件数</div><div class="v">${a.length}</div></div><div class="card kpi"><div class="l">確定売上</div><div class="v">${yen(sales)}</div></div></div>`;
+  $('reservationSources').innerHTML=(state.profile?.sources||[]).map(source=>{const xs=a.filter(x=>x.source===source);return `<div class="analysis-source"><b>${esc(source)}</b><div class="small">${xs.length}件 / 実来店 ${xs.filter(isVisited).length}人</div></div>`}).join('');
+  $('bookingList').innerHTML=a.length?a.map(bookingCard).join(''):'<div class="empty">予約はありません</div>';
+}
+function resetBookingFilters(){
+  ['bookingFilterName','bookingFilterFrom','bookingFilterTo','bookingFilterSource','bookingFilterType','bookingFilterStatus','bookingFilterPayment','bookingFilterNext'].forEach(id=>{if($(id))$(id).value=''});renderBookings();
+}
+function renderReservationCalendar(){
+  $('reservationCalendar').innerHTML=calendarHTML(viewMonth,selectedDate,'selectReservationDate');
+  const a=state.bookings.filter(b=>b.date===selectedDate).sort((x,y)=>x.time.localeCompare(y.time));
+  $('calendarDayBookings').innerHTML=a.length?a.map(bookingCard).join(''):'<div class="empty">予約はありません</div>';
+}
+function selectReservationDate(iso){selectedDate=iso;renderReservationCalendar()}
+function changeReservationWeek(n){weekStart.setDate(weekStart.getDate()+n*7);renderWeek()}
+function jumpWeekToday(){weekStart=mondayOf(new Date());renderWeek()}
+function timeMin(t){const [h,m]=String(t||'').split(':').map(Number);return (h||0)*60+(m||0)}
+function renderWeek(){
+  if(!$('weekGrid'))return;
+  const days=Array.from({length:7},(_,i)=>{const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);return d});
+  $('weekTitle').textContent=`${days[0].getMonth()+1}/${days[0].getDate()}〜${days[6].getMonth()+1}/${days[6].getDate()}`;
+  let h='<div class="week-corner">TIME</div>';
+  days.forEach((d,i)=>h+=`<div class="week-dayhead ${localISO(d)===todayISO?'today':''}" style="grid-column:${i+2};grid-row:1">${['月','火','水','木','金','土','日'][i]}<br>${d.getMonth()+1}/${d.getDate()}</div>`);
+  for(let slot=0;slot<30;slot++){
+    const mins=8*60+slot*30,row=slot+2;
+    h+=`<div class="week-time" style="grid-column:1;grid-row:${row}">${slot%2===0?`${pad(Math.floor(mins/60))}:00`:''}</div>`;
+    for(let col=0;col<7;col++)h+=`<div class="week-slot" style="grid-column:${col+2};grid-row:${row}"></div>`;
+  }
+  state.bookings.filter(isActive).forEach(b=>{
+    const col=days.findIndex(d=>localISO(d)===b.date);if(col<0)return;
+    const start=Math.max(8*60,timeMin(b.time)),end=Math.min(23*60,timeMin(b.end||b.time)+30);if(end<=8*60||start>=23*60)return;
+    const rowStart=2+Math.floor((start-8*60)/30),span=Math.max(1,Math.ceil((end-start)/30));
+    h+=`<div class="week-booking" style="grid-column:${col+2};grid-row:${rowStart}/span ${span}" onclick="bookingForm('${b.id}')"><div class="wk-name">${esc(b.customer)}</div><div class="wk-meta">${esc(b.time)} ${esc(b.menu||'')}</div></div>`;
+  });
+  $('weekGrid').innerHTML=h;
+}
+function bookingForm(id=''){
+  const b=id?state.bookings.find(x=>x.id===id)||{}:{};
+  const sources=state.profile?.sources?.length?state.profile.sources:['その他'];
+  modal(`<h3>${id?'予約を編集':'予約を追加'}</h3>
+    <label>日付</label><input id="fDate" type="date" value="${esc(b.date||todayISO)}">
+    <div class="row"><div><label>開始</label><input id="fTime" type="time" value="${esc(b.time||'11:00')}"></div><div><label>終了</label><input id="fEnd" type="time" value="${esc(b.end||'13:00')}"></div></div>
+    <label>予約名</label><input id="fCustomer" value="${esc(b.customer||'')}">
+    <label>メニュー</label><input id="fMenu" value="${esc(b.menu||'カット+カラー')}">
+    <label>料金</label><input id="fPrice" type="number" value="${Number(b.price||0)}">
+    <label>フリー / 指名</label><select id="fType"><option value="free" ${b.bookingType==='free'||!b.bookingType?'selected':''}>フリー</option><option value="designated" ${b.bookingType==='designated'?'selected':''}>指名</option></select>
+    <label>予約媒体</label><select id="fSource">${sources.map(x=>`<option ${b.source===x?'selected':''}>${esc(x)}</option>`).join('')}</select>
+    <label>新規 / 再来</label><select id="fNew"><option value="new" ${b.newGuest?'selected':''}>新規</option><option value="repeat" ${b.newGuest===false?'selected':''}>再来</option></select>
+    <label>来店ステータス</label><select id="fStatus"><option value="booked" ${bookingStatus(b)==='booked'?'selected':''}>予約中</option><option value="visited" ${bookingStatus(b)==='visited'?'selected':''}>来店済み</option><option value="cancelled" ${bookingStatus(b)==='cancelled'?'selected':''}>キャンセル</option><option value="noshow" ${bookingStatus(b)==='noshow'?'selected':''}>無断キャンセル</option></select>
+    <div class="card"><b>次回予約・フォロー</b>
+      <label><input id="fNext" type="checkbox" style="width:auto" ${b.nextBookingTaken?'checked':''}> 次回予約あり</label><br>
+      <label><input id="fAfter" type="checkbox" style="width:auto" ${b.followAftercare?'checked':''}> 当日アフター送信済み</label><br>
+      <label><input id="fWeek" type="checkbox" style="width:auto" ${b.followWeek?'checked':''}> 1週間前連絡済み</label><br>
+      <label><input id="fTwo" type="checkbox" style="width:auto" ${b.follow2Days?'checked':''}> 2日前連絡済み</label>
+    </div>
+    <label><input id="fPaid" type="checkbox" style="width:auto" ${b.paymentComplete?'checked':''}> 決済完了</label>
+    <h3 style="margin-top:18px">施術カルテ</h3>
+    <label>薬剤 / 配合</label><textarea id="fFormula">${esc(b.formula||'')}</textarea>
+    <label>施術メモ</label><textarea id="fVisitNote">${esc(b.visitNote||'')}</textarea>
+    <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveBooking('${id}')">保存</button></div>
+    ${id?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteBooking('${id}')">削除</button>`:''}`);
+}
+async function saveBooking(id){
+  const b={id:id||'',date:$('fDate').value,time:$('fTime').value,end:$('fEnd').value,customer:$('fCustomer').value.trim(),menu:$('fMenu').value.trim(),price:Number($('fPrice').value)||0,bookingType:$('fType').value,source:$('fSource').value,newGuest:$('fNew').value==='new',status:$('fStatus').value,nextBookingTaken:$('fNext').checked,followAftercare:$('fAfter').checked,followWeek:$('fWeek').checked,follow2Days:$('fTwo').checked,paymentComplete:$('fPaid').checked,formula:$('fFormula').value,visitNote:$('fVisitNote').value};
+  try{const r=await api({method:'POST',body:JSON.stringify({action:'upsertBooking',booking:b})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
+}
+async function deleteBooking(id){
+  if(!confirm('この予約を削除しますか？'))return;
+  try{const r=await api({method:'POST',body:JSON.stringify({action:'deleteBooking',id})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
+}
+
+function renderCustomers(){
+  const q=($('customerSearch')?.value||'').toLowerCase();
+  const a=state.customers.filter(c=>(c.name||'').toLowerCase().includes(q));
+  $('customerList').innerHTML=a.length?a.map(c=>{const h=customerBookings(c.name),v=h.filter(isVisited);return `<div class="item" onclick="openCustomer('${c.id}')"><div class="t">${esc(c.name)}</div><div class="s">来店 ${v.length}回${c.lastVisit?' ・ 最終 '+esc(c.lastVisit):''}</div></div>`}).join(''):'<div class="empty">顧客はまだいません</div>';
+  renderDuplicateCandidates();
+}
+function renderDuplicateCandidates(){
+  const pairs=[];
+  for(let i=0;i<state.customers.length;i++)for(let j=i+1;j<state.customers.length;j++){
+    const a=state.customers[i],b=state.customers[j],sameName=normalize(a.name)===normalize(b.name),sameKana=a.kana&&b.kana&&normalize(a.kana)===normalize(b.kana),sameIg=a.instagram&&b.instagram&&a.instagram===b.instagram;
+    if(sameName||sameKana||sameIg)pairs.push([a,b,sameName?'名前':sameKana?'読み仮名':'Instagram']);
+  }
+  $('duplicateCandidates').innerHTML=pairs.length?`<div class="card"><b>重複候補</b><div class="small">候補だけ表示します。自動統合はしません。</div>${pairs.slice(0,10).map(([a,b,r])=>`<div class="small" style="margin-top:8px">${esc(a.name)} ⇄ ${esc(b.name)}（${r}一致）</div>`).join('')}</div>`:'';
+}
+function openCustomer(id){
+  const c=state.customers.find(x=>x.id===id);if(!c)return;const h=customerBookings(c.name);
+  modal(`<h3>${esc(c.name)}</h3><div class="small">自分の担当履歴のみ表示</div><label>読み仮名</label><input id="cKana" value="${esc(c.kana||'')}"><label>Instagram</label><input id="cInstagram" value="${esc(c.instagram||'')}"><label>メモ</label><textarea id="cNote">${esc(c.note||'')}</textarea><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button class="blue" onclick="saveCustomer('${id}')">保存</button></div><h2>来店・予約履歴</h2>${h.length?h.map(bookingCard).join(''):'<div class="empty">履歴なし</div>'}`);
+}
+async function saveCustomer(id){
+  const old=state.customers.find(x=>x.id===id)||{};
+  const c={...old,id,note:$('cNote').value,kana:$('cKana').value,instagram:$('cInstagram').value};
+  try{const r=await api({method:'POST',body:JSON.stringify({action:'updateCustomer',customer:c})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
+}
+
+function renderSales(){
+  const m=monthString(viewMonth),s=statsFor(m);
+  $('salesStats').innerHTML=`
+    <div class="card kpi"><div class="l">技術売上</div><div class="v">${yen(s.tech)}</div></div>
+    <div class="card kpi"><div class="l">店販売上</div><div class="v">${yen(s.retailSales)}</div></div>
+    <div class="card kpi"><div class="l">合計</div><div class="v">${yen(s.total)}</div></div>
+    <div class="card kpi"><div class="l">平均単価</div><div class="v">${yen(s.avg)}</div></div>
+    <div class="card kpi"><div class="l">新規 次回</div><div class="v">${s.newNextRate}%</div></div>
+    <div class="card kpi"><div class="l">再来 次回</div><div class="v">${s.repNextRate}%</div></div>
+    <div class="card kpi"><div class="l">2回目実来店率</div><div class="v">${s.repeatRate}%</div></div>
+    <div class="card kpi"><div class="l">キャンセル / 無断</div><div class="v">${s.cancels} / ${s.noshows}</div></div>`;
+  $('salesSources').innerHTML=(state.profile?.sources||[]).map(source=>{const xs=s.visits.filter(x=>x.source===source),rev=s.all.filter(x=>x.source===source&&x.paymentComplete&&isActive(x)).reduce((a,x)=>a+Number(x.price||0),0);return `<div class="analysis-source"><b>${esc(source)}</b><div class="small">実来店 ${xs.length}人 ・ 確定売上 ${yen(rev)}</div></div>`}).join('');
+  const months=[];for(let i=3;i>=0;i--){const d=addMonths(viewMonth,-i),x=statsFor(monthString(d));months.push(`<tr><td>${d.getMonth()+1}月</td><td>${x.newV.length}</td><td>${x.repeatRate}%</td><td>${x.newNextRate}%</td><td>${x.repNextRate}%</td></tr>`)}
+  $('trendHost').innerHTML=`<table class="trend"><thead><tr><th>月</th><th>新規</th><th>リピート</th><th>新規次回</th><th>再来次回</th></tr></thead><tbody>${months.join('')}</tbody></table>`;
+  const rows=[...s.all.filter(x=>x.paymentComplete&&isActive(x)).map(x=>({id:x.id,date:x.date,amount:x.price,label:`技術・${x.customer}`,kind:'booking'})),...s.extras.map(x=>({id:x.id,date:x.date,amount:x.amount,label:`追加・${x.customer||x.menu||''}`,kind:'sale'})),...s.retail.map(x=>({id:x.id,date:x.date,amount:x.amount,label:`店販・${x.product}`,kind:'retail'}))].sort((a,b)=>b.date.localeCompare(a.date));
+  $('salesHistory').innerHTML=rows.length?rows.map(x=>`<div class="item"><div class="t">${esc(x.date)} ${yen(x.amount)}</div><div class="s">${esc(x.label)}</div>${x.kind==='sale'?`<button class="danger" style="margin-top:8px" onclick="deleteSale('${x.id}')">削除</button>`:''}</div>`).join(''):'<div class="empty">売上履歴はありません</div>';
+}
+function saleForm(){
+  modal(`<h3>追加売上</h3><div class="note">通常の技術売上は予約の「決済完了」から自動集計されます。</div><label>日付</label><input id="sDate" type="date" value="${todayISO}"><label>顧客名</label><input id="sCustomer"><label>金額</label><input id="sAmount" type="number"><label>内容</label><input id="sMenu"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveSale()">保存</button></div>`);
+}
+async function saveSale(){
+  try{const r=await api({method:'POST',body:JSON.stringify({action:'addSale',sale:{date:$('sDate').value,customer:$('sCustomer').value,amount:Number($('sAmount').value)||0,menu:$('sMenu').value}})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
+}
+async function deleteSale(id){
+  if(!confirm('この追加売上を削除しますか？'))return;
+  try{const r=await api({method:'POST',body:JSON.stringify({action:'deleteSale',id})});applyState(r);renderAll()}catch(e){alert(e.message)}
+}
+
+function selectedProducts(){
+  const ids=new Set((state.profile?.retailProductIds||[]).map(String));return state.products.filter(p=>ids.has(String(p.id)));
+}
+function renderRetail(){
+  if(!$('retailStats'))return;
+  const m=monthString(viewMonth),rows=state.retail.filter(x=>monthKey(x.date)===m),sales=rows.reduce((a,x)=>a+Number(x.amount||0),0),qty=rows.reduce((a,x)=>a+Number(x.quantity||1),0);
+  $('retailStats').innerHTML=`<div class="card kpi"><div class="l">今月店販売上</div><div class="v">${yen(sales)}</div></div><div class="card kpi"><div class="l">販売点数</div><div class="v">${qty}</div></div>`;
+  const products=selectedProducts();
+  $('retailProductList').innerHTML=products.length?products.map(p=>`<div class="product-row"><div class="main"><div class="name">${esc(p.name)}</div><div class="meta">${esc(p.category)} ・ ${yen(p.price)}${p.fulfillment==='external'?' ・ 外部購入':` ・ 在庫 ${p.stock}`}</div></div></div>`).join(''):'<div class="empty">「使う店販商品を選ぶ」から選択してください</div>';
+  $('retailHistory').innerHTML=state.retail.length?[...state.retail].sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<div class="item"><div class="t">${esc(x.product)} ${yen(x.amount)}</div><div class="s">${esc(x.date)} ・ ${Number(x.quantity||1)}点 ・ ${esc(x.customer||'顧客未指定')}</div><button class="danger" style="margin-top:8px" onclick="deleteRetail('${x.id}')">削除</button></div>`).join(''):'<div class="empty">販売履歴はありません</div>';
+}
+function openRetailPreferences(){
+  const chosen=new Set((state.profile?.retailProductIds||[]).map(String));
+  modal(`<h3>使う店販商品</h3><div class="note">自分が提案・販売する商品だけONにしてください。</div><div class="check-grid">${state.products.map(p=>`<label><input class="retailChoice" type="checkbox" style="width:auto" value="${esc(p.id)}" ${chosen.has(String(p.id))?'checked':''}> ${esc(p.name)}</label>`).join('')}</div><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveRetailPreferences()">保存</button></div>`);
+}
+async function saveRetailPreferences(){
+  const ids=[...document.querySelectorAll('.retailChoice:checked')].map(x=>x.value);
+  try{const r=await api({method:'POST',body:JSON.stringify({action:'updatePreferences',sources:state.profile.sources,retailProductIds:ids})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
+}
+function retailSaleForm(){
+  const products=selectedProducts();if(!products.length)return alert('先に「使う店販商品を選ぶ」から商品を選んでください');
+  modal(`<h3>店販を記録</h3><label>日付</label><input id="rDate" type="date" value="${todayISO}"><label>商品</label><select id="rProduct" onchange="updateRetailAmount()">${products.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select><label>数量</label><input id="rQty" type="number" min="1" value="1" oninput="updateRetailAmount()"><label>顧客名</label><input id="rCustomer"><label>金額（合計）</label><input id="rAmount" type="number" value="${Number(products[0]?.price||0)}"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveRetailSale()">保存</button></div>`);
+}
+function updateRetailAmount(){const p=state.products.find(x=>String(x.id)===$('rProduct').value);$('rAmount').value=Number(p?.price||0)*Number($('rQty').value||1)}
+async function saveRetailSale(){
+  try{const r=await api({method:'POST',body:JSON.stringify({action:'addRetail',retail:{date:$('rDate').value,productId:$('rProduct').value,quantity:Number($('rQty').value)||1,customer:$('rCustomer').value,amount:Number($('rAmount').value)||0}})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
+}
+async function deleteRetail(id){
+  if(!confirm('この店販履歴を削除しますか？'))return;
+  try{const r=await api({method:'POST',body:JSON.stringify({action:'deleteRetail',id})});applyState(r);renderAll()}catch(e){alert(e.message)}
+}
+
+function openStaffPreferences(){
+  const selected=new Set(state.profile?.sources||[]);
+  const custom=(state.profile?.sources||[]).filter(x=>!SOURCE_CHOICES.includes(x));
+  modal(`<h3>使用する予約サイト</h3><div class="note">使っている予約サイトだけONにすると、予約追加・読み取り・分析・絞り込みにだけ表示されます。</div><div class="check-grid">${SOURCE_CHOICES.map(x=>`<label><input class="sourceChoice" type="checkbox" style="width:auto" value="${esc(x)}" ${selected.has(x)?'checked':''}> ${esc(x)}</label>`).join('')}</div><label>その他の予約サイト（1行1つ）</label><textarea id="customSources" placeholder="例：自社予約アプリ">${esc(custom.join('\n'))}</textarea><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveStaffPreferences()">保存</button></div>`);
+}
+async function saveStaffPreferences(){
+  const base=[...document.querySelectorAll('.sourceChoice:checked')].map(x=>x.value);
+  const custom=$('customSources').value.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+  const sources=[...new Set([...base,...custom])];if(!sources.length)return alert('予約サイトを1つ以上選んでください');
+  try{const r=await api({method:'POST',body:JSON.stringify({action:'updatePreferences',sources,retailProductIds:state.profile.retailProductIds||[]})});applyState(r);closeModal();showMain()}catch(e){alert(e.message)}
+}
+
+function openStoryAvailability(){
+  modal(`<h3>ストーリー用 空き枠</h3><div class="row"><div><label>開始日</label><input id="storyFrom" type="date" value="${todayISO}"></div><div><label>終了日</label><input id="storyTo" type="date" value="${addDaysISO(todayISO,6)}"></div></div><div class="row"><div><label>営業時間開始</label><input id="storyStart" type="time" value="11:00"></div><div><label>終了</label><input id="storyEnd" type="time" value="21:00"></div></div><label>必要時間</label><select id="storyDur"><option value="60">1時間</option><option value="90">1.5時間</option><option value="120" selected>2時間</option><option value="180">3時間</option></select><button class="blue" style="width:100%" onclick="makeStoryText()">作成</button><textarea id="storyOutput" style="min-height:220px;margin-top:10px"></textarea>`);
+}
+function mergeIntervals(rows){
+  const a=rows.map(b=>[timeMin(b.time),timeMin(b.end||b.time)]).filter(x=>x[1]>x[0]).sort((x,y)=>x[0]-y[0]),out=[];
+  a.forEach(r=>{const p=out[out.length-1];if(p&&r[0]<=p[1])p[1]=Math.max(p[1],r[1]);else out.push([...r])});return out;
+}
+function clock(m){return `${pad(Math.floor(m/60))}:${pad(m%60)}`}
+function makeStoryText(){
+  const from=$('storyFrom').value,to=$('storyTo').value,start=timeMin($('storyStart').value),end=timeMin($('storyEnd').value),dur=Number($('storyDur').value),lines=[];
+  let d=dateOnly(from),last=dateOnly(to);if(!d||!last||d>last)return;
+  while(d<=last){
+    const iso=localISO(d);if(d.getDay()!==1){
+      const busy=mergeIntervals(state.bookings.filter(b=>b.date===iso&&isActive(b)));let cur=start,gaps=[];
+      busy.forEach(([s,e])=>{s=Math.max(s,start);e=Math.min(e,end);if(s>cur&&s-cur>=dur)gaps.push([cur,s-dur]);cur=Math.max(cur,e)});if(end-cur>=dur)gaps.push([cur,end-dur]);
+      if(gaps.length)lines.push(`${d.getMonth()+1}/${d.getDate()}(${['日','月','火','水','木','金','土'][d.getDay()]})  ${gaps.map(([a,b])=>a===b?clock(a):`${clock(a)}〜${clock(b)}`).join(' / ')}`);
+    }
+    d.setDate(d.getDate()+1);
+  }
+  $('storyOutput').value=lines.length?`ご予約空き状況\n\n${lines.join('\n')}\n\nご予約・ご相談はDMまたは予約リンクからお願いします🤍`:'空き枠はありません';
+}
+
+function inferNewGuest(name,date){
+  const n=normalize(name);if(!n)return true;
+  return !state.bookings.some(b=>normalize(b.customer)===n&&b.date<date&&isActive(b));
+}
+function openStaffImport(){
+  importRows=[];
+  const sources=state.profile?.sources?.length?state.profile.sources:['その他'];
+  modal(`<h3>予約媒体を読み取る</h3><div class="note">予約サイトを選んでスクショを読み取ります。サイトによって表示形式が違うため、登録前に必ず内容を確認してください。</div><label>予約媒体</label><select id="importSource">${sources.map(x=>`<option>${esc(x)}</option>`).join('')}</select><label>画像の日付（読み取れない時の基準）</label><input id="importBaseDate" type="date" value="${todayISO}"><label class="drop">📷 予約画面のスクショを選択<input id="importFile" type="file" accept="image/*" onchange="handleImportImage(event)"></label><img id="importPreview" class="preview"><div id="importStatus" class="status">画像を選ぶと文字を読み取ります。</div><div id="importResults"></div>`);
+}
+async function handleImportImage(e){
+  const file=e.target.files?.[0];if(!file)return;
+  const reader=new FileReader();reader.onload=ev=>{$('importPreview').src=ev.target.result;$('importPreview').style.display='block'};reader.readAsDataURL(file);
+  $('importStatus').textContent='文字を読み取り中…';
+  try{
+    if(!window.Tesseract)throw new Error('読み取り機能を読み込めませんでした');
+    const worker=await Tesseract.createWorker('jpn+eng',1,{logger:m=>{if(m.status==='recognizing text')$('importStatus').textContent=`文字を読み取り中… ${Math.round((m.progress||0)*100)}%`}});
+    const ocr=await worker.recognize(file);await worker.terminate();
+    buildImportRows(ocr.data.text||'');
+  }catch(err){$('importStatus').textContent='自動読み取りに失敗しました。手動で予約を追加できます。';importRows=[blankImportRow()];renderImportRows()}
+}
+function blankImportRow(){
+  const date=$('importBaseDate')?.value||todayISO;return {date,time:'11:00',end:'13:00',customer:'',menu:'',price:0,newGuest:true};
+}
+function buildImportRows(text){
+  const source=$('importSource').value,base=$('importBaseDate').value||todayISO,lines=String(text||'').split(/\n+/).map(x=>x.normalize('NFKC').trim()).filter(Boolean),rows=[];
+  const range=/(\d{1,2})[:：](\d{2})\s*(?:[-ー–—~〜]|to)\s*(\d{1,2})[:：](\d{2})/i;
+  const single=/(\d{1,2})[:：](\d{2})/;
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i];let m=line.match(range),time='',end='';
+    if(m){time=`${pad(+m[1])}:${m[2]}`;end=`${pad(+m[3])}:${m[4]}`}
+    else{m=line.match(single);if(m){time=`${pad(+m[1])}:${m[2]}`;let mins=timeMin(time)+120;end=clock(Math.min(mins,23*60+59))}}
+    if(!time)continue;
+    let date=base,dm=line.match(/(\d{1,2})[\/月](\d{1,2})日?/);
+    if(dm){const y=dateOnly(base).getFullYear();date=`${y}-${pad(+dm[1])}-${pad(+dm[2])}`}
+    let customer=line.replace(range,'').replace(single,'').replace(/\d{1,2}[\/月]\d{1,2}日?/g,'').replace(/[|｜・]/g,' ').replace(/\s+/g,' ').trim();
+    if(!customer&&lines[i+1]&&!single.test(lines[i+1]))customer=lines[i+1].slice(0,80);
+    rows.push({date,time,end,customer,menu:'',price:0,newGuest:inferNewGuest(customer,date),source});
+  }
+  importRows=rows.length?rows:[blankImportRow()];
+  $('importStatus').innerHTML=`読み取り完了：<b>${rows.length}件</b>候補。必ず内容を確認してから登録してください。`;
+  renderImportRows();
+}
+function renderImportRows(){
+  $('importResults').innerHTML=`<h3 style="margin-top:16px">読み取り結果</h3>${importRows.map((x,i)=>`<div class="import-row"><div class="row"><input type="date" value="${esc(x.date)}" onchange="importRows[${i}].date=this.value"><input type="time" value="${esc(x.time)}" onchange="importRows[${i}].time=this.value"></div><input type="time" value="${esc(x.end)}" onchange="importRows[${i}].end=this.value"><input value="${esc(x.customer)}" placeholder="予約名" onchange="importRows[${i}].customer=this.value"><input value="${esc(x.menu||'')}" placeholder="メニュー" onchange="importRows[${i}].menu=this.value"><input type="number" value="${Number(x.price||0)}" placeholder="料金" onchange="importRows[${i}].price=Number(this.value)||0"><select onchange="importRows[${i}].newGuest=this.value==='new'"><option value="new" ${x.newGuest?'selected':''}>新規</option><option value="repeat" ${!x.newGuest?'selected':''}>再来</option></select><button class="danger" style="width:100%" onclick="importRows.splice(${i},1);renderImportRows()">除外</button></div>`).join('')}<button class="soft" style="width:100%" onclick="importRows.push(blankImportRow());renderImportRows()">＋ 手動で1件追加</button><button class="blue" style="width:100%;margin-top:8px" onclick="saveImportRows()">最終確認して登録</button>`;
+}
+async function saveImportRows(){
+  const source=$('importSource').value;
+  if(importRows.some(x=>!x.customer.trim()||!x.date||!x.time||!x.end||x.time>=x.end))return alert('予約名・日付・時間を確認してください');
+  if(!confirm(`${importRows.length}件を「${source}」の予約として登録しますか？`))return;
+  busy=true;
+  try{
+    for(const x of importRows){
+      const r=await api({method:'POST',body:JSON.stringify({action:'upsertBooking',booking:{...x,id:'',source,bookingType:'free',status:'booked',paymentComplete:false,nextBookingTaken:false}})});applyState(r);
+    }
+    closeModal();renderAll();alert('予約を登録しました');
+  }catch(e){alert(e.message)}finally{busy=false}
+}
+
 if(token){loadData().then(()=>showMain()).catch(()=>logout(false))}
 setInterval(()=>{if(token&&!document.hidden&&!busy)loadData().catch(()=>{})},30000);
 document.addEventListener('visibilitychange',()=>{if(token&&!document.hidden)loadData().catch(()=>{})});
