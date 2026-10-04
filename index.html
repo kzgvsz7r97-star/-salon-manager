@@ -2136,14 +2136,38 @@ const PRODUCT_CATEGORIES=['ミルク','オイル','スプレー','シャンプ�
 const ORDER_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/orders';
 const CATALOG_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/catalog';
 let remoteOrders=[],ordersBusy=false,orderNotice='';
+const STAFF_ADMIN_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/staff';
+let staffLoginAccounts=[];
 function openStaffSettings(){
   migrateExtras();
-  modal(`<h3>スタッフ・予約設定</h3><div class="note" style="margin-bottom:10px">親は全担当者の数字を確認できます。ここでは担当者ごとに使う予約媒体を設定します。</div><div id="staffSettingsList" class="list"></div><button class="blue" style="width:100%;margin-top:10px" onclick="staffForm()">＋ スタッフを追加</button><div class="note" style="margin-top:12px">※ スタッフごとの安全な個別ログインは次の段階で設定します。今は担当者別の記録・集計・媒体設定まで対応しています。</div>`);
+  modal(`<h3>スタッフ・予約設定</h3>
+    <div class="note" style="margin-bottom:10px">親は全担当者の数字を確認できます。スタッフごとに予約媒体と個別ログインを設定できます。</div>
+    <div id="staffSettingsList" class="list"></div>
+    <button class="blue" style="width:100%;margin-top:10px" onclick="staffForm()">＋ スタッフを追加</button>
+    <button class="soft" style="width:100%;margin-top:8px" onclick="copyStaffPortalUrl()">スタッフ用ログインURLをコピー</button>
+    <div id="staffAccountStatus" class="small" style="margin-top:10px">ログイン設定を確認中…</div>`);
   renderStaffSettingsList();
+  refreshStaffAccounts();
 }
+async function refreshStaffAccounts(){
+  const status=$('staffAccountStatus');
+  const key=getCloudBackupKey();
+  if(!key){if(status)status.textContent='同期キーが未設定のためログイン設定を読み込めません';return;}
+  try{
+    const r=await fetch(STAFF_ADMIN_API+'?admin=1',{headers:{'X-Backup-Key':key}}),body=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(body.error||'取得できませんでした');
+    staffLoginAccounts=body.users||[];
+    if(status)status.textContent='個別ログイン設定を読み込みました';
+    renderStaffSettingsList();
+  }catch(e){if(status)status.textContent='ログイン設定を読み込めません。Vercel/Supabase設定を確認してください。';}
+}
+function accountForStaff(id){return staffLoginAccounts.find(x=>x.staff_id===id)||null}
 function renderStaffSettingsList(){
   const host=$('staffSettingsList');if(!host)return;
-  host.innerHTML=(db.staffProfiles||[]).map(p=>`<div class="item" onclick="staffForm('${p.id}')"><div class="t">${esc(p.name)}${p.role==='owner'?' <span class="staff-pill">親</span>':''}${p.active===false?' <span class="staff-pill">停止中</span>':''}</div><div class="s">${esc((p.sources||[]).join(' / ')||'媒体未設定')}</div></div>`).join('');
+  host.innerHTML=(db.staffProfiles||[]).map(p=>{
+    const a=accountForStaff(p.id);
+    return `<div class="item"><div class="t">${esc(p.name)}${p.role==='owner'?' <span class="staff-pill">親</span>':''}${p.active===false?' <span class="staff-pill">停止中</span>':''}${a?` <span class="staff-pill">ログイン${a.active===false?'停止':'設定済み'}</span>`:''}</div><div class="s">${esc((p.sources||[]).join(' / ')||'媒体未設定')}</div><div class="actions"><button class="ghost" onclick="staffForm('${p.id}')">担当設定</button>${p.role==='owner'?'<button class="soft" disabled>管理者</button>':`<button onclick="staffLoginForm('${p.id}')">ログイン設定</button>`}</div></div>`;
+  }).join('');
 }
 function staffForm(id=''){
   const p=(db.staffProfiles||[]).find(x=>x.id===id)||{id:'',name:'',role:'staff',active:true,sources:['SHAiRE','Nailie','minimo','Instagram','その他']};
@@ -2158,6 +2182,37 @@ function saveStaff(id=''){
   const obj={id:id||uid(),name,role,active,sources};
   if(id)db.staffProfiles=db.staffProfiles.map(x=>x.id===id?{...x,...obj}:x);else db.staffProfiles.push(obj);
   save();openStaffSettings();
+}
+function staffLoginForm(staffId){
+  const p=(db.staffProfiles||[]).find(x=>x.id===staffId);if(!p)return;
+  const a=accountForStaff(staffId);
+  modal(`<h3>${esc(p.name)}のログイン設定</h3>
+    <div class="note" style="margin-bottom:10px">このアカウントでは${esc(p.name)}さん自身の予約・顧客・売上だけ表示されます。</div>
+    <label>ユーザー名</label><input id="staffLoginUser" autocapitalize="none" value="${esc(a?.username||'')}">
+    <label>${a?'新しいパスワード（変更しない場合は空欄）':'初回パスワード（8文字以上）'}</label><input id="staffLoginPass" type="password" autocomplete="new-password">
+    <label><input id="staffLoginActive" type="checkbox" style="width:auto" ${a?.active===false?'':'checked'}> ログインを有効にする</label>
+    <div class="actions"><button class="ghost" onclick="openStaffSettings()">戻る</button><button onclick="saveStaffLogin('${staffId}')">保存</button></div>
+    <div id="staffLoginStatus" class="small" style="margin-top:8px"></div>`);
+}
+async function saveStaffLogin(staffId){
+  const p=(db.staffProfiles||[]).find(x=>x.id===staffId);if(!p)return;
+  const username=$('staffLoginUser').value.trim().toLowerCase(),password=$('staffLoginPass').value,active=$('staffLoginActive').checked,key=getCloudBackupKey();
+  if(!key)return;
+  if(!/^[a-z0-9._-]{3,40}$/.test(username))return alert('ユーザー名は英小文字・数字・._-で3文字以上にしてください');
+  if(!accountForStaff(staffId)&&password.length<8)return alert('初回パスワードは8文字以上にしてください');
+  if(password&&password.length<8)return alert('パスワードは8文字以上にしてください');
+  const status=$('staffLoginStatus');if(status)status.textContent='保存中…';
+  try{
+    const r=await fetch(STAFF_ADMIN_API,{method:'POST',headers:{'Content-Type':'application/json','X-Backup-Key':key},body:JSON.stringify({action:'adminSave',staffId,username,password,active,role:'staff'})});
+    const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.error||'保存できませんでした');
+    if(status)status.textContent='保存しました';
+    await refreshStaffAccounts();openStaffSettings();
+  }catch(e){if(status)status.textContent=e.message;}
+}
+async function copyStaffPortalUrl(){
+  const url=new URL('staff.html',location.href).href;
+  try{await navigator.clipboard.writeText(url);alert('スタッフ用ログインURLをコピーしました');}
+  catch{prompt('スタッフ用ログインURL',url);}
 }
 function migrateExtras(){
   db.goalPlans ||= {};db.orderSettings ||= {};db.seenOrders ||= [];
