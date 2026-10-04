@@ -206,7 +206,7 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
     <h2>データ管理</h2>
     <div class="backup-box">
       <div><b>クラウド同期 / バックアップ</b></div>
-      <div class="small" style="margin-top:4px">同じ同期キーを使う端末どうしで、予約・顧客・売上を自動同期します。</div>
+      <div class="small" style="margin-top:4px">同じ同期キーを使う端末どうしで自動同期します。片方の端末だけで全データを上書きしない保護モードです。</div>
       <div class="backup-actions">
         <button onclick="exportBackup()">バックアップ保存</button>
         <button class="soft" onclick="document.getElementById('backupImportFile').click()">バックアップ復元</button>
@@ -410,7 +410,7 @@ let importDraft=[],importImageFile=null,importImageDataURL='';
 
 const CLOUD_BACKUP_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/backup';
 const CLOUD_BACKUP_KEY_STORAGE='salonManagerCloudBackupKey';
-const CLOUD_SYNC_APPLIED_STORAGE='salonManagerCloudAppliedAt';
+const CLOUD_SYNC_BASE_STORAGE='salonManagerSyncBaseV3';
 let cloudBackupTimer=null;
 let cloudSyncBusy=false;
 let cloudDirty=false;
@@ -442,11 +442,110 @@ function normalizedCloudData(restored){
     ...structuredClone(initial),
     ...restored,
     goals:restored?.goals||{},
+    goalPlans:restored?.goalPlans||{},
+    orderSettings:restored?.orderSettings||{},
+    seenOrders:Array.isArray(restored?.seenOrders)?restored.seenOrders:[],
     bookings:Array.isArray(restored?.bookings)?restored.bookings:[],
     customers:Array.isArray(restored?.customers)?restored.customers:[],
     sales:Array.isArray(restored?.sales)?restored.sales:[],
     retail:Array.isArray(restored?.retail)?restored.retail:[],
     products:Array.isArray(restored?.products)&&restored.products.length?restored.products:structuredClone(initial.products)
+  };
+}
+
+function sameJSON(a,b){
+  try{return JSON.stringify(a??null)===JSON.stringify(b??null);}
+  catch{return false;}
+}
+
+function readSyncBase(){
+  try{
+    const raw=localStorage.getItem(CLOUD_SYNC_BASE_STORAGE);
+    return raw?normalizedCloudData(JSON.parse(raw)):null;
+  }catch{return null;}
+}
+
+function writeSyncBase(data){
+  localStorage.setItem(CLOUD_SYNC_BASE_STORAGE,JSON.stringify(normalizedCloudData(data)));
+}
+
+function itemMap(arr){
+  return new Map((arr||[]).filter(Boolean).map((x,i)=>[String(x.id||'__index_'+i),x]));
+}
+
+function mergeArrayFirst(localArr,remoteArr){
+  const remote=itemMap(remoteArr),local=itemMap(localArr),out=[];
+  remote.forEach((v,k)=>out.push(v));
+  local.forEach((v,k)=>{if(!remote.has(k))out.push(v);});
+  return out;
+}
+
+function mergeArraySafe(localArr,remoteArr,baseArr){
+  if(!baseArr)return mergeArrayFirst(localArr,remoteArr);
+
+  const local=itemMap(localArr),remote=itemMap(remoteArr),base=itemMap(baseArr),out=[];
+  const keys=new Set([...remote.keys(),...local.keys(),...base.keys()]);
+
+  keys.forEach(k=>{
+    const l=local.get(k),r=remote.get(k),b=base.get(k);
+    const localChanged=!!l&&!sameJSON(l,b);
+    const localDeleted=!!b&&!l;
+    const remoteChanged=!!r&&!sameJSON(r,b);
+
+    if(localDeleted){
+      if(remoteChanged&&r)out.push(r);
+      return;
+    }
+
+    if(localChanged&&l){out.push(l);return;}
+    if(r){out.push(r);return;}
+    if(l)out.push(l);
+  });
+
+  return out;
+}
+
+function mergeObjectSafe(localObj,remoteObj,baseObj){
+  const l=localObj||{},r=remoteObj||{};
+  if(!baseObj)return {...l,...r};
+
+  const b=baseObj||{},out={},keys=new Set([...Object.keys(b),...Object.keys(l),...Object.keys(r)]);
+  keys.forEach(k=>{
+    const hasL=Object.prototype.hasOwnProperty.call(l,k);
+    const hasR=Object.prototype.hasOwnProperty.call(r,k);
+    const hasB=Object.prototype.hasOwnProperty.call(b,k);
+    const localChanged=hasL&&!sameJSON(l[k],b[k]);
+    const localDeleted=hasB&&!hasL;
+    const remoteChanged=hasR&&!sameJSON(r[k],b[k]);
+
+    if(localDeleted){
+      if(remoteChanged&&hasR)out[k]=r[k];
+      return;
+    }
+    if(localChanged){out[k]=l[k];return;}
+    if(hasR){out[k]=r[k];return;}
+    if(hasL)out[k]=l[k];
+  });
+  return out;
+}
+
+function mergeDbSafe(localData,remoteData,baseData){
+  const local=normalizedCloudData(localData||{});
+  const remote=normalizedCloudData(remoteData||{});
+  const base=baseData?normalizedCloudData(baseData):null;
+
+  return {
+    ...remote,
+    ...local,
+    goals:mergeObjectSafe(local.goals,remote.goals,base?.goals),
+    goalPlans:mergeObjectSafe(local.goalPlans,remote.goalPlans,base?.goalPlans),
+    orderSettings:mergeObjectSafe(local.orderSettings,remote.orderSettings,base?.orderSettings),
+    seenOrders:[...new Set([...(remote.seenOrders||[]),...(local.seenOrders||[])])],
+    bookings:mergeArraySafe(local.bookings,remote.bookings,base?.bookings),
+    customers:mergeArraySafe(local.customers,remote.customers,base?.customers),
+    sales:mergeArraySafe(local.sales,remote.sales,base?.sales),
+    retail:mergeArraySafe(local.retail,remote.retail,base?.retail),
+    products:mergeArraySafe(local.products,remote.products,base?.products)
   };
 }
 
@@ -457,7 +556,7 @@ async function latestCloudSnapshot(key){
   if(!r.ok){
     if(r.status===401){
       localStorage.removeItem(CLOUD_BACKUP_KEY_STORAGE);
-      localStorage.removeItem(CLOUD_SYNC_APPLIED_STORAGE);
+      localStorage.removeItem(CLOUD_SYNC_BASE_STORAGE);
       sessionStorage.removeItem('salonManagerBackupPromptSkipped');
     }
     throw new Error(body.error||'同期データを取得できませんでした');
@@ -466,29 +565,43 @@ async function latestCloudSnapshot(key){
   return body.backups?.[0]||null;
 }
 
-function applyCloudSnapshot(row,force=false){
-  if(!row?.data||typeof row.data!=='object')return false;
+async function postCloudSnapshot(key,data){
+  const r=await fetch(CLOUD_BACKUP_API,{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'X-Backup-Key':key
+    },
+    body:JSON.stringify({data})
+  });
 
-  const created=String(row.created_at||'');
-  const last=
-    localStorage.getItem(CLOUD_SYNC_APPLIED_STORAGE)||
-    localStorage.getItem('salonManagerLastCloudBackup')||
-    '';
+  if(!r.ok){
+    if(r.status===401){
+      localStorage.removeItem(CLOUD_BACKUP_KEY_STORAGE);
+      localStorage.removeItem(CLOUD_SYNC_BASE_STORAGE);
+      sessionStorage.removeItem('salonManagerBackupPromptSkipped');
+    }
+    throw new Error(await r.text());
+  }
+  return true;
+}
 
-  if(!force&&created&&last&&created<=last)return false;
-
+function applySyncedDb(data){
   cloudApplying=true;
   try{
-    db=normalizedCloudData(row.data);
+    db=normalizedCloudData(data);
     migrateExtras();
     localStorage.setItem(KEY,JSON.stringify(db));
-    if(created)localStorage.setItem(CLOUD_SYNC_APPLIED_STORAGE,created);
     renderAll();
     if(reservationView==='week')renderReservationWeek();
   }finally{
     cloudApplying=false;
   }
-  return true;
+}
+
+function hasLocalChanges(){
+  const base=readSyncBase();
+  return !!base&&!sameJSON(normalizedCloudData(db),base);
 }
 
 async function syncFromCloud(force=false,keyOverride=''){
@@ -496,7 +609,7 @@ async function syncFromCloud(force=false,keyOverride=''){
   if(!key||cloudSyncBusy)return false;
 
   if(cloudDirty&&!force){
-    syncStatus('この端末の変更をクラウドへ保存中…');
+    syncStatus('この端末の変更を安全に同期中…');
     return false;
   }
 
@@ -504,24 +617,29 @@ async function syncFromCloud(force=false,keyOverride=''){
   try{
     const latest=await latestCloudSnapshot(key);
     if(!latest){
-      syncStatus('クラウド同期：まだ保存データがありません');
-      return false;
+      await postCloudSnapshot(key,db);
+      writeSyncBase(db);
+      cloudDirty=false;
+      syncStatus('クラウド同期を開始しました');
+      return true;
     }
 
-    const applied=applyCloudSnapshot(latest,force);
-    const when=latest.created_at
-      ?new Date(latest.created_at).toLocaleString('ja-JP')
-      :'';
+    const remote=normalizedCloudData(latest.data||{});
+    const base=readSyncBase();
+    const merged=mergeDbSafe(db,remote,base);
 
-    syncStatus(
-      applied
-        ?`クラウドから同期しました${when?'：'+when:''}`
-        :`同期済み（最新）${when?'：'+when:''}`
-    );
-    return applied;
+    applySyncedDb(merged);
+
+    // 初回や端末ごとの差分がある場合も、消さずに統合した状態をクラウドへ戻す
+    if(!sameJSON(merged,remote))await postCloudSnapshot(key,merged);
+
+    writeSyncBase(merged);
+    cloudDirty=false;
+    syncStatus('同期済み（データ保護モード）');
+    return true;
   }catch(err){
     console.error('Cloud sync failed:',err);
-    syncStatus('クラウド同期に失敗しました。同期キーと通信を確認してください');
+    syncStatus('クラウド同期に失敗しました。端末内のデータは保持されています');
     return false;
   }finally{
     cloudSyncBusy=false;
@@ -543,42 +661,35 @@ function scheduleCloudBackup(){
   if(!key)return;
 
   clearTimeout(cloudBackupTimer);
-  cloudBackupTimer=setTimeout(()=>cloudBackup(key),700);
+  cloudBackupTimer=setTimeout(()=>cloudBackup(key),900);
 }
 
 async function cloudBackup(key=getCloudBackupKey()){
-  if(!key)return false;
+  if(!key||cloudSyncBusy)return false;
 
-  syncStatus('クラウドへ保存中…');
+  cloudSyncBusy=true;
+  syncStatus('変更を安全に同期中…');
 
   try{
-    const r=await fetch(CLOUD_BACKUP_API,{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'X-Backup-Key':key
-      },
-      body:JSON.stringify({data:db})
-    });
+    const latest=await latestCloudSnapshot(key);
+    const remote=latest?normalizedCloudData(latest.data||{}):normalizedCloudData({});
+    const base=readSyncBase();
+    const merged=mergeDbSafe(db,remote,base);
 
-    if(!r.ok){
-      if(r.status===401){
-        localStorage.removeItem(CLOUD_BACKUP_KEY_STORAGE);
-        localStorage.removeItem(CLOUD_SYNC_APPLIED_STORAGE);
-        sessionStorage.removeItem('salonManagerBackupPromptSkipped');
-      }
-      throw new Error(await r.text());
-    }
-
+    // ローカルだけで全体上書きせず、必ずクラウド最新と統合してから保存
+    await postCloudSnapshot(key,merged);
+    applySyncedDb(merged);
+    writeSyncBase(merged);
     cloudDirty=false;
-    localStorage.setItem('salonManagerLastCloudBackup',new Date().toISOString());
-    await syncFromCloud(true,key);
+    syncStatus('同期済み（データ保護モード）');
     return true;
   }catch(err){
     cloudDirty=true;
     console.error('Cloud backup failed:',err);
-    syncStatus('クラウド保存に失敗しました。この端末のデータは保持されています');
+    syncStatus('同期に失敗しました。この端末のデータは保持されています');
     return false;
+  }finally{
+    cloudSyncBusy=false;
   }
 }
 
@@ -586,7 +697,7 @@ async function manualCloudSync(){
   const key=getCloudBackupKey();
   if(!key)return;
 
-  if(cloudDirty)await cloudBackup(key);
+  if(cloudDirty||hasLocalChanges())await cloudBackup(key);
   else await syncFromCloud(true,key);
 }
 function go(id,btn){
