@@ -155,8 +155,8 @@ button{border:0;background:#111;color:#fff;border-radius:12px;padding:12px 14px;
   <section id="retail" class="section">
     <div class="row auto"><h2 style="margin:0;flex:1">店販</h2><button onclick="retailSaleForm()">＋ 販売を記録</button></div>
     <div id="retailStats" class="grid" style="margin-top:10px"></div>
-    <button class="soft" style="width:100%;margin-top:10px" onclick="openRetailPreferences()">使う店販商品を選ぶ</button>
-    <h2>使用中の商品</h2><div id="retailProductList"></div>
+    <button class="soft" style="width:100%;margin-top:10px" onclick="staffProductForm()">＋ 扱いたい商品・リンクを登録</button>
+    <h2>自分の商品</h2><div id="retailProductList"></div>
     <h2>販売履歴</h2><div id="retailHistory"></div>
   </section>
 </div>
@@ -523,26 +523,46 @@ async function deleteSale(id){
 }
 
 function selectedProducts(){
-  const ids=new Set((state.profile?.retailProductIds||[]).map(String));return state.products.filter(p=>ids.has(String(p.id)));
+  return (state.profile?.retailCatalog||[]).filter(p=>p.active!==false);
 }
 function renderRetail(){
   if(!$('retailStats'))return;
   const m=monthString(viewMonth),rows=state.retail.filter(x=>monthKey(x.date)===m),sales=rows.reduce((a,x)=>a+Number(x.amount||0),0),qty=rows.reduce((a,x)=>a+Number(x.quantity||1),0);
   $('retailStats').innerHTML=`<div class="card kpi"><div class="l">今月店販売上</div><div class="v">${yen(sales)}</div></div><div class="card kpi"><div class="l">販売点数</div><div class="v">${qty}</div></div>`;
-  const products=selectedProducts();
-  $('retailProductList').innerHTML=products.length?products.map(p=>`<div class="product-row"><div class="main"><div class="name">${esc(p.name)}</div><div class="meta">${esc(p.category)} ・ ${yen(p.price)}${p.fulfillment==='external'?' ・ 外部購入':` ・ 在庫 ${p.stock}`}</div></div></div>`).join(''):'<div class="empty">「使う店販商品を選ぶ」から選択してください</div>';
+  const products=state.profile?.retailCatalog||[];
+  $('retailProductList').innerHTML=products.length?products.map(p=>`<div class="product-row"><div class="main"><div class="name">${esc(p.name)}${p.active===false?' <span class="badge">停止中</span>':''}</div><div class="meta">${esc(p.category||'その他')} ・ ${yen(p.price||0)}</div><div class="small" style="word-break:break-all;margin-top:4px">${esc(p.url||'')}</div><div class="actions"><button class="soft" onclick="openProductLink('${p.id}')">リンクを開く</button><button class="ghost" onclick="copyProductLink('${p.id}')">リンクコピー</button><button onclick="staffProductForm('${p.id}')">編集</button></div></div></div>`).join(''):'<div class="empty">扱いたい商品を自分で登録できます</div>';
   $('retailHistory').innerHTML=state.retail.length?[...state.retail].sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<div class="item"><div class="t">${esc(x.product)} ${yen(x.amount)}</div><div class="s">${esc(x.date)} ・ ${Number(x.quantity||1)}点 ・ ${esc(x.customer||'顧客未指定')}</div><button class="danger" style="margin-top:8px" onclick="deleteRetail('${x.id}')">削除</button></div>`).join(''):'<div class="empty">販売履歴はありません</div>';
 }
-function openRetailPreferences(){
-  const chosen=new Set((state.profile?.retailProductIds||[]).map(String));
-  modal(`<h3>使う店販商品</h3><div class="note">自分が提案・販売する商品だけONにしてください。</div><div class="check-grid">${state.products.map(p=>`<label><input class="retailChoice" type="checkbox" style="width:auto" value="${esc(p.id)}" ${chosen.has(String(p.id))?'checked':''}> ${esc(p.name)}</label>`).join('')}</div><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveRetailPreferences()">保存</button></div>`);
+function staffProductForm(id=''){
+  const p=(state.profile?.retailCatalog||[]).find(x=>String(x.id)===String(id))||{name:'',url:'',price:0,category:'その他',active:true};
+  modal(`<h3>${id?'商品を編集':'扱いたい商品を登録'}</h3>
+    <div class="note">商品候補は管理者側で用意しません。自分が扱いたい商品・EC・B happy等のリンクを自由に登録できます。</div>
+    <label>商品名</label><input id="spName" value="${esc(p.name||'')}" placeholder="例：リケラエマルジョン">
+    <label>商品リンク</label><input id="spUrl" type="url" value="${esc(p.url||'')}" placeholder="https://...">
+    <label>価格（任意）</label><input id="spPrice" type="number" min="0" value="${Number(p.price||0)}">
+    <label>カテゴリ</label><input id="spCategory" value="${esc(p.category||'その他')}" placeholder="ミルク / オイル / ReFa など">
+    <label><input id="spActive" type="checkbox" style="width:auto" ${p.active===false?'':'checked'}> 使用中</label>
+    <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveStaffProduct('${id}')">保存</button></div>
+    ${id?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteStaffProduct('${id}')">商品を削除</button>`:''}`);
 }
-async function saveRetailPreferences(){
-  const ids=[...document.querySelectorAll('.retailChoice:checked')].map(x=>x.value);
-  try{const r=await api({method:'POST',body:JSON.stringify({action:'updatePreferences',sources:state.profile.sources,retailProductIds:ids})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
+async function saveStaffProduct(id=''){
+  const product={id,name:$('spName').value.trim(),url:$('spUrl').value.trim(),price:Number($('spPrice').value)||0,category:$('spCategory').value.trim()||'その他',active:$('spActive').checked};
+  try{const r=await api({method:'POST',body:JSON.stringify({action:'upsertStaffProduct',product})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
+}
+async function deleteStaffProduct(id){
+  if(!confirm('この商品を削除しますか？\\n過去の販売履歴は残ります。'))return;
+  try{const r=await api({method:'POST',body:JSON.stringify({action:'deleteStaffProduct',id})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
+}
+function openProductLink(id){
+  const p=(state.profile?.retailCatalog||[]).find(x=>String(x.id)===String(id));if(!p?.url)return;
+  window.open(p.url,'_blank','noopener,noreferrer');
+}
+async function copyProductLink(id){
+  const p=(state.profile?.retailCatalog||[]).find(x=>String(x.id)===String(id));if(!p?.url)return;
+  try{await navigator.clipboard.writeText(p.url);alert('商品リンクをコピーしました')}catch{prompt('商品リンク',p.url)}
 }
 function retailSaleForm(){
-  const products=selectedProducts();if(!products.length)return alert('先に「使う店販商品を選ぶ」から商品を選んでください');
+  const products=selectedProducts();if(!products.length)return alert('先に「扱いたい商品・リンクを登録」から商品を登録してください');
   modal(`<h3>店販を記録</h3><label>日付</label><input id="rDate" type="date" value="${todayISO}"><label>商品</label><select id="rProduct" onchange="updateRetailAmount()">${products.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select><label>数量</label><input id="rQty" type="number" min="1" value="1" oninput="updateRetailAmount()"><label>顧客名</label><input id="rCustomer"><label>金額（合計）</label><input id="rAmount" type="number" value="${Number(products[0]?.price||0)}"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveRetailSale()">保存</button></div>`);
 }
 function updateRetailAmount(){const p=state.products.find(x=>String(x.id)===$('rProduct').value);$('rAmount').value=Number(p?.price||0)*Number($('rQty').value||1)}
@@ -563,7 +583,7 @@ async function saveStaffPreferences(){
   const base=[...document.querySelectorAll('.sourceChoice:checked')].map(x=>x.value);
   const custom=$('customSources').value.split(/\n+/).map(x=>x.trim()).filter(Boolean);
   const sources=[...new Set([...base,...custom])];if(!sources.length)return alert('予約サイトを1つ以上選んでください');
-  try{const r=await api({method:'POST',body:JSON.stringify({action:'updatePreferences',sources,retailProductIds:state.profile.retailProductIds||[]})});applyState(r);closeModal();showMain()}catch(e){alert(e.message)}
+  try{const r=await api({method:'POST',body:JSON.stringify({action:'updatePreferences',sources})});applyState(r);closeModal();showMain()}catch(e){alert(e.message)}
 }
 
 function openStoryAvailability(){
