@@ -16,6 +16,7 @@ function publicProduct(p){
     id:String(p.id||''),
     name:String(p.name||''),
     category:String(p.category||'その他'),
+    concern:String(p.concern||''),
     price:Number(p.price||0),
     fulfillment:p.fulfillment==='external'?'external':'salon',
     externalUrl:p.fulfillment==='external'
@@ -82,6 +83,11 @@ export default async function handler(req,res){
         p.category||'その他',
         80
       )||'その他',
+
+      concern:text(
+        p.concern||'',
+        80
+      ),
 
       price:Number(p.price),
 
