@@ -64,6 +64,41 @@ button{border:0;background:#111;color:#fff;border-radius:12px;padding:12px 14px;
   .week-corner{font-size:8px}.week-dayhead{font-size:8px;line-height:1.08}.week-time{font-size:7px;padding-top:1px}
   .week-booking{margin:0 1px;border-radius:4px;padding:1px 2px;border-left-width:2px;font-size:7.5px;line-height:1.08;min-height:17px}.week-booking .wk-name{font-size:7.5px}.week-booking .wk-meta{display:none}
 }
+
+.staff-undo-toast{
+  position:fixed;
+  left:50%;
+  bottom:86px;
+  transform:translateX(-50%);
+  width:min(430px,calc(100% - 24px));
+  z-index:9999;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  background:#111;
+  color:#fff;
+  border-radius:15px;
+  padding:12px 12px 12px 14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.22);
+}
+.staff-undo-toast.hidden{display:none}
+.staff-undo-toast .message{
+  flex:1;
+  min-width:0;
+  font-size:13px;
+  font-weight:750;
+  line-height:1.35;
+}
+.staff-undo-toast button{
+  width:auto;
+  flex:0 0 auto;
+  background:#fff;
+  color:#111;
+  border:0;
+  padding:9px 12px;
+  border-radius:10px;
+  font-weight:850;
+}
 </style>
 </head>
 <body>
@@ -174,6 +209,11 @@ button{border:0;background:#111;color:#fff;border-radius:12px;padding:12px 14px;
 </nav>
 <div id="modal" class="modal hidden" onclick="if(event.target===this)closeModal()"><div id="sheet" class="sheet"></div></div>
 
+<div id="staffUndoToast" class="staff-undo-toast hidden" role="status" aria-live="polite">
+  <div id="staffUndoMessage" class="message"></div>
+  <button type="button" onclick="undoStaffPendingDelete()">元に戻す</button>
+</div>
+
 <script>
 const STAFF_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/staff';
 const TOKEN_KEY='salonManagerStaffToken';
@@ -189,6 +229,7 @@ const normalize=s=>String(s||'').normalize('NFKC').replace(/[ァ-ヶ]/g,c=>Strin
 const $=id=>document.getElementById(id);
 let token=localStorage.getItem(TOKEN_KEY)||'';
 let state={profile:null,bookings:[],customers:[],sales:[],retail:[],products:[],orders:[]};
+let staffPendingDelete=null;
 let viewMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
 let selectedDate=todayISO,reservationView='list',weekStart=mondayOf(new Date()),busy=false,importRows=[];
 
@@ -232,6 +273,142 @@ function applyState(b){
     products:b.products??state.products,
     orders:b.orders??state.orders
   };
+
+  maskStaffPendingDelete();
+}
+
+function staffUndoList(kind){
+  if(kind==='booking')return state.bookings||[];
+  if(kind==='sale')return state.sales||[];
+  if(kind==='retail')return state.retail||[];
+  if(kind==='product')return state.profile?.retailCatalog||[];
+  return [];
+}
+
+function setStaffUndoList(kind,list){
+  if(kind==='booking')state.bookings=list;
+  if(kind==='sale')state.sales=list;
+  if(kind==='retail')state.retail=list;
+  if(kind==='product'&&state.profile)state.profile.retailCatalog=list;
+}
+
+function maskStaffPendingDelete(){
+  const p=staffPendingDelete;
+  if(!p)return;
+
+  setStaffUndoList(
+    p.kind,
+    staffUndoList(p.kind).filter(
+      x=>String(x.id)!==String(p.id)
+    )
+  );
+}
+
+function hideStaffUndoToast(){
+  const toast=$('staffUndoToast');
+  if(toast)toast.classList.add('hidden');
+}
+
+function showStaffUndoToast(message){
+  const toast=$('staffUndoToast');
+  const text=$('staffUndoMessage');
+  if(!toast||!text)return;
+
+  text.textContent=message;
+  toast.classList.remove('hidden');
+}
+
+async function finalizeStaffPendingDelete(){
+  const p=staffPendingDelete;
+  if(!p)return true;
+
+  clearTimeout(p.timer);
+
+  try{
+    const r=await api({
+      method:'POST',
+      body:JSON.stringify({
+        action:p.action,
+        id:p.id
+      })
+    });
+
+    applyState(r);
+    staffPendingDelete=null;
+    hideStaffUndoToast();
+    renderAll();
+    return true;
+
+  }catch(e){
+    const list=staffUndoList(p.kind);
+
+    if(!list.some(x=>String(x.id)===String(p.id))){
+      const at=Math.max(0,Math.min(p.index,list.length));
+      list.splice(at,0,p.item);
+      setStaffUndoList(p.kind,list);
+    }
+
+    staffPendingDelete=null;
+    hideStaffUndoToast();
+    renderAll();
+    alert(e.message||'削除できませんでした');
+    return false;
+  }
+}
+
+async function beginStaffUndoDelete({kind,id,action,message}){
+  if(staffPendingDelete){
+    await finalizeStaffPendingDelete();
+  }
+
+  const list=staffUndoList(kind);
+  const index=list.findIndex(x=>String(x.id)===String(id));
+  const item=index>=0?list[index]:null;
+
+  if(!item)return;
+
+  setStaffUndoList(
+    kind,
+    list.filter(x=>String(x.id)!==String(id))
+  );
+
+  closeModal();
+  renderAll();
+
+  const timer=setTimeout(
+    ()=>finalizeStaffPendingDelete(),
+    7000
+  );
+
+  staffPendingDelete={
+    kind,
+    id,
+    action,
+    item:structuredClone(item),
+    index,
+    timer
+  };
+
+  showStaffUndoToast(message||'削除しました');
+}
+
+function undoStaffPendingDelete(){
+  const p=staffPendingDelete;
+  if(!p)return;
+
+  clearTimeout(p.timer);
+
+  const list=staffUndoList(p.kind);
+
+  if(!list.some(x=>String(x.id)===String(p.id))){
+    const at=Math.max(0,Math.min(p.index,list.length));
+    list.splice(at,0,p.item);
+    setStaffUndoList(p.kind,list);
+  }
+
+  staffPendingDelete=null;
+  hideStaffUndoToast();
+  renderAll();
 }
 async function login(){
   const u=$('loginUser').value.trim(),p=$('loginPass').value;
@@ -621,7 +798,13 @@ async function saveBooking(id){
 
 async function deleteBooking(id){
   if(!confirm('この予約を削除しますか？'))return;
-  try{const r=await api({method:'POST',body:JSON.stringify({action:'deleteBooking',id})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
+
+  await beginStaffUndoDelete({
+    kind:'booking',
+    id,
+    action:'deleteBooking',
+    message:'予約を削除しました'
+  });
 }
 
 function renderCustomers(){
@@ -673,7 +856,13 @@ async function saveSale(){
 }
 async function deleteSale(id){
   if(!confirm('この追加売上を削除しますか？'))return;
-  try{const r=await api({method:'POST',body:JSON.stringify({action:'deleteSale',id})});applyState(r);renderAll()}catch(e){alert(e.message)}
+
+  await beginStaffUndoDelete({
+    kind:'sale',
+    id,
+    action:'deleteSale',
+    message:'追加売上を削除しました'
+  });
 }
 
 function canonicalStaffProductCategory(category,name=''){
@@ -1246,30 +1435,12 @@ async function deleteStaffProduct(id){
     return;
   }
 
-  try{
-
-    const r=
-      await api({
-        method:'POST',
-
-        body:
-          JSON.stringify({
-            action:
-              'deleteStaffProduct',
-            id
-          })
-      });
-
-    applyState(r);
-
-    closeModal();
-
-    renderAll();
-
-  }catch(e){
-
-    alert(e.message);
-  }
+  await beginStaffUndoDelete({
+    kind:'product',
+    id,
+    action:'deleteStaffProduct',
+    message:'商品を削除しました'
+  });
 }
 
 function openProductLink(id){
@@ -1486,27 +1657,12 @@ async function deleteRetail(id){
     return;
   }
 
-  try{
-
-    const r=
-      await api({
-        method:'POST',
-
-        body:
-          JSON.stringify({
-            action:'deleteRetail',
-            id
-          })
-      });
-
-    applyState(r);
-
-    renderAll();
-
-  }catch(e){
-
-    alert(e.message);
-  }
+  await beginStaffUndoDelete({
+    kind:'retail',
+    id,
+    action:'deleteRetail',
+    message:'店販履歴を削除しました'
+  });
 }
 function openStaffPreferences(){
   const selected=new Set(state.profile?.sources||[]);
