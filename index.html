@@ -4420,7 +4420,17 @@ async function publishCatalog(){
   db.orderSettings={...db.orderSettings,lineUrl:line};save();
   const key=getCloudBackupKey();if(!key)return;$('publishStatus').textContent='公開中…';
   try{
-    const products=ownerProductsInOrder().filter(p=>p.public).map(({id,name,category,price,description,recommended,usage})=>({id,name,category:canonicalProductCategory(category,name),price,fulfillment:'salon',externalUrl:'',description,recommended,usage}));
+    const category:text(
+  p.category||'その他',
+  80
+)||'その他',
+
+concern:text(
+  p.concern||'',
+  80
+),
+
+price:Number(p.price||0),
     const r=await fetch(CATALOG_API,{method:'POST',headers:{'Content-Type':'application/json','X-Backup-Key':key},body:JSON.stringify({products,settings:{lineUrl:line,bHappyUrl:''}})});const body=await r.json();if(!r.ok)throw new Error(body.error||'公開に失敗');
     await cloudBackup(key);
     $('publishStatus').textContent='商品を公開しました。注文が入るとアプリに保存され、LINE通知設定済みならLINEにも届きます。';
