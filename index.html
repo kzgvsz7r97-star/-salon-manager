@@ -3735,14 +3735,176 @@ async function refreshOrders(manual=false){
 }
 function renderOrderNotice(){const host=$('orderNotice');if(!host)return;const unseen=remoteOrders.filter(o=>o.status==='new'&&!db.seenOrders.includes(o.id));host.innerHTML=unseen.length?`<button class="blue" style="width:100%;margin-top:10px" onclick="viewOrders()">新しい商品注文 ${unseen.length}件</button>`:'';}
 function viewOrders(){go('retail',document.querySelector('[data-tab="retail"]'));db.seenOrders=[...new Set([...db.seenOrders,...remoteOrders.map(o=>o.id)])];localStorage.setItem(KEY,JSON.stringify(db));renderOrderNotice();$('orderList').scrollIntoView({behavior:'smooth'});}
-function renderOrders(){
-  if(!$('orderList'))return;$('orderStatus').textContent=orderNotice||'アプリを開いている間は1分ごとに注文を確認します。';
-  const labels={new:'未対応',ordered:'発注済み',ready:'入荷済み',completed:'お渡し済み',cancelled:'キャンセル'};
-  $('orderList').innerHTML=remoteOrders.length?remoteOrders.map(o=>{const deadline=dateOnly(o.visit_date);deadline.setDate(deadline.getDate()-7);const late=localISO(deadline)<todayISO;const supplier=(o.items||[]).map(i=>db.products.find(p=>String(p.id)===String(i.productId))?.supplierUrl||'').find(Boolean)||'';
-    return `<div class="item"><div class="t">${esc(o.customer_name)} ・ ${esc(labels[o.status]||o.status)}</div><div class="s">受取 ${esc(o.visit_date)} ／ 発注目安 ${localISO(deadline)}${late&&o.status==='new'?' <b>早めに要確認</b>':''}<br>${(o.items||[]).map(i=>`${esc(i.name)} × ${i.quantity}`).join('<br>')}<br>${yen(o.total)}<br>連絡先：${esc(o.contact||'LINEで確認')}<br>${esc(o.note||'')}</div><div class="order-status-row">${supplier?`<button class="soft" onclick="openOwnerOrderSupplier('${o.id}')">仕入れ先を開く</button>`:''}<select aria-label="注文状況" onchange="updateOrderStatus('${o.id}',this.value)">${Object.entries(labels).map(([k,v])=>`<option value="${k}" ${o.status===k?'selected':''}>${v}</option>`).join('')}</select></div></div>`;
-  }).join(''):empty('商品注文はまだありません');
+function customerOrderLineQr(order){
+  return (order?.items||[])
+    .map(i=>String(i.customerLineQr||''))
+    .find(v=>/^data:image\/(?:png|jpeg|webp);base64,/i.test(v))
+    ||'';
 }
-function openOwnerOrderSupplier(id){const o=remoteOrders.find(x=>x.id===id);const url=(o?.items||[]).map(i=>db.products.find(p=>String(p.id)===String(i.productId))?.supplierUrl||'').find(Boolean);if(!url)return alert('仕入れ先URLがありません');window.open(url,'_blank','noopener,noreferrer');}
+
+function renderOrders(){
+  if(!$('orderList'))return;
+
+  $('orderStatus').textContent=
+    orderNotice||
+    'アプリを開いている間は1分ごとに注文を確認します。';
+
+  const labels={
+    new:'未対応',
+    ordered:'発注済み',
+    ready:'入荷済み',
+    completed:'お渡し済み',
+    cancelled:'キャンセル'
+  };
+
+  $('orderList').innerHTML=
+    remoteOrders.length
+      ?remoteOrders.map(o=>{
+        const deadline=dateOnly(o.visit_date);
+        deadline.setDate(deadline.getDate()-7);
+
+        const late=
+          localISO(deadline)<todayISO;
+
+        const supplier=
+          (o.items||[])
+            .map(
+              i=>
+                db.products.find(
+                  p=>String(p.id)===String(i.productId)
+                )?.supplierUrl||
+                ''
+            )
+            .find(Boolean)
+          ||'';
+
+        const lineQr=
+          customerOrderLineQr(o);
+
+        const contactText=
+          o.contact||
+          (lineQr?'QRコード添付あり':'LINEで確認');
+
+        return `<div class="item">
+          <div class="t">
+            ${esc(o.customer_name)} ・ ${esc(labels[o.status]||o.status)}
+          </div>
+
+          <div class="s">
+            受取 ${esc(o.visit_date)} ／ 発注目安 ${localISO(deadline)}
+            ${late&&o.status==='new'?' <b>早めに要確認</b>':''}
+            <br>
+            ${(o.items||[]).map(i=>`${esc(i.name)} × ${i.quantity}`).join('<br>')}
+            <br>
+            ${yen(o.total)}
+            <br>
+            連絡先：${esc(contactText)}
+            ${o.note?`<br>${esc(o.note)}`:''}
+          </div>
+
+          <div class="order-status-row">
+            ${lineQr
+              ?`<button class="blue" onclick="openOwnerLineQr('${o.id}')">LINE QRを見る</button>`
+              :''
+            }
+
+            ${supplier
+              ?`<button class="soft" onclick="openOwnerOrderSupplier('${o.id}')">仕入れ先を開く</button>`
+              :''
+            }
+
+            <select
+              aria-label="注文状況"
+              onchange="updateOrderStatus('${o.id}',this.value)"
+            >
+              ${Object.entries(labels)
+                .map(
+                  ([k,v])=>
+                    `<option value="${k}" ${o.status===k?'selected':''}>${v}</option>`
+                )
+                .join('')
+              }
+            </select>
+          </div>
+        </div>`;
+      }).join('')
+      :empty('商品注文はまだありません');
+}
+
+function openOwnerLineQr(id){
+  const order=
+    remoteOrders.find(
+      x=>x.id===id
+    );
+
+  const qr=
+    customerOrderLineQr(order);
+
+  if(!qr){
+    return alert(
+      'LINE QRコードは添付されていません'
+    );
+  }
+
+  modal(`
+    <h3>お客様のLINE QR</h3>
+
+    <div class="note" style="margin-bottom:12px">
+      ${esc(order?.customer_name||'お客様')}
+      ${order?.contact?`<br>連絡先：${esc(order.contact)}`:''}
+    </div>
+
+    <img
+      src="${esc(qr)}"
+      alt="お客様のLINE QRコード"
+      style="
+        width:min(320px,100%);
+        display:block;
+        margin:0 auto;
+        border-radius:16px;
+        border:1px solid #e5e1da;
+        background:#fff;
+      "
+    >
+
+    <div class="actions">
+      <button class="ghost" onclick="closeModal()">
+        閉じる
+      </button>
+    </div>
+  `);
+}
+
+function openOwnerOrderSupplier(id){
+  const o=
+    remoteOrders.find(
+      x=>x.id===id
+    );
+
+  const url=
+    (o?.items||[])
+      .map(
+        i=>
+          db.products.find(
+            p=>String(p.id)===String(i.productId)
+          )?.supplierUrl||
+          ''
+      )
+      .find(Boolean);
+
+  if(!url){
+    return alert(
+      '仕入れ先URLがありません'
+    );
+  }
+
+  window.open(
+    url,
+    '_blank',
+    'noopener,noreferrer'
+  );
+}
+
 async function updateOrderStatus(id,status){
   const key=localStorage.getItem(CLOUD_BACKUP_KEY_STORAGE);if(!key)return;
   try{const r=await fetch(ORDER_API,{method:'PATCH',headers:{'Content-Type':'application/json','X-Backup-Key':key},body:JSON.stringify({id,status})});const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.error||'更新できませんでした');await refreshOrders(true);if(status==='completed'){await syncFromCloud(true,key);alert('お渡し済みにしました。店販売上へ反映しました');}}
