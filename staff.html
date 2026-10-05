@@ -540,15 +540,179 @@ function renderRetail(){
   $('retailProductList').innerHTML=products.length?products.map(p=>`<div class="product-row"><div class="main"><div class="name">${esc(p.name)}${p.active===false?' <span class="badge">停止中</span>':''}</div><div class="meta">${esc(p.category||'その他')} ・ 販売 ${yen(p.price||0)}${p.cost?` ・ 仕入 ${yen(p.cost)}`:''}</div>${p.description?`<div class="small" style="margin-top:6px">${esc(p.description)}</div>`:''}<div class="actions"><button class="soft" onclick="openProductLink('${p.id}')">仕入れ先</button><button class="ghost" onclick="copyProductLink('${p.id}')">URLコピー</button><button onclick="staffProductForm('${p.id}')">編集</button></div></div></div>`).join(''):'<div class="empty">扱いたい商品を自分で登録できます</div>';
   $('retailHistory').innerHTML=state.retail.length?[...state.retail].sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<div class="item"><div class="t">${esc(x.product)} ${yen(x.amount)}</div><div class="s">${esc(x.date)} ・ ${Number(x.quantity||1)}点 ・ ${esc(x.customer||'顧客未指定')}${x.source==='customer-order'?' ・ お客様注文':''}</div>${x.source!=='customer-order'?`<button class="danger" style="margin-top:8px" onclick="deleteRetail('${x.id}')">削除</button>`:''}</div>`).join(''):'<div class="empty">販売履歴はありません</div>';
 }
+function staffOrderLineQr(order){
+  return (order?.items||[])
+    .map(i=>String(i.customerLineQr||''))
+    .find(v=>/^data:image\/(?:png|jpeg|webp);base64,/i.test(v))
+    ||'';
+}
+
 function renderStaffOrders(){
-  const host=$('staffOrderList');if(!host)return;
-  const labels={new:'未対応',ordered:'発注済み',ready:'入荷済み',completed:'お渡し済み',cancelled:'キャンセル'};
+  const host=$('staffOrderList');
+  if(!host)return;
+
+  const labels={
+    new:'未対応',
+    ordered:'発注済み',
+    ready:'入荷済み',
+    completed:'お渡し済み',
+    cancelled:'キャンセル'
+  };
+
   const rows=state.orders||[];
-  host.innerHTML=rows.length?rows.map(o=>{const items=(o.items||[]).filter(i=>String(i.sellerId||'')===String(state.profile.id));const deadline=addDaysISO(o.visit_date,-7);return `<div class="item"><div class="t">${esc(o.customer_name)} ・ ${esc(labels[o.status]||o.status)}</div><div class="s">受取 ${esc(o.visit_date)} ／ 発注目安 ${esc(deadline)}<br>${items.map(i=>`${esc(i.name)} × ${Number(i.quantity||1)}`).join('<br>')}<br>${yen(items.reduce((a,i)=>a+Number(i.price||0)*Number(i.quantity||1),0))}<br>連絡先：${esc(o.contact||'')}</div><div class="actions"><button class="soft" onclick="openOrderSupplier('${o.id}')">仕入れ先を開く</button><select onchange="updateStaffOrderStatus('${o.id}',this.value)">${Object.entries(labels).map(([k,v])=>`<option value="${k}" ${o.status===k?'selected':''}>${v}</option>`).join('')}</select></div></div>`}).join(''):'<div class="empty">商品注文はまだありません</div>';
+
+  host.innerHTML=
+    rows.length
+      ?rows.map(o=>{
+        const items=
+          (o.items||[])
+            .filter(
+              i=>
+                String(i.sellerId||'')===
+                String(state.profile.id)
+            );
+
+        const deadline=
+          addDaysISO(
+            o.visit_date,
+            -7
+          );
+
+        const lineQr=
+          staffOrderLineQr(o);
+
+        const contactText=
+          o.contact||
+          (lineQr?'QRコード添付あり':'未入力');
+
+        return `
+          <div class="item">
+
+            <div class="t">
+              ${esc(o.customer_name)} ・ ${esc(labels[o.status]||o.status)}
+            </div>
+
+            <div class="s">
+              受取 ${esc(o.visit_date)} ／ 発注目安 ${esc(deadline)}
+              <br>
+              ${items.map(i=>`${esc(i.name)} × ${Number(i.quantity||1)}`).join('<br>')}
+              <br>
+              ${yen(items.reduce((a,i)=>a+Number(i.price||0)*Number(i.quantity||1),0))}
+              <br>
+              連絡先：${esc(contactText)}
+              ${o.note?`<br>${esc(o.note)}`:''}
+            </div>
+
+            <div class="actions">
+
+              ${lineQr
+                ?`<button class="blue" onclick="openStaffOrderLineQr('${o.id}')">LINE QRを見る</button>`
+                :''
+              }
+
+              <button
+                class="soft"
+                onclick="openOrderSupplier('${o.id}')"
+              >
+                仕入れ先を開く
+              </button>
+
+              <select
+                onchange="updateStaffOrderStatus('${o.id}',this.value)"
+              >
+                ${Object.entries(labels)
+                  .map(
+                    ([k,v])=>
+                      `<option value="${k}" ${o.status===k?'selected':''}>${v}</option>`
+                  )
+                  .join('')
+                }
+              </select>
+
+            </div>
+          </div>
+        `;
+      }).join('')
+      :'<div class="empty">商品注文はまだありません</div>';
 }
+
+function openStaffOrderLineQr(orderId){
+  const order=
+    (state.orders||[])
+      .find(
+        x=>x.id===orderId
+      );
+
+  const qr=
+    staffOrderLineQr(order);
+
+  if(!qr){
+    return alert(
+      'LINE QRコードは添付されていません'
+    );
+  }
+
+  modal(`
+    <h3>お客様のLINE QR</h3>
+
+    <div class="note" style="margin-bottom:12px">
+      ${esc(order?.customer_name||'お客様')}
+      ${order?.contact?`<br>連絡先：${esc(order.contact)}`:''}
+    </div>
+
+    <img
+      src="${esc(qr)}"
+      alt="お客様のLINE QRコード"
+      style="
+        width:min(320px,100%);
+        display:block;
+        margin:0 auto;
+        border-radius:16px;
+        border:1px solid #e5e1da;
+        background:#fff;
+      "
+    >
+
+    <div class="actions">
+      <button class="ghost" onclick="closeModal()">
+        閉じる
+      </button>
+    </div>
+  `);
+}
+
 function openOrderSupplier(orderId){
-  const o=(state.orders||[]).find(x=>x.id===orderId);if(!o)return;const item=(o.items||[]).find(i=>String(i.sellerId||'')===String(state.profile.id)&&i.supplierUrl);if(!item?.supplierUrl)return alert('仕入れ先URLがありません');window.open(item.supplierUrl,'_blank','noopener,noreferrer');
+  const o=
+    (state.orders||[])
+      .find(
+        x=>x.id===orderId
+      );
+
+  if(!o)return;
+
+  const item=
+    (o.items||[])
+      .find(
+        i=>
+          String(i.sellerId||'')===
+          String(state.profile.id)
+          &&
+          i.supplierUrl
+      );
+
+  if(!item?.supplierUrl){
+    return alert(
+      '仕入れ先URLがありません'
+    );
+  }
+
+  window.open(
+    item.supplierUrl,
+    '_blank',
+    'noopener,noreferrer'
+  );
 }
+
 async function updateStaffOrderStatus(id,status){try{const r=await api({method:'POST',body:JSON.stringify({action:'updateOrderStatus',id,status})});applyState(r);renderAll();if(status==='completed')alert('お渡し済みにしました。店販売上へ反映しました');}catch(e){alert(e.message);loadData().catch(()=>{})}}
 function customerOrderUrl(){return new URL('order.html?staff='+encodeURIComponent(state.profile.id),location.href).href}
 async function copyCustomerOrderUrl(){const url=customerOrderUrl();try{await navigator.clipboard.writeText(url);alert('お客様用注文URLをコピーしました')}catch{prompt('お客様用注文URL',url)}}
