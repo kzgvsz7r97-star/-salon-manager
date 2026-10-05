@@ -99,6 +99,56 @@ button{border:0;background:#111;color:#fff;border-radius:12px;padding:12px 14px;
   border-radius:10px;
   font-weight:850;
 }
+
+.staff-order-summary-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:7px;
+  margin:10px 0;
+}
+.staff-order-summary-chip{
+  background:#f5f3ef;
+  border-radius:12px;
+  padding:9px 8px;
+  text-align:center;
+}
+.staff-order-summary-chip .n{
+  display:block;
+  font-size:20px;
+  font-weight:900;
+  line-height:1.1;
+}
+.staff-order-summary-chip .l{
+  display:block;
+  font-size:10px;
+  color:#777;
+  margin-top:3px;
+}
+.staff-order-filter-grid{
+  display:grid;
+  grid-template-columns:1.25fr .9fr;
+  gap:8px;
+  margin-top:8px;
+}
+.staff-order-priority-new{
+  border-left:4px solid #111;
+}
+.staff-order-priority-ready{
+  border-left:4px solid #7a6a42;
+}
+.staff-order-status-badge{
+  display:inline-block;
+  font-size:10px;
+  font-weight:850;
+  padding:3px 7px;
+  border-radius:999px;
+  background:#eee;
+  margin-left:5px;
+  vertical-align:1px;
+}
+@media(max-width:420px){
+  .staff-order-filter-grid{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
@@ -127,6 +177,7 @@ button{border:0;background:#111;color:#fff;border-radius:12px;padding:12px 14px;
     <h2>選択日の予約</h2><div id="homeDayBookings"></div>
     <h2>フォロー管理</h2><div id="followupQueue"></div>
     <h2>再来リマインド</h2><div id="returnReminders"></div>
+    <div id="staffOrderHomeNotice"></div>
     <h2>この先の予約</h2><div id="upcoming"></div>
   </section>
 
@@ -193,7 +244,35 @@ button{border:0;background:#111;color:#fff;border-radius:12px;padding:12px 14px;
     <button class="blue" style="width:100%;margin-top:10px" onclick="copyCustomerOrderUrl()">お客様用注文URLをコピー</button>
     <button class="soft" style="width:100%;margin-top:8px" onclick="staffProductForm()">＋ 扱いたい商品を登録</button>
     <div id="orderNotifySetup"></div>
-    <h2>新しい商品注文</h2><div id="staffOrderList"></div>
+
+    <h2>商品注文</h2>
+    <div class="card">
+      <div id="staffOrderSummary" class="staff-order-summary-grid"></div>
+
+      <div class="staff-order-filter-grid">
+        <input
+          id="staffOrderFilterName"
+          placeholder="お客様名で検索"
+          oninput="renderStaffOrders()"
+        >
+
+        <select
+          id="staffOrderFilterStatus"
+          onchange="renderStaffOrders()"
+        >
+          <option value="active" selected>対応中のみ</option>
+          <option value="">すべて</option>
+          <option value="new">未対応</option>
+          <option value="ordered">発注済み</option>
+          <option value="ready">入荷済み</option>
+          <option value="completed">お渡し済み</option>
+          <option value="cancelled">キャンセル</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="staffOrderList"></div>
+
     <h2>自分の商品</h2><div id="retailProductList"></div>
     <h2>販売履歴</h2><div id="retailHistory"></div>
   </section>
@@ -471,7 +550,7 @@ function renderHome(){
     <div class="card kpi"><div class="l">平均単価</div><div class="v">${yen(s.avg)}</div></div>`;
   const goal=Number(state.profile?.goals?.[m]||0),pct=goal?Math.min(100,Math.round(s.forecast/goal*100)):0;
   $('goalCard').innerHTML=`<div class="row"><div><b>月目標</b><div class="small">${goal?yen(goal):'未設定'}</div></div><button class="ghost" onclick="editGoal()">目標変更</button></div><div class="progress"><i style="width:${pct}%"></i></div><div class="small" style="margin-top:8px">${goal?`見込み ${yen(s.forecast)} / ${pct}%`:'目標を設定すると進捗が出ます'}</div>`;
-  renderHomeCalendar();renderFollowups();renderReturnReminders();renderUpcoming();
+  renderHomeCalendar();renderFollowups();renderReturnReminders();renderStaffOrderHomeNotice();renderUpcoming();
 }
 function editGoal(){
   const m=monthString(viewMonth),v=Number(state.profile?.goals?.[m]||0);
@@ -912,6 +991,60 @@ function renderRetail(){
   $('retailHistory').innerHTML=state.retail.length?[...state.retail].sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<div class="item"><div class="t">${esc(x.product)} ${yen(x.amount)}</div><div class="s">${esc(x.date)} ・ ${Number(x.quantity||1)}点 ・ ${esc(x.customer||'顧客未指定')}${x.source==='customer-order'?' ・ お客様注文':''}</div>${x.source!=='customer-order'?`<button class="danger" style="margin-top:8px" onclick="deleteRetail('${x.id}')">削除</button>`:''}</div>`).join(''):'<div class="empty">販売履歴はありません</div>';
 }
 
+function staffOwnOrderItems(order){
+  return (order?.items||[])
+    .filter(
+      i=>
+        String(i.sellerId||'')===
+        String(state.profile?.id||'')
+    );
+}
+
+function staffOwnOrders(){
+  return (state.orders||[])
+    .filter(
+      o=>staffOwnOrderItems(o).length
+    );
+}
+
+function renderStaffOrderHomeNotice(){
+  const host=$('staffOrderHomeNotice');
+  if(!host)return;
+
+  const rows=
+    staffOwnOrders()
+      .filter(
+        o=>
+          o.status==='new'||
+          o.status==='ordered'||
+          o.status==='ready'
+      );
+
+  const newCount=
+    rows.filter(
+      o=>o.status==='new'
+    ).length;
+
+  if(!rows.length){
+    host.innerHTML='';
+    return;
+  }
+
+  host.innerHTML=`
+    <button
+      class="${newCount?'blue':'soft'}"
+      style="width:100%;margin:12px 0 2px"
+      onclick="go(
+        'retail',
+        document.querySelector('#nav [data-tab=&quot;retail&quot;]')
+      )"
+    >
+      商品注文 対応中 ${rows.length}件
+      ${newCount?`（未対応 ${newCount}件）`:''}
+    </button>
+  `;
+}
+
 function staffOrderLineQr(order){
   return (order?.items||[])
     .map(i=>String(i.customerLineQr||''))
@@ -931,18 +1064,131 @@ function renderStaffOrders(){
     cancelled:'キャンセル'
   };
 
-  const rows=state.orders||[];
+  const priority={
+    new:0,
+    ordered:1,
+    ready:2,
+    completed:3,
+    cancelled:4
+  };
+
+  const ownOrders=
+    staffOwnOrders();
+
+  const counts={
+    new:
+      ownOrders.filter(
+        o=>o.status==='new'
+      ).length,
+
+    ordered:
+      ownOrders.filter(
+        o=>o.status==='ordered'
+      ).length,
+
+    ready:
+      ownOrders.filter(
+        o=>o.status==='ready'
+      ).length
+  };
+
+  const summary=
+    $('staffOrderSummary');
+
+  if(summary){
+    summary.innerHTML=`
+      <div class="staff-order-summary-chip">
+        <span class="n">${counts.new}</span>
+        <span class="l">未対応</span>
+      </div>
+
+      <div class="staff-order-summary-chip">
+        <span class="n">${counts.ordered}</span>
+        <span class="l">発注済み</span>
+      </div>
+
+      <div class="staff-order-summary-chip">
+        <span class="n">${counts.ready}</span>
+        <span class="l">入荷済み</span>
+      </div>
+    `;
+  }
+
+  const statusFilter=
+    $('staffOrderFilterStatus')?.value??'active';
+
+  const nameFilter=
+    ($('staffOrderFilterName')?.value||'')
+      .trim()
+      .toLowerCase();
+
+  const rows=
+    ownOrders
+      .filter(o=>{
+        if(
+          statusFilter==='active'&&
+          !['new','ordered','ready'].includes(o.status)
+        ){
+          return false;
+        }
+
+        if(
+          statusFilter&&
+          statusFilter!=='active'&&
+          o.status!==statusFilter
+        ){
+          return false;
+        }
+
+        if(
+          nameFilter&&
+          !String(o.customer_name||'')
+            .toLowerCase()
+            .includes(nameFilter)
+        ){
+          return false;
+        }
+
+        return true;
+      })
+      .sort((a,b)=>{
+        const pa=
+          priority[a.status]??99;
+
+        const pb=
+          priority[b.status]??99;
+
+        if(pa!==pb)return pa-pb;
+
+        const activeA=
+          ['new','ordered','ready'].includes(a.status);
+
+        const activeB=
+          ['new','ordered','ready'].includes(b.status);
+
+        if(activeA&&activeB){
+          const va=
+            String(a.visit_date||'9999-12-31');
+
+          const vb=
+            String(b.visit_date||'9999-12-31');
+
+          if(va!==vb){
+            return va.localeCompare(vb);
+          }
+        }
+
+        return String(b.created_at||'')
+          .localeCompare(
+            String(a.created_at||'')
+          );
+      });
 
   host.innerHTML=
     rows.length
       ?rows.map(o=>{
         const items=
-          (o.items||[])
-            .filter(
-              i=>
-                String(i.sellerId||'')===
-                String(state.profile.id)
-            );
+          staffOwnOrderItems(o);
 
         const deadline=
           addDaysISO(
@@ -957,11 +1203,26 @@ function renderStaffOrders(){
           o.contact||
           (lineQr?'QRコード添付あり':'未入力');
 
+        const hasSupplier=
+          items.some(
+            i=>!!i.supplierUrl
+          );
+
+        const itemClass=
+          o.status==='new'
+            ?' staff-order-priority-new'
+            :o.status==='ready'
+              ?' staff-order-priority-ready'
+              :'';
+
         return `
-          <div class="item">
+          <div class="item${itemClass}">
 
             <div class="t">
-              ${esc(o.customer_name)} ・ ${esc(labels[o.status]||o.status)}
+              ${esc(o.customer_name)}
+              <span class="staff-order-status-badge">
+                ${esc(labels[o.status]||o.status)}
+              </span>
             </div>
 
             <div class="s">
@@ -982,12 +1243,15 @@ function renderStaffOrders(){
                 :''
               }
 
-              <button
-                class="soft"
-                onclick="openOrderSupplier('${o.id}')"
-              >
-                仕入れ先を開く
-              </button>
+              ${hasSupplier
+                ?`<button
+                    class="soft"
+                    onclick="openOrderSupplier('${o.id}')"
+                  >
+                    仕入れ先を開く
+                  </button>`
+                :''
+              }
 
               <select
                 onchange="updateStaffOrderStatus('${o.id}',this.value)"
@@ -1005,7 +1269,7 @@ function renderStaffOrders(){
           </div>
         `;
       }).join('')
-      :'<div class="empty">商品注文はまだありません</div>';
+      :'<div class="empty">条件に合う商品注文はありません</div>';
 }
 
 function openStaffOrderLineQr(orderId){
