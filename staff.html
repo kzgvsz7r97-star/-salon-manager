@@ -155,7 +155,10 @@ button{border:0;background:#111;color:#fff;border-radius:12px;padding:12px 14px;
   <section id="retail" class="section">
     <div class="row auto"><h2 style="margin:0;flex:1">店販</h2><button onclick="retailSaleForm()">＋ 販売を記録</button></div>
     <div id="retailStats" class="grid" style="margin-top:10px"></div>
-    <button class="soft" style="width:100%;margin-top:10px" onclick="staffProductForm()">＋ 扱いたい商品・リンクを登録</button>
+    <button class="blue" style="width:100%;margin-top:10px" onclick="copyCustomerOrderUrl()">お客様用注文URLをコピー</button>
+    <button class="soft" style="width:100%;margin-top:8px" onclick="staffProductForm()">＋ 扱いたい商品を登録</button>
+    <div id="orderNotifySetup"></div>
+    <h2>新しい商品注文</h2><div id="staffOrderList"></div>
     <h2>自分の商品</h2><div id="retailProductList"></div>
     <h2>販売履歴</h2><div id="retailHistory"></div>
   </section>
@@ -184,7 +187,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const normalize=s=>String(s||'').normalize('NFKC').replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60)).replace(/[\s・･]/g,'').toLowerCase();
 const $=id=>document.getElementById(id);
 let token=localStorage.getItem(TOKEN_KEY)||'';
-let state={profile:null,bookings:[],customers:[],sales:[],retail:[],products:[]};
+let state={profile:null,bookings:[],customers:[],sales:[],retail:[],products:[],orders:[]};
 let viewMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
 let selectedDate=todayISO,reservationView='list',weekStart=mondayOf(new Date()),busy=false,importRows=[];
 
@@ -225,7 +228,8 @@ function applyState(b){
     customers:b.customers||[],
     sales:b.sales||[],
     retail:b.retail||[],
-    products:b.products||[]
+    products:b.products??state.products,
+    orders:b.orders??state.orders
   };
 }
 async function login(){
@@ -529,24 +533,54 @@ function renderRetail(){
   if(!$('retailStats'))return;
   const m=monthString(viewMonth),rows=state.retail.filter(x=>monthKey(x.date)===m),sales=rows.reduce((a,x)=>a+Number(x.amount||0),0),qty=rows.reduce((a,x)=>a+Number(x.quantity||1),0);
   $('retailStats').innerHTML=`<div class="card kpi"><div class="l">今月店販売上</div><div class="v">${yen(sales)}</div></div><div class="card kpi"><div class="l">販売点数</div><div class="v">${qty}</div></div>`;
+  const linked=!!state.profile?.notifyLineUserId;
+  $('orderNotifySetup').innerHTML=`<div class="card"><b>注文通知</b><div class="small" style="margin-top:5px">注文はアプリに保存され、${linked?'LINEにも通知されます。':'LINE通知はまだ未設定です。'}</div><button class="${linked?'ghost':'blue'}" style="width:100%;margin-top:8px" onclick="openOrderNotificationSettings()">${linked?'LINE通知設定を変更':'LINE通知を設定'}</button></div>`;
+  renderStaffOrders();
   const products=state.profile?.retailCatalog||[];
-  $('retailProductList').innerHTML=products.length?products.map(p=>`<div class="product-row"><div class="main"><div class="name">${esc(p.name)}${p.active===false?' <span class="badge">停止中</span>':''}</div><div class="meta">${esc(p.category||'その他')} ・ ${yen(p.price||0)}</div><div class="small" style="word-break:break-all;margin-top:4px">${esc(p.url||'')}</div><div class="actions"><button class="soft" onclick="openProductLink('${p.id}')">リンクを開く</button><button class="ghost" onclick="copyProductLink('${p.id}')">リンクコピー</button><button onclick="staffProductForm('${p.id}')">編集</button></div></div></div>`).join(''):'<div class="empty">扱いたい商品を自分で登録できます</div>';
-  $('retailHistory').innerHTML=state.retail.length?[...state.retail].sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<div class="item"><div class="t">${esc(x.product)} ${yen(x.amount)}</div><div class="s">${esc(x.date)} ・ ${Number(x.quantity||1)}点 ・ ${esc(x.customer||'顧客未指定')}</div><button class="danger" style="margin-top:8px" onclick="deleteRetail('${x.id}')">削除</button></div>`).join(''):'<div class="empty">販売履歴はありません</div>';
+  $('retailProductList').innerHTML=products.length?products.map(p=>`<div class="product-row"><div class="main"><div class="name">${esc(p.name)}${p.active===false?' <span class="badge">停止中</span>':''}</div><div class="meta">${esc(p.category||'その他')} ・ 販売 ${yen(p.price||0)}${p.cost?` ・ 仕入 ${yen(p.cost)}`:''}</div>${p.description?`<div class="small" style="margin-top:6px">${esc(p.description)}</div>`:''}<div class="actions"><button class="soft" onclick="openProductLink('${p.id}')">仕入れ先</button><button class="ghost" onclick="copyProductLink('${p.id}')">URLコピー</button><button onclick="staffProductForm('${p.id}')">編集</button></div></div></div>`).join(''):'<div class="empty">扱いたい商品を自分で登録できます</div>';
+  $('retailHistory').innerHTML=state.retail.length?[...state.retail].sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<div class="item"><div class="t">${esc(x.product)} ${yen(x.amount)}</div><div class="s">${esc(x.date)} ・ ${Number(x.quantity||1)}点 ・ ${esc(x.customer||'顧客未指定')}${x.source==='customer-order'?' ・ お客様注文':''}</div>${x.source!=='customer-order'?`<button class="danger" style="margin-top:8px" onclick="deleteRetail('${x.id}')">削除</button>`:''}</div>`).join(''):'<div class="empty">販売履歴はありません</div>';
 }
+function renderStaffOrders(){
+  const host=$('staffOrderList');if(!host)return;
+  const labels={new:'未対応',ordered:'発注済み',ready:'入荷済み',completed:'お渡し済み',cancelled:'キャンセル'};
+  const rows=state.orders||[];
+  host.innerHTML=rows.length?rows.map(o=>{const items=(o.items||[]).filter(i=>String(i.sellerId||'')===String(state.profile.id));const deadline=addDaysISO(o.visit_date,-7);return `<div class="item"><div class="t">${esc(o.customer_name)} ・ ${esc(labels[o.status]||o.status)}</div><div class="s">受取 ${esc(o.visit_date)} ／ 発注目安 ${esc(deadline)}<br>${items.map(i=>`${esc(i.name)} × ${Number(i.quantity||1)}`).join('<br>')}<br>${yen(items.reduce((a,i)=>a+Number(i.price||0)*Number(i.quantity||1),0))}<br>連絡先：${esc(o.contact||'')}</div><div class="actions"><button class="soft" onclick="openOrderSupplier('${o.id}')">仕入れ先を開く</button><select onchange="updateStaffOrderStatus('${o.id}',this.value)">${Object.entries(labels).map(([k,v])=>`<option value="${k}" ${o.status===k?'selected':''}>${v}</option>`).join('')}</select></div></div>`}).join(''):'<div class="empty">商品注文はまだありません</div>';
+}
+function openOrderSupplier(orderId){
+  const o=(state.orders||[]).find(x=>x.id===orderId);if(!o)return;const item=(o.items||[]).find(i=>String(i.sellerId||'')===String(state.profile.id)&&i.supplierUrl);if(!item?.supplierUrl)return alert('仕入れ先URLがありません');window.open(item.supplierUrl,'_blank','noopener,noreferrer');
+}
+async function updateStaffOrderStatus(id,status){try{const r=await api({method:'POST',body:JSON.stringify({action:'updateOrderStatus',id,status})});applyState(r);renderAll();if(status==='completed')alert('お渡し済みにしました。店販売上へ反映しました');}catch(e){alert(e.message);loadData().catch(()=>{})}}
+function customerOrderUrl(){return new URL('order.html?staff='+encodeURIComponent(state.profile.id),location.href).href}
+async function copyCustomerOrderUrl(){const url=customerOrderUrl();try{await navigator.clipboard.writeText(url);alert('お客様用注文URLをコピーしました')}catch{prompt('お客様用注文URL',url)}}
+function openOrderNotificationSettings(){
+  modal(`<h3>商品注文のLINE通知</h3><div class="note">公式LINEに「連携ID」と送ると表示されるLINE連携IDを貼り付けてください。注文はLINE通知とアプリの両方に届きます。</div><label>LINE連携ID</label><input id="orderNotifyLineId" value="${esc(state.profile?.notifyLineUserId||'')}" placeholder="Uから始まるID"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveOrderNotificationSettings()">保存</button></div>`);
+}
+async function saveOrderNotificationSettings(){try{const r=await api({method:'POST',body:JSON.stringify({action:'updateOrderNotification',notifyLineUserId:$('orderNotifyLineId').value.trim()})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}}
 function staffProductForm(id=''){
-  const p=(state.profile?.retailCatalog||[]).find(x=>String(x.id)===String(id))||{name:'',url:'',price:0,category:'その他',active:true};
+  const p=(state.profile?.retailCatalog||[]).find(x=>String(x.id)===String(id))||{name:'',supplierUrl:'',price:0,cost:0,category:'その他',description:'',recommended:'',usage:'',active:true};
   modal(`<h3>${id?'商品を編集':'扱いたい商品を登録'}</h3>
-    <div class="note">商品候補は管理者側で用意しません。自分が扱いたい商品・EC・B happy等のリンクを自由に登録できます。</div>
+    <div class="note">お客様には商品説明と販売価格だけを表示。仕入れ先URL・仕入れ値は自分だけに表示されます。</div>
     <label>商品名</label><input id="spName" value="${esc(p.name||'')}" placeholder="例：リケラエマルジョン">
-    <label>商品リンク</label><input id="spUrl" type="url" value="${esc(p.url||'')}" placeholder="https://...">
-    <label>価格（任意）</label><input id="spPrice" type="number" min="0" value="${Number(p.price||0)}">
     <label>カテゴリ</label><input id="spCategory" value="${esc(p.category||'その他')}" placeholder="ミルク / オイル / ReFa など">
-    <label><input id="spActive" type="checkbox" style="width:auto" ${p.active===false?'':'checked'}> 使用中</label>
+    <label>商品説明</label><textarea id="spDescription" placeholder="どんな商品か">${esc(p.description||'')}</textarea>
+    <label>おすすめの人</label><textarea id="spRecommended" placeholder="こんな悩みの方におすすめ">${esc(p.recommended||'')}</textarea>
+    <label>使い方</label><textarea id="spUsage" placeholder="使用量・タイミングなど">${esc(p.usage||'')}</textarea>
+    <button class="ghost" style="width:100%;margin-bottom:10px" onclick="makeProductCopyDraft()">説明文のたたき台を作る</button>
+    <label>販売価格</label><input id="spPrice" type="number" min="0" value="${Number(p.price||0)}">
+    <label>仕入れ値</label><input id="spCost" type="number" min="0" value="${Number(p.cost||0)}">
+    <label>仕入れ先URL</label><input id="spUrl" type="url" value="${esc(p.supplierUrl||p.url||'')}" placeholder="https://...">
+    <label><input id="spActive" type="checkbox" style="width:auto" ${p.active===false?'':'checked'}> お客様の注文ページに掲載</label>
     <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveStaffProduct('${id}')">保存</button></div>
     ${id?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteStaffProduct('${id}')">商品を削除</button>`:''}`);
 }
+function makeProductCopyDraft(){
+  const name=$('spName').value.trim(),cat=$('spCategory').value.trim()||'ヘアケア';if(!name)return alert('先に商品名を入力してください');
+  if(!$('spDescription').value.trim())$('spDescription').value=`${name}は、毎日のホームケアに取り入れやすい${cat}アイテムです。髪の状態や仕上がりの好みに合わせてご提案します。`;
+  if(!$('spRecommended').value.trim())$('spRecommended').value='サロン帰りの質感をできるだけ長く保ちたい方、毎日のケアを見直したい方におすすめです。';
+  if(!$('spUsage').value.trim())$('spUsage').value='使用量やタイミングは髪質・長さに合わせて調整してください。ご来店時にも使い方をご説明します。';
+}
 async function saveStaffProduct(id=''){
-  const product={id,name:$('spName').value.trim(),url:$('spUrl').value.trim(),price:Number($('spPrice').value)||0,category:$('spCategory').value.trim()||'その他',active:$('spActive').checked};
+  const product={id,name:$('spName').value.trim(),supplierUrl:$('spUrl').value.trim(),price:Number($('spPrice').value)||0,cost:Number($('spCost').value)||0,category:$('spCategory').value.trim()||'その他',description:$('spDescription').value.trim(),recommended:$('spRecommended').value.trim(),usage:$('spUsage').value.trim(),active:$('spActive').checked};
   try{const r=await api({method:'POST',body:JSON.stringify({action:'upsertStaffProduct',product})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
 }
 async function deleteStaffProduct(id){
@@ -554,12 +588,12 @@ async function deleteStaffProduct(id){
   try{const r=await api({method:'POST',body:JSON.stringify({action:'deleteStaffProduct',id})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
 }
 function openProductLink(id){
-  const p=(state.profile?.retailCatalog||[]).find(x=>String(x.id)===String(id));if(!p?.url)return;
-  window.open(p.url,'_blank','noopener,noreferrer');
+  const p=(state.profile?.retailCatalog||[]).find(x=>String(x.id)===String(id));const url=p?.supplierUrl||p?.url;if(!url)return;
+  window.open(url,'_blank','noopener,noreferrer');
 }
 async function copyProductLink(id){
-  const p=(state.profile?.retailCatalog||[]).find(x=>String(x.id)===String(id));if(!p?.url)return;
-  try{await navigator.clipboard.writeText(p.url);alert('商品リンクをコピーしました')}catch{prompt('商品リンク',p.url)}
+  const p=(state.profile?.retailCatalog||[]).find(x=>String(x.id)===String(id));const url=p?.supplierUrl||p?.url;if(!url)return;
+  try{await navigator.clipboard.writeText(url);alert('仕入れ先URLをコピーしました')}catch{prompt('仕入れ先URL',url)}
 }
 function retailSaleForm(){
   const products=selectedProducts();if(!products.length)return alert('先に「扱いたい商品・リンクを登録」から商品を登録してください');
