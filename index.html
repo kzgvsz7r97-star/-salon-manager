@@ -4412,15 +4412,7 @@ function openOrderSettings(){
     <button class="ghost" style="width:100%;margin-top:8px" onclick="shareOrderPage()">お客様用URLをコピー</button>
     <p id="publishStatus" role="status" class="small"></p><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button></div>`);
 }
-async function publishCatalog(){
-  const line=$('orderLine').value.trim(),lineId=$('ownerNotifyLineId').value.trim();
-  if(line&&!safeHTTPS(line))return alert('公式LINEは https:// から始まるURLを入力してください');
-  if(lineId&&!/^U[0-9a-f]{32}$/i.test(lineId))return alert('LINE連携IDを確認してください');
-  const owner=ownerStaff();if(owner)owner.notifyLineUserId=lineId;
-  db.orderSettings={...db.orderSettings,lineUrl:line};save();
-  const key=getCloudBackupKey();if(!key)return;$('publishStatus').textContent='公開中…';
-  try{
-    const category:text(
+const category:text(
   p.category||'その他',
   80
 )||'その他',
@@ -4431,11 +4423,6 @@ concern:text(
 ),
 
 price:Number(p.price||0),
-    const r=await fetch(CATALOG_API,{method:'POST',headers:{'Content-Type':'application/json','X-Backup-Key':key},body:JSON.stringify({products,settings:{lineUrl:line,bHappyUrl:''}})});const body=await r.json();if(!r.ok)throw new Error(body.error||'公開に失敗');
-    await cloudBackup(key);
-    $('publishStatus').textContent='商品を公開しました。注文が入るとアプリに保存され、LINE通知設定済みならLINEにも届きます。';
-  }catch(e){$('publishStatus').textContent='公開できませんでした。注文用APIと保存先の設定を確認してください。';}
-}
 async function shareOrderPage(){const url=new URL('order.html',location.href).href;try{await navigator.clipboard.writeText(url);alert('お客様用URLをコピーしました');}catch{prompt('このURLをお客様に共有',url);}}
 async function refreshOrders(manual=false){
   const key=localStorage.getItem(CLOUD_BACKUP_KEY_STORAGE);if(!key){if(manual){getCloudBackupKey();return refreshOrders(false);}return;}
