@@ -557,57 +557,613 @@ function openOrderNotificationSettings(){
 }
 async function saveOrderNotificationSettings(){try{const r=await api({method:'POST',body:JSON.stringify({action:'updateOrderNotification',notifyLineUserId:$('orderNotifyLineId').value.trim()})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}}
 function staffProductForm(id=''){
-  const p=(state.profile?.retailCatalog||[]).find(x=>String(x.id)===String(id))||{name:'',supplierUrl:'',price:0,cost:0,category:'その他',description:'',recommended:'',usage:'',active:true};
-  modal(`<h3>${id?'商品を編集':'扱いたい商品を登録'}</h3>
-    <div class="note">お客様には商品説明と販売価格だけを表示。仕入れ先URL・仕入れ値は自分だけに表示されます。</div>
-    <label>商品名</label><input id="spName" value="${esc(p.name||'')}" placeholder="例：リケラエマルジョン">
-    <label>カテゴリ</label><input id="spCategory" value="${esc(p.category||'その他')}" placeholder="ミルク / オイル / ReFa など">
-    <label>商品説明</label><textarea id="spDescription" placeholder="どんな商品か">${esc(p.description||'')}</textarea>
-    <label>おすすめの人</label><textarea id="spRecommended" placeholder="こんな悩みの方におすすめ">${esc(p.recommended||'')}</textarea>
-    <label>使い方</label><textarea id="spUsage" placeholder="使用量・タイミングなど">${esc(p.usage||'')}</textarea>
-    <button class="ghost" style="width:100%;margin-bottom:10px" onclick="makeProductCopyDraft()">説明文のたたき台を作る</button>
-    <label>販売価格</label><input id="spPrice" type="number" min="0" value="${Number(p.price||0)}">
-    <label>仕入れ値</label><input id="spCost" type="number" min="0" value="${Number(p.cost||0)}">
-    <label>仕入れ先URL</label><input id="spUrl" type="url" value="${esc(p.supplierUrl||p.url||'')}" placeholder="https://...">
-    <label><input id="spActive" type="checkbox" style="width:auto" ${p.active===false?'':'checked'}> お客様の注文ページに掲載</label>
-    <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveStaffProduct('${id}')">保存</button></div>
-    ${id?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteStaffProduct('${id}')">商品を削除</button>`:''}`);
-}
-function makeProductCopyDraft(){
-  const name=$('spName').value.trim(),cat=$('spCategory').value.trim()||'ヘアケア';if(!name)return alert('先に商品名を入力してください');
-  if(!$('spDescription').value.trim())$('spDescription').value=`${name}は、毎日のホームケアに取り入れやすい${cat}アイテムです。髪の状態や仕上がりの好みに合わせてご提案します。`;
-  if(!$('spRecommended').value.trim())$('spRecommended').value='サロン帰りの質感をできるだけ長く保ちたい方、毎日のケアを見直したい方におすすめです。';
-  if(!$('spUsage').value.trim())$('spUsage').value='使用量やタイミングは髪質・長さに合わせて調整してください。ご来店時にも使い方をご説明します。';
-}
-async function saveStaffProduct(id=''){
-  const product={id,name:$('spName').value.trim(),supplierUrl:$('spUrl').value.trim(),price:Number($('spPrice').value)||0,cost:Number($('spCost').value)||0,category:$('spCategory').value.trim()||'その他',description:$('spDescription').value.trim(),recommended:$('spRecommended').value.trim(),usage:$('spUsage').value.trim(),active:$('spActive').checked};
-  try{const r=await api({method:'POST',body:JSON.stringify({action:'upsertStaffProduct',product})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
-}
-async function deleteStaffProduct(id){
-  if(!confirm('この商品を削除しますか？\\n過去の販売履歴は残ります。'))return;
-  try{const r=await api({method:'POST',body:JSON.stringify({action:'deleteStaffProduct',id})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
-}
-function openProductLink(id){
-  const p=(state.profile?.retailCatalog||[]).find(x=>String(x.id)===String(id));const url=p?.supplierUrl||p?.url;if(!url)return;
-  window.open(url,'_blank','noopener,noreferrer');
-}
-async function copyProductLink(id){
-  const p=(state.profile?.retailCatalog||[]).find(x=>String(x.id)===String(id));const url=p?.supplierUrl||p?.url;if(!url)return;
-  try{await navigator.clipboard.writeText(url);alert('仕入れ先URLをコピーしました')}catch{prompt('仕入れ先URL',url)}
-}
-function retailSaleForm(){
-  const products=selectedProducts();if(!products.length)return alert('先に「扱いたい商品・リンクを登録」から商品を登録してください');
-  modal(`<h3>店販を記録</h3><label>日付</label><input id="rDate" type="date" value="${todayISO}"><label>商品</label><select id="rProduct" onchange="updateRetailAmount()">${products.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select><label>数量</label><input id="rQty" type="number" min="1" value="1" oninput="updateRetailAmount()"><label>顧客名</label><input id="rCustomer"><label>金額（合計）</label><input id="rAmount" type="number" value="${Number(products[0]?.price||0)}"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveRetailSale()">保存</button></div>`);
-}
-function updateRetailAmount(){const p=state.products.find(x=>String(x.id)===$('rProduct').value);$('rAmount').value=Number(p?.price||0)*Number($('rQty').value||1)}
-async function saveRetailSale(){
-  try{const r=await api({method:'POST',body:JSON.stringify({action:'addRetail',retail:{date:$('rDate').value,productId:$('rProduct').value,quantity:Number($('rQty').value)||1,customer:$('rCustomer').value,amount:Number($('rAmount').value)||0}})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
-}
-async function deleteRetail(id){
-  if(!confirm('この店販履歴を削除しますか？'))return;
-  try{const r=await api({method:'POST',body:JSON.stringify({action:'deleteRetail',id})});applyState(r);renderAll()}catch(e){alert(e.message)}
+function staffProductForm(id=''){
+  const p=
+    (state.profile?.retailCatalog||[])
+      .find(
+        x=>String(x.id)===String(id)
+      )
+    ||{
+      name:'',
+      officialUrl:'',
+      supplierUrl:'',
+      price:0,
+      cost:0,
+      category:'その他',
+      description:'',
+      recommended:'',
+      usage:'',
+      active:true
+    };
+
+  modal(`
+    <h3>
+      ${id?'商品を編集':'扱いたい商品を登録'}
+    </h3>
+
+    <div class="note">
+      公式商品HPのURLを貼ると、
+      商品ごとに説明文・おすすめ・使い方を作れます。
+      仕入れ先URL・仕入れ値はお客様には表示されません。
+    </div>
+
+    <label>商品名</label>
+    <input
+      id="spName"
+      value="${esc(p.name||'')}"
+      placeholder="例：リケラエマルジョン"
+    >
+
+    <label>カテゴリ</label>
+    <input
+      id="spCategory"
+      value="${esc(p.category||'その他')}"
+      placeholder="ミルク / オイル / ReFa など"
+    >
+
+    <label>公式商品HP URL</label>
+    <input
+      id="spOfficialUrl"
+      type="url"
+      value="${esc(p.officialUrl||'')}"
+      placeholder="https://..."
+    >
+
+    <button
+      id="spCopyBtn"
+      type="button"
+      class="blue"
+      style="width:100%;margin-bottom:8px"
+      onclick="makeProductCopyFromHP()"
+    >
+      HPから説明文を作る
+    </button>
+
+    <div
+      id="spCopyStatus"
+      class="small"
+      style="margin-bottom:10px"
+    ></div>
+
+    <label>商品説明</label>
+    <textarea
+      id="spDescription"
+      placeholder="どんな商品か"
+    >${esc(p.description||'')}</textarea>
+
+    <label>おすすめの人</label>
+    <textarea
+      id="spRecommended"
+      placeholder="こんな悩みの方におすすめ"
+    >${esc(p.recommended||'')}</textarea>
+
+    <label>使い方</label>
+    <textarea
+      id="spUsage"
+      placeholder="使用量・タイミングなど"
+    >${esc(p.usage||'')}</textarea>
+
+    <label>販売価格</label>
+    <input
+      id="spPrice"
+      type="number"
+      min="0"
+      value="${Number(p.price||0)}"
+    >
+
+    <label>仕入れ値</label>
+    <input
+      id="spCost"
+      type="number"
+      min="0"
+      value="${Number(p.cost||0)}"
+    >
+
+    <label>仕入れ先URL</label>
+    <input
+      id="spUrl"
+      type="url"
+      value="${esc(p.supplierUrl||p.url||'')}"
+      placeholder="https://..."
+    >
+
+    <label>
+      <input
+        id="spActive"
+        type="checkbox"
+        style="width:auto"
+        ${p.active===false?'':'checked'}
+      >
+      お客様の注文ページに掲載
+    </label>
+
+    <div class="actions">
+      <button
+        class="ghost"
+        onclick="closeModal()"
+      >
+        閉じる
+      </button>
+
+      <button
+        onclick="saveStaffProduct('${id}')"
+      >
+        保存
+      </button>
+    </div>
+
+    ${
+      id
+        ?`
+          <button
+            class="danger"
+            style="width:100%;margin-top:8px"
+            onclick="deleteStaffProduct('${id}')"
+          >
+            商品を削除
+          </button>
+        `
+        :''
+    }
+  `);
 }
 
+async function makeProductCopyFromHP(){
+
+  const url=
+    $('spOfficialUrl')
+      .value
+      .trim();
+
+  if(!url){
+    return alert(
+      '公式商品HPのURLを貼ってください'
+    );
+  }
+
+  if(!/^https:\/\//i.test(url)){
+    return alert(
+      'https:// から始まるURLを入力してください'
+    );
+  }
+
+  const button=
+    $('spCopyBtn');
+
+  const status=
+    $('spCopyStatus');
+
+  button.disabled=true;
+  button.textContent='HPを読み込み中…';
+
+  status.textContent=
+    '公式商品情報を確認しています…';
+
+  try{
+
+    const r=
+      await fetch(
+        'https://salon-manager-kzgvsz7r97-star.vercel.app/api/product-copy',
+        {
+          method:'POST',
+
+          headers:{
+            'Content-Type':
+              'application/json'
+          },
+
+          body:
+            JSON.stringify({
+              url
+            })
+        }
+      );
+
+    const b=
+      await r.json()
+        .catch(
+          ()=>({})
+        );
+
+    if(!r.ok){
+      throw new Error(
+        b.error||
+        '商品HPを読み込めませんでした'
+      );
+    }
+
+    if(
+      !$('spName')
+        .value
+        .trim()
+      &&
+      b.title
+    ){
+      $('spName').value=
+        b.title;
+    }
+
+    $('spDescription').value=
+      b.description||'';
+
+    $('spRecommended').value=
+      b.recommended||'';
+
+    $('spUsage').value=
+      b.usage||'';
+
+    status.textContent=
+      '説明文を作成しました。内容を確認して保存してください。';
+
+  }catch(e){
+
+    status.textContent=
+      e.message||
+      '商品HPを読み込めませんでした';
+
+  }finally{
+
+    button.disabled=false;
+
+    button.textContent=
+      'HPから説明文を作る';
+  }
+}
+
+async function saveStaffProduct(id=''){
+
+  const product={
+
+    id,
+
+    name:
+      $('spName')
+        .value
+        .trim(),
+
+    officialUrl:
+      $('spOfficialUrl')
+        .value
+        .trim(),
+
+    supplierUrl:
+      $('spUrl')
+        .value
+        .trim(),
+
+    price:
+      Number(
+        $('spPrice').value
+      )||0,
+
+    cost:
+      Number(
+        $('spCost').value
+      )||0,
+
+    category:
+      $('spCategory')
+        .value
+        .trim()
+      ||'その他',
+
+    description:
+      $('spDescription')
+        .value
+        .trim(),
+
+    recommended:
+      $('spRecommended')
+        .value
+        .trim(),
+
+    usage:
+      $('spUsage')
+        .value
+        .trim(),
+
+    active:
+      $('spActive').checked
+  };
+
+  try{
+
+    const r=
+      await api({
+        method:'POST',
+
+        body:
+          JSON.stringify({
+            action:
+              'upsertStaffProduct',
+            product
+          })
+      });
+
+    applyState(r);
+
+    closeModal();
+
+    renderAll();
+
+  }catch(e){
+
+    alert(e.message);
+  }
+}
+
+async function deleteStaffProduct(id){
+
+  if(
+    !confirm(
+      'この商品を削除しますか？\n過去の販売履歴は残ります。'
+    )
+  ){
+    return;
+  }
+
+  try{
+
+    const r=
+      await api({
+        method:'POST',
+
+        body:
+          JSON.stringify({
+            action:
+              'deleteStaffProduct',
+            id
+          })
+      });
+
+    applyState(r);
+
+    closeModal();
+
+    renderAll();
+
+  }catch(e){
+
+    alert(e.message);
+  }
+}
+
+function openProductLink(id){
+
+  const p=
+    (state.profile?.retailCatalog||[])
+      .find(
+        x=>
+          String(x.id)===
+          String(id)
+      );
+
+  const url=
+    p?.supplierUrl||
+    p?.url;
+
+  if(!url)return;
+
+  window.open(
+    url,
+    '_blank',
+    'noopener,noreferrer'
+  );
+}
+
+async function copyProductLink(id){
+
+  const p=
+    (state.profile?.retailCatalog||[])
+      .find(
+        x=>
+          String(x.id)===
+          String(id)
+      );
+
+  const url=
+    p?.supplierUrl||
+    p?.url;
+
+  if(!url)return;
+
+  try{
+
+    await navigator
+      .clipboard
+      .writeText(url);
+
+    alert(
+      '仕入れ先URLをコピーしました'
+    );
+
+  }catch{
+
+    prompt(
+      '仕入れ先URL',
+      url
+    );
+  }
+}
+
+function retailSaleForm(){
+
+  const products=
+    selectedProducts();
+
+  if(!products.length){
+
+    return alert(
+      '先に「扱いたい商品を登録」から商品を登録してください'
+    );
+  }
+
+  modal(`
+    <h3>店販を記録</h3>
+
+    <label>日付</label>
+    <input
+      id="rDate"
+      type="date"
+      value="${todayISO}"
+    >
+
+    <label>商品</label>
+    <select
+      id="rProduct"
+      onchange="updateRetailAmount()"
+    >
+      ${
+        products
+          .map(
+            p=>`
+              <option value="${esc(p.id)}">
+                ${esc(p.name)}
+              </option>
+            `
+          )
+          .join('')
+      }
+    </select>
+
+    <label>数量</label>
+    <input
+      id="rQty"
+      type="number"
+      min="1"
+      value="1"
+      oninput="updateRetailAmount()"
+    >
+
+    <label>顧客名</label>
+    <input id="rCustomer">
+
+    <label>金額（合計）</label>
+    <input
+      id="rAmount"
+      type="number"
+      value="${Number(products[0]?.price||0)}"
+    >
+
+    <div class="actions">
+      <button
+        class="ghost"
+        onclick="closeModal()"
+      >
+        閉じる
+      </button>
+
+      <button
+        onclick="saveRetailSale()"
+      >
+        保存
+      </button>
+    </div>
+  `);
+}
+
+function updateRetailAmount(){
+
+  const p=
+    selectedProducts()
+      .find(
+        x=>
+          String(x.id)===
+          String(
+            $('rProduct').value
+          )
+      );
+
+  $('rAmount').value=
+    Number(p?.price||0)
+    *
+    Number(
+      $('rQty').value||1
+    );
+}
+
+async function saveRetailSale(){
+
+  try{
+
+    const r=
+      await api({
+        method:'POST',
+
+        body:
+          JSON.stringify({
+
+            action:
+              'addRetail',
+
+            retail:{
+
+              date:
+                $('rDate').value,
+
+              productId:
+                $('rProduct').value,
+
+              quantity:
+                Number(
+                  $('rQty').value
+                )||1,
+
+              customer:
+                $('rCustomer').value,
+
+              amount:
+                Number(
+                  $('rAmount').value
+                )||0
+            }
+          })
+      });
+
+    applyState(r);
+
+    closeModal();
+
+    renderAll();
+
+  }catch(e){
+
+    alert(e.message);
+  }
+}
+
+async function deleteRetail(id){
+
+  if(
+    !confirm(
+      'この店販履歴を削除しますか？'
+    )
+  ){
+    return;
+  }
+
+  try{
+
+    const r=
+      await api({
+        method:'POST',
+
+        body:
+          JSON.stringify({
+            action:'deleteRetail',
+            id
+          })
+      });
+
+    applyState(r);
+
+    renderAll();
+
+  }catch(e){
+
+    alert(e.message);
+  }
+}
 function openStaffPreferences(){
   const selected=new Set(state.profile?.sources||[]);
   const custom=(state.profile?.sources||[]).filter(x=>!SOURCE_CHOICES.includes(x));
