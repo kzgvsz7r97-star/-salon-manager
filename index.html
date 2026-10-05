@@ -166,6 +166,41 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
 .follow-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.follow-actions .wide{grid-column:1/-1}
 @media(max-width:420px){.follow-actions{grid-template-columns:1fr}.follow-actions .wide{grid-column:auto}}
 
+.undo-toast{
+  position:fixed;
+  left:50%;
+  bottom:86px;
+  transform:translateX(-50%);
+  width:min(430px,calc(100% - 24px));
+  z-index:9999;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  background:#111;
+  color:#fff;
+  border-radius:15px;
+  padding:12px 12px 12px 14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.22);
+}
+.undo-toast.hidden{display:none}
+.undo-toast .undo-message{
+  flex:1;
+  min-width:0;
+  font-size:13px;
+  font-weight:750;
+  line-height:1.35;
+}
+.undo-toast button{
+  width:auto;
+  flex:0 0 auto;
+  background:#fff;
+  color:#111;
+  border:0;
+  padding:9px 12px;
+  border-radius:10px;
+  font-weight:850;
+}
+
 </style>
 </head>
 <body>
@@ -344,6 +379,11 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
 </nav>
 
 <div id="modal" class="modal hidden" onclick="if(event.target===this)closeModal()"><div class="sheet" id="sheet"></div></div>
+
+<div id="undoToast" class="undo-toast hidden" role="status" aria-live="polite">
+  <div id="undoMessage" class="undo-message"></div>
+  <button type="button" onclick="undoPendingDelete()">元に戻す</button>
+</div>
 
 <script>
 const KEY='salonManagerV2';
@@ -888,12 +928,14 @@ function scheduleCloudBackup(){
   const key=getCloudBackupKey();
   if(!key)return;
 
+  if(pendingUndoDelete)return;
+
   clearTimeout(cloudBackupTimer);
   cloudBackupTimer=setTimeout(()=>cloudBackup(key),900);
 }
 
 async function cloudBackup(key=getCloudBackupKey()){
-  if(!key||cloudSyncBusy)return false;
+  if(!key||cloudSyncBusy||pendingUndoDelete)return false;
 
   cloudSyncBusy=true;
   syncStatus('変更を安全に同期中…');
@@ -924,6 +966,10 @@ async function cloudBackup(key=getCloudBackupKey()){
 async function manualCloudSync(){
   const key=getCloudBackupKey();
   if(!key)return;
+
+  if(pendingUndoDelete){
+    return alert('削除の「元に戻す」が出ている間は、少し待ってから同期してください');
+  }
 
   if(cloudDirty||hasLocalChanges())await cloudBackup(key);
   else await syncFromCloud(true,key);
@@ -2659,10 +2705,176 @@ function markDeleted(kind,id){
   db.syncDeleted[kind] ||= {};
   db.syncDeleted[kind][String(id)]=Date.now();
 }
+
+let pendingUndoDelete=null;
+
+function hideUndoToast(){
+  const toast=$('undoToast');
+  if(toast)toast.classList.add('hidden');
+}
+
+function showUndoToast(message){
+  const toast=$('undoToast');
+  const text=$('undoMessage');
+  if(!toast||!text)return;
+  text.textContent=message;
+  toast.classList.remove('hidden');
+}
+
+function finalizePendingDelete(){
+  const pending=pendingUndoDelete;
+  if(!pending)return;
+
+  clearTimeout(pending.timer);
+
+  markDeleted(
+    pending.kind,
+    pending.item?.id
+  );
+
+  pendingUndoDelete=null;
+  hideUndoToast();
+
+  save();
+}
+
+function beginUndoableDelete({
+  kind,
+  listKey,
+  item,
+  index,
+  message
+}){
+  if(!item||!listKey)return;
+
+  if(pendingUndoDelete){
+    finalizePendingDelete();
+  }
+
+  const list=
+    Array.isArray(db[listKey])
+      ?db[listKey]
+      :[];
+
+  const safeIndex=
+    Number.isInteger(index)&&index>=0
+      ?index
+      :list.findIndex(x=>String(x.id)===String(item.id));
+
+  db[listKey]=
+    list.filter(
+      x=>String(x.id)!==String(item.id)
+    );
+
+  localStorage.setItem(
+    KEY,
+    JSON.stringify(db)
+  );
+
+  stampLocalSave('削除保留');
+  renderAll();
+  closeModal();
+
+  cloudDirty=true;
+
+  const timer=
+    setTimeout(
+      finalizePendingDelete,
+      7000
+    );
+
+  pendingUndoDelete={
+    kind,
+    listKey,
+    item:structuredClone(item),
+    index:safeIndex,
+    timer
+  };
+
+  showUndoToast(
+    message||'削除しました'
+  );
+}
+
+function undoPendingDelete(){
+  const pending=pendingUndoDelete;
+  if(!pending)return;
+
+  clearTimeout(pending.timer);
+
+  const list=
+    Array.isArray(db[pending.listKey])
+      ?db[pending.listKey]
+      :[];
+
+  const exists=
+    list.some(
+      x=>String(x.id)===String(pending.item?.id)
+    );
+
+  if(!exists){
+    const at=
+      Math.max(
+        0,
+        Math.min(
+          Number.isInteger(pending.index)
+            ?pending.index
+            :list.length,
+          list.length
+        )
+      );
+
+    list.splice(
+      at,
+      0,
+      structuredClone(pending.item)
+    );
+  }
+
+  if(
+    db.syncDeleted?.[pending.kind]&&
+    pending.item?.id
+  ){
+    delete db.syncDeleted[pending.kind][String(pending.item.id)];
+  }
+
+  pendingUndoDelete=null;
+  hideUndoToast();
+
+  localStorage.setItem(
+    KEY,
+    JSON.stringify(db)
+  );
+
+  stampLocalSave('元に戻す');
+  renderAll();
+
+  cloudDirty=true;
+  scheduleCloudBackup();
+}
 function deleteBooking(id){
-  markDeleted('bookings',id);
-  db.bookings=db.bookings.filter(x=>x.id!==id);
-  save();closeModal();
+  const item=
+    db.bookings.find(
+      x=>String(x.id)===String(id)
+    );
+
+  if(!item)return;
+
+  if(
+    !confirm(
+      `${item.customer||'この予約'}の予約を削除しますか？`
+    )
+  ){
+    return;
+  }
+
+  beginUndoableDelete({
+    kind:'bookings',
+    listKey:'bookings',
+    item,
+    index:db.bookings.findIndex(x=>String(x.id)===String(id)),
+    message:'予約を削除しました'
+  });
 }
 function upsertCustomerFromBooking(o){
   if(!o.customer)return;
@@ -2678,9 +2890,28 @@ function customerForm(x={}){
 function saveCustomer(id){const prev=db.customers.find(x=>x.id===id)||{};const o={...prev,id:id||uid(),name:$('cName').value.trim(),lastVisit:$('cLast').value,note:$('cNote').value,instagram:$('cInstagram').value.trim(),kana:$('cKana').value.trim()};if(!o.name)return;if(o.instagram&&!instagramURL(o.instagram)){alert('InstagramのプロフィールURLかユーザーネームを確認してください');return;}if(id)db.customers=db.customers.map(x=>x.id===id?o:x);else db.customers.push(o);save();closeModal()}
 function editCustomer(id){customerForm(db.customers.find(x=>x.id===id)||{})}
 function deleteCustomer(id){
-  markDeleted('customers',id);
-  db.customers=db.customers.filter(x=>x.id!==id);
-  save();closeModal();
+  const item=
+    db.customers.find(
+      x=>String(x.id)===String(id)
+    );
+
+  if(!item)return;
+
+  if(
+    !confirm(
+      `${item.name||'この顧客'}を削除しますか？`
+    )
+  ){
+    return;
+  }
+
+  beginUndoableDelete({
+    kind:'customers',
+    listKey:'customers',
+    item,
+    index:db.customers.findIndex(x=>String(x.id)===String(id)),
+    message:'顧客を削除しました'
+  });
 }
 function saleForm(){modal(`<h3>売上を追加</h3><div class="note" style="margin-bottom:10px">通常の技術売上は予約の料金から自動集計されます。ここは予約外の売上を記録したい時だけ使ってください。</div><label>日付</label><input id="sDate" type="date" value="${todayISO}"><label>顧客名</label><input id="sCustomer"><label>金額</label><input id="sAmount" type="number"><label>メニュー</label><input id="sMenu"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveSale()">保存</button></div>`)}
 function saveSale(){db.sales.push({id:uid(),date:$('sDate').value,customer:$('sCustomer').value.trim(),amount:+$('sAmount').value||0,menu:$('sMenu').value.trim()});const c=db.customers.find(x=>normalizeName(x.name)===normalizeName($('sCustomer').value));if(c)c.lastVisit=$('sDate').value;save();closeModal()}
@@ -3301,19 +3532,13 @@ function deleteProduct(i){
     return;
   }
 
-  markDeleted(
-    'products',
-    p.id
-  );
-
-  db.products.splice(
-    i,
-    1
-  );
-
-  save();
-
-  closeModal();
+  beginUndoableDelete({
+    kind:'products',
+    listKey:'products',
+    item:p,
+    index:i,
+    message:'商品を削除しました'
+  });
 }
 function retailSaleForm(){
   migrateExtras();const products=db.products;if(!products.length)return alert('商品を追加してください');
