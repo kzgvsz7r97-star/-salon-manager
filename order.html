@@ -1,35 +1,714 @@
-<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ヘアケア商品のお取り置き</title><style>
-*{box-sizing:border-box}body{margin:0;background:#f6f5f2;color:#222;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;line-height:1.6}main{max-width:560px;margin:0 auto;padding:32px 20px 60px}h1{font-size:25px;line-height:1.4;margin:12px 0}h2{font-size:19px;margin:26px 0 10px}.sub{font-size:14px;color:#666}.card{background:white;border:1px solid #e9e5dd;border-radius:18px;padding:18px;margin:12px 0}.product{display:flex;justify-content:space-between;gap:12px;align-items:center}.product label{flex:1;font-weight:600}.category{font-size:12px;color:#777}.price{font-size:14px;font-weight:400}.product select{width:74px}label{display:block;font-size:14px;margin:15px 0 6px}input,select,textarea,button,.button{font:inherit;border-radius:10px;min-height:46px;padding:10px 12px}input,select,textarea{width:100%;border:1px solid #d4d0c8;background:white}textarea{min-height:90px}button,.button{display:block;text-align:center;width:100%;border:0;background:#222;color:#fff;text-decoration:none;cursor:pointer;margin-top:14px}.secondary{background:#eee;color:#222}button:disabled{opacity:.55;cursor:wait}#status{font-size:14px;color:#8a3425}#total{font-size:22px;font-weight:700}.hidden{display:none}a{color:#222}#success{border:1px solid #aac8ac;background:#f2f9f1}.trap{position:absolute;left:-9999px}#products:empty:before{content:'商品を読み込んでいます…';color:#777}
-</style></head><body><main><div class="sub">KYO · HAIR CARE</div><h1>いつものヘアケアを、<br>次のご来店に。</h1><p class="sub">商品を選んでお取り置き。お支払いとお渡しはサロンで。<br>準備のため、ご来店の7日前までにご注文ください。</p><div id="loading" role="status" class="sub"></div><form id="orderForm"><h2>サロンで受け取る商品</h2><div id="products"></div><div id="external"></div><div class="card"><label for="name">お名前（予約時のお名前）</label><input id="name" autocomplete="name" maxlength="100" required><label for="contact">LINEのお名前 / 電話番号などの連絡先</label><input id="contact" maxlength="150" required><p class="sub">確認が必要な場合の連絡先をご記入ください。</p><label for="visit">ご来店・受取予定日</label><input id="visit" type="date" required><label for="note">ご要望（任意）</label><textarea id="note" maxlength="500"></textarea><div class="trap" aria-hidden="true"><label for="website">Website</label><input id="website" tabindex="-1" autocomplete="off"></div></div><div class="card"><span class="sub">お取り置き合計（税込）</span><div id="total">¥0</div><p class="sub">在庫・入荷を確認して、必要に応じてLINEでご連絡します。ご注文時点で入荷を保証するものではありません。</p><button id="submit" disabled>お取り置きを申し込む</button><p id="status" role="status"></p></div></form><div id="success" class="card hidden" role="status"></div><div id="lineLink"></div></main><script>
-const API_BASE='https://salon-manager-kzgvsz7r97-star.vercel.app/api';
-const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const yen=n=>'¥'+Number(n||0).toLocaleString('ja-JP');let catalog=[],settings={},orderId=crypto.randomUUID(),sending=false,lastMessage='';
-function httpsURL(v){try{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password?u.href:'';}catch{return '';}}
-function offsetDate(n){const now=new Date();const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);const d=new Date(parts+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
-$('visit').min=offsetDate(7);$('visit').max=offsetDate(180);
-function selectedItems(){return catalog.filter(p=>p.fulfillment==='salon').map(p=>({productId:p.id,quantity:Number($('qty-'+p.id)?.value||0)})).filter(i=>i.quantity>0);}
-function totalPrice(){return selectedItems().reduce((sum,i)=>sum+catalog.find(p=>p.id===i.productId).price*i.quantity,0);}
-function updateTotal(){$('total').textContent=yen(totalPrice());$('submit').disabled=sending||!selectedItems().length;}
-async function loadCatalog(){
-  try{const r=await fetch(API_BASE+'/catalog');const body=await r.json();if(!r.ok)throw new Error();catalog=body.products||[];settings=body.settings||{};
-    const local=catalog.filter(p=>p.fulfillment==='salon');$('products').innerHTML=local.length?local.map(p=>`<div class="card product"><label for="qty-${esc(p.id)}"><div class="category">${esc(p.category)}</div>${esc(p.name)}<div class="price">${yen(p.price)}（税込）</div></label><select id="qty-${esc(p.id)}" onchange="updateTotal()">${Array.from({length:11},(_,n)=>`<option value="${n}">${n}個</option>`).join('')}</select></div>`).join(''):'<div class="card sub">お取り置きできる商品は準備中です。公式LINEでご相談ください。</div>';
-    const external=catalog.filter(p=>p.fulfillment==='external');const general=httpsURL(settings.bHappyUrl);$('external').innerHTML=external.length||general?'<h2>ReFaの商品</h2><p class="sub">B happyから直接ご購入いただけます。</p>'+external.map(p=>`<div class="card"><b>${esc(p.name)}</b><a class="button secondary" href="${esc(httpsURL(p.externalUrl)||general)}" target="_blank" rel="noopener noreferrer">B happyで見る ↗</a></div>`).join('')+(general?`<a class="button secondary" href="${esc(general)}" target="_blank" rel="noopener noreferrer">ReFaの商品一覧 ↗</a>`:''):'';
-    const line=httpsURL(settings.lineUrl);if(line)$('lineLink').innerHTML=`<a class="button secondary" href="${esc(line)}" target="_blank" rel="noopener noreferrer">公式LINEで相談する</a>`;
-    $('loading').textContent='';updateTotal();
-  }catch{$('products').innerHTML='';$('loading').innerHTML='商品を読み込めませんでした。<button class="secondary" onclick="loadCatalog()">再読み込み</button>';$('submit').disabled=true;}
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ヘアケア商品のお取り置き</title>
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:#f6f5f2;
+  color:#222;
+  font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;
+  line-height:1.65
 }
-$('orderForm').addEventListener('submit',async e=>{
-  e.preventDefault();if(sending)return;const items=selectedItems();if(!items.length)return;
-  const payload={id:orderId,customerName:$('name').value.trim(),contact:$('contact').value.trim(),visitDate:$('visit').value,note:$('note').value.trim(),website:$('website').value,items,expectedTotal:totalPrice()};
-  if(!payload.customerName||!payload.contact||payload.visitDate<$('visit').min||payload.visitDate>$('visit').max){$('status').textContent='お名前・連絡先・受取予定日を確認してください。';return;}
-  sending=true;updateTotal();$('status').textContent='送信中…';
-  try{const r=await fetch(API_BASE+'/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const body=await r.json();if(!r.ok)throw new Error(body.error||'注文を保存できませんでした');
-    lastMessage=`商品お取り置きの確認\nお名前：${payload.customerName}\n受取予定：${payload.visitDate}\n${items.map(i=>catalog.find(p=>p.id===i.productId).name+' × '+i.quantity).join('\n')}\n合計：${yen(body.total)}\n受付番号：${body.orderId}`;
-    $('orderForm').classList.add('hidden');$('success').classList.remove('hidden');$('success').innerHTML=`<b>お取り置きの申し込みを受け付けました☺️</b><p>${esc(payload.customerName)} 様<br>受取予定：${esc(payload.visitDate)}<br>合計：${yen(body.total)}</p><p class="sub">受付番号 ${esc(body.orderId)}<br>公式LINEへ注文内容もお送りいただくと、お客様との確認がスムーズです。</p><button class="secondary" onclick="copyOrder()">LINEに送る注文内容をコピー</button>`;
-    $('success').scrollIntoView({behavior:'smooth'});
-  }catch(err){$('status').textContent=err.message||'送信できませんでした。再度お試しください。';}
-  finally{sending=false;updateTotal();}
-});
-async function copyOrder(){try{await navigator.clipboard.writeText(lastMessage);alert('コピーしました。公式LINEに貼り付けて送信できます。');}catch{prompt('注文内容をコピー',lastMessage);}}
+main{max-width:560px;margin:0 auto;padding:32px 20px 60px}
+h1{font-size:25px;line-height:1.4;margin:12px 0}
+h2{font-size:19px;margin:26px 0 10px}
+.sub{font-size:14px;color:#666}
+.card{
+  background:#fff;
+  border:1px solid #e9e5dd;
+  border-radius:18px;
+  padding:18px;
+  margin:12px 0
+}
+.product-head{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start
+}
+.product-main{flex:1}
+.name{font-weight:750;font-size:16px}
+.category{font-size:12px;color:#777}
+.price{font-size:15px;font-weight:650;margin-top:4px}
+.desc{font-size:13px;color:#555;margin-top:10px;white-space:pre-wrap}
+.detail{
+  font-size:12px;
+  color:#666;
+  background:#faf9f7;
+  border-radius:10px;
+  padding:10px;
+  margin-top:8px
+}
+.product select{width:78px;min-height:42px}
+label{display:block;font-size:14px;margin:15px 0 6px}
+input,select,textarea,button,.button{
+  font:inherit;
+  border-radius:10px;
+  min-height:46px;
+  padding:10px 12px
+}
+input,select,textarea{
+  width:100%;
+  border:1px solid #d4d0c8;
+  background:white
+}
+textarea{min-height:90px}
+button,.button{
+  display:block;
+  text-align:center;
+  width:100%;
+  border:0;
+  background:#222;
+  color:#fff;
+  text-decoration:none;
+  cursor:pointer;
+  margin-top:14px
+}
+.secondary{background:#eee;color:#222}
+button:disabled{opacity:.55;cursor:wait}
+#status{font-size:14px;color:#8a3425}
+#total{font-size:22px;font-weight:700}
+.hidden{display:none}
+a{color:#222}
+#success{border:1px solid #aac8ac;background:#f2f9f1}
+.trap{position:absolute;left:-9999px}
+#products:empty:before{
+  content:'商品を読み込んでいます…';
+  color:#777
+}
+.deadline{
+  background:#fff7e8;
+  border:1px solid #efd9a8;
+  border-radius:14px;
+  padding:12px 14px;
+  font-size:13px;
+  margin:14px 0
+}
+</style>
+</head>
+
+<body>
+<main>
+
+<div class="sub">HAIR CARE ORDER</div>
+
+<h1>
+いつものヘアケアを、<br>
+次のご来店に。
+</h1>
+
+<p id="sellerText" class="sub">
+商品を選んでお取り置き。お支払いとお渡しはサロンで。
+</p>
+
+<div class="deadline">
+<b>ご注文はご来店の7日前まで</b><br>
+注文後、担当者が確認して商品を発注します。
+</div>
+
+<div id="loading" role="status" class="sub"></div>
+
+<form id="orderForm">
+
+<h2>商品を選ぶ</h2>
+
+<div id="products"></div>
+<div id="external"></div>
+
+<div class="card">
+
+<label for="name">お名前（予約時のお名前）</label>
+<input
+  id="name"
+  autocomplete="name"
+  maxlength="100"
+  required
+>
+
+<label for="contact">
+LINEのお名前 / 電話番号などの連絡先
+</label>
+
+<input
+  id="contact"
+  maxlength="150"
+  required
+>
+
+<p class="sub">
+確認が必要な場合の連絡先をご記入ください。
+</p>
+
+<label for="visit">
+ご来店・受取予定日
+</label>
+
+<input
+  id="visit"
+  type="date"
+  required
+>
+
+<label for="note">
+ご要望（任意）
+</label>
+
+<textarea
+  id="note"
+  maxlength="500"
+></textarea>
+
+<div class="trap" aria-hidden="true">
+<label for="website">Website</label>
+<input
+  id="website"
+  tabindex="-1"
+  autocomplete="off"
+>
+</div>
+
+</div>
+
+<div class="card">
+
+<span class="sub">
+お取り置き合計（税込）
+</span>
+
+<div id="total">
+¥0
+</div>
+
+<p class="sub">
+注文後、担当者のSalon Managerに記録されます。
+必要に応じてLINE等で確認のご連絡をする場合があります。
+</p>
+
+<button
+  id="submit"
+  disabled
+>
+お取り置きを申し込む
+</button>
+
+<p id="status" role="status"></p>
+
+</div>
+
+</form>
+
+<div
+  id="success"
+  class="card hidden"
+  role="status"
+></div>
+
+<div id="lineLink"></div>
+
+</main>
+
+<script>
+
+const API_BASE=
+  'https://salon-manager-kzgvsz7r97-star.vercel.app/api';
+
+const params=
+  new URLSearchParams(location.search);
+
+const staffId=
+  (params.get('staff')||'').trim();
+
+const $=
+  id=>document.getElementById(id);
+
+const esc=
+  s=>String(s??'').replace(
+    /[&<>"']/g,
+    c=>({
+      '&':'&amp;',
+      '<':'&lt;',
+      '>':'&gt;',
+      '"':'&quot;',
+      "'":'&#39;'
+    }[c])
+  );
+
+const yen=
+  n=>'¥'+Number(n||0).toLocaleString('ja-JP');
+
+let catalog=[];
+let settings={};
+let seller=null;
+
+let orderId=
+  crypto.randomUUID();
+
+let sending=false;
+let lastMessage='';
+
+function httpsURL(v){
+  try{
+    const u=new URL(v);
+
+    return(
+      u.protocol==='https:'&&
+      !u.username&&
+      !u.password
+    )
+      ?u.href
+      :'';
+  }catch{
+    return '';
+  }
+}
+
+function offsetDate(n){
+
+  const now=new Date();
+
+  const parts=
+    new Intl.DateTimeFormat(
+      'en-CA',
+      {
+        timeZone:'Asia/Tokyo',
+        year:'numeric',
+        month:'2-digit',
+        day:'2-digit'
+      }
+    ).format(now);
+
+  const d=
+    new Date(parts+'T12:00:00Z');
+
+  d.setUTCDate(
+    d.getUTCDate()+n
+  );
+
+  return d
+    .toISOString()
+    .slice(0,10);
+}
+
+$('visit').min=
+  offsetDate(7);
+
+$('visit').max=
+  offsetDate(180);
+
+function selectedItems(){
+
+  return catalog
+    .filter(
+      p=>p.fulfillment!=='external'
+    )
+    .map(
+      p=>({
+        productId:p.id,
+        quantity:Number(
+          $('qty-'+p.id)?.value||0
+        )
+      })
+    )
+    .filter(
+      i=>i.quantity>0
+    );
+}
+
+function totalPrice(){
+
+  return selectedItems()
+    .reduce(
+      (sum,i)=>
+        sum+
+        (
+          catalog.find(
+            p=>p.id===i.productId
+          )?.price||0
+        )*
+        i.quantity,
+      0
+    );
+}
+
+function updateTotal(){
+
+  $('total').textContent=
+    yen(totalPrice());
+
+  $('submit').disabled=
+    sending||
+    !selectedItems().length;
+}
+
+function productDetails(p){
+
+  return `
+    ${
+      p.description
+        ?`<div class="desc">
+          ${esc(p.description)}
+        </div>`
+        :''
+    }
+
+    ${
+      p.recommended
+        ?`<div class="detail">
+          <b>おすすめ</b><br>
+          ${esc(p.recommended)}
+        </div>`
+        :''
+    }
+
+    ${
+      p.usage
+        ?`<div class="detail">
+          <b>使い方</b><br>
+          ${esc(p.usage)}
+        </div>`
+        :''
+    }
+  `;
+}
+
+function renderProducts(){
+
+  const salon=
+    catalog.filter(
+      p=>p.fulfillment!=='external'
+    );
+
+  const external=
+    catalog.filter(
+      p=>p.fulfillment==='external'
+    );
+
+  $('products').innerHTML=
+    salon.length
+      ?salon.map(
+        p=>`
+          <div class="card product">
+
+            <div class="product-head">
+
+              <div class="product-main">
+
+                <div class="name">
+                  ${esc(p.name)}
+                </div>
+
+                <div class="category">
+                  ${esc(p.category||'その他')}
+                </div>
+
+                <div class="price">
+                  ${yen(p.price)}
+                </div>
+
+              </div>
+
+              <select
+                id="qty-${esc(p.id)}"
+                aria-label="${esc(p.name)}の数量"
+                onchange="updateTotal()"
+              >
+                <option value="0">0</option>
+
+                ${
+                  [1,2,3,4,5]
+                    .map(
+                      n=>`
+                        <option value="${n}">
+                          ${n}
+                        </option>
+                      `
+                    )
+                    .join('')
+                }
+
+              </select>
+
+            </div>
+
+            ${productDetails(p)}
+
+          </div>
+        `
+      ).join('')
+      :`
+        <div class="card sub">
+          現在お取り置きできる商品はありません。
+        </div>
+      `;
+
+  $('external').innerHTML=
+    external.length
+      ?`
+        <h2>外部購入商品</h2>
+
+        ${
+          external.map(
+            p=>`
+              <div class="card">
+
+                <div class="name">
+                  ${esc(p.name)}
+                </div>
+
+                <div class="category">
+                  ${esc(p.category||'その他')}
+                </div>
+
+                ${productDetails(p)}
+
+                ${
+                  httpsURL(p.externalUrl)
+                    ?`
+                      <a
+                        class="button secondary"
+                        href="${esc(
+                          httpsURL(
+                            p.externalUrl
+                          )
+                        )}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        購入ページを開く
+                      </a>
+                    `
+                    :''
+                }
+
+              </div>
+            `
+          ).join('')
+        }
+      `
+      :'';
+
+  updateTotal();
+}
+
+async function loadCatalog(){
+
+  $('loading').textContent=
+    '商品を読み込んでいます…';
+
+  try{
+
+    const url=
+      staffId
+        ?`${API_BASE}/storefront?staff=${encodeURIComponent(staffId)}`
+        :`${API_BASE}/catalog`;
+
+    const r=
+      await fetch(
+        url,
+        {cache:'no-store'}
+      );
+
+    const b=
+      await r.json();
+
+    if(!r.ok)
+      throw new Error(
+        b.error||
+        '商品を読み込めませんでした'
+      );
+
+    seller=
+      b.seller||null;
+
+    catalog=
+      (b.products||[])
+        .map(
+          p=>({
+            ...p,
+            fulfillment:
+              p.fulfillment||'salon'
+          })
+        );
+
+    settings=
+      b.settings||{};
+
+    if(seller?.name){
+
+      $('sellerText').textContent=
+        `${seller.name}のお取り置き商品です。お支払いとお渡しはサロンで。`;
+
+    }
+
+    renderProducts();
+
+    if(
+      settings.lineUrl&&
+      httpsURL(settings.lineUrl)
+    ){
+
+      $('lineLink').innerHTML=`
+        <a
+          class="button secondary"
+          href="${esc(
+            httpsURL(
+              settings.lineUrl
+            )
+          )}"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          公式LINEで相談する
+        </a>
+      `;
+    }
+
+    $('loading').textContent='';
+
+  }catch(e){
+
+    $('loading').textContent=
+      e.message;
+
+    $('products').innerHTML='';
+
+  }
+}
+
+$('orderForm')
+  .addEventListener(
+    'submit',
+    async e=>{
+
+      e.preventDefault();
+
+      if(sending)return;
+
+      const items=
+        selectedItems();
+
+      if(!items.length)return;
+
+      const visit=
+        $('visit').value;
+
+      if(
+        !visit||
+        visit<offsetDate(7)
+      ){
+
+        return(
+          $('status').textContent=
+            '受取日は7日後以降を選んでください。'
+        );
+      }
+
+      sending=true;
+
+      updateTotal();
+
+      $('status').textContent=
+        '送信中…';
+
+      const payload={
+        id:orderId,
+        customerName:
+          $('name').value.trim(),
+        contact:
+          $('contact').value.trim(),
+        visitDate:visit,
+        note:
+          $('note').value.trim(),
+        website:
+          $('website').value,
+        items,
+        expectedTotal:
+          totalPrice(),
+        staffId
+      };
+
+      try{
+
+        const r=
+          await fetch(
+            `${API_BASE}/orders`,
+            {
+              method:'POST',
+              headers:{
+                'Content-Type':
+                  'application/json'
+              },
+              body:
+                JSON.stringify(
+                  payload
+                )
+            }
+          );
+
+        const b=
+          await r.json();
+
+        if(!r.ok)
+          throw new Error(
+            b.error||
+            '注文できませんでした'
+          );
+
+        $('orderForm')
+          .classList
+          .add('hidden');
+
+        $('success')
+          .classList
+          .remove('hidden');
+
+        $('success').innerHTML=`
+          <b>
+            お申し込みありがとうございます。
+          </b>
+
+          <br><br>
+
+          受取予定日：
+          ${esc(visit)}
+
+          <br>
+
+          合計：
+          ${yen(b.total)}
+
+          <br><br>
+
+          担当者に注文が届きました。
+          商品を発注して準備します。
+        `;
+
+        lastMessage='success';
+
+      }catch(err){
+
+        $('status').textContent=
+          err.message;
+
+        lastMessage=
+          err.message;
+
+      }finally{
+
+        sending=false;
+        updateTotal();
+
+      }
+    }
+  );
+
 loadCatalog();
-</script></body></html>
+
+</script>
+
+</body>
+</html>
