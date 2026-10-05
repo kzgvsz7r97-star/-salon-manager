@@ -107,6 +107,7 @@ function signSession(user){
   };
 
   const data=Buffer.from(JSON.stringify(payload)).toString('base64url');
+
   const sig=crypto
     .createHmac('sha256',sessionSecret())
     .update(data)
@@ -1128,6 +1129,69 @@ async function staffHandler(req,res,session){
           ...catalog,
           clean
         ];
+
+    state.staffProfiles=
+      (state.staffProfiles||[])
+        .map(
+          p=>
+            p.id===profile.id
+              ?{
+                ...p,
+                retailCatalog:
+                  profile.retailCatalog
+              }
+              :p
+        );
+
+    await writeState(state);
+
+    return res
+      .status(200)
+      .json({
+        ok:true,
+        ...await responseState(state,profile)
+      });
+  }
+
+  if(action==='reorderStaffProducts'){
+    const catalog=ownCatalog(profile);
+
+    const ids=
+      Array.isArray(b.ids)
+        ?b.ids.map(x=>String(x||'')).filter(Boolean)
+        :[];
+
+    const currentIds=
+      catalog.map(x=>String(x.id||''));
+
+    const valid=
+      ids.length===currentIds.length&&
+      new Set(ids).size===ids.length&&
+      currentIds.every(id=>ids.includes(id));
+
+    if(!valid){
+      return res
+        .status(400)
+        .json({
+          ok:false,
+          error:'商品順を確認してください'
+        });
+    }
+
+    const map=
+      new Map(
+        catalog.map(
+          p=>[
+            String(p.id),
+            p
+          ]
+        )
+      );
+
+    profile.retailCatalog=
+      ids
+        .map(id=>map.get(id))
+        .filter(Boolean);
 
     state.staffProfiles=
       (state.staffProfiles||[])
