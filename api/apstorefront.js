@@ -72,11 +72,16 @@ export default async function handler(req,res){
         ),
 
         category:text(
-          p.category||'その他',
-          80
-        )||'その他',
+  p.category||'その他',
+  80
+)||'その他',
 
-        price:Number(p.price||0),
+concern:text(
+  p.concern||'',
+  80
+),
+
+price:Number(p.price||0),
 
         fulfillment:'salon',
 
