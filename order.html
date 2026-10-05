@@ -1,149 +1,134 @@
-<!doctype html>
-<html lang="ja">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ヘアケア商品のお取り置き</title>
-<style>
-*{box-sizing:border-box}
-body{margin:0;background:#f6f5f2;color:#222;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;line-height:1.65}
-main{max-width:560px;margin:0 auto;padding:28px 18px 60px}
-h1{font-size:25px;line-height:1.4;margin:12px 0}h2{font-size:19px;margin:24px 0 10px}.sub{font-size:13px;color:#666}
-.card{background:#fff;border:1px solid #e9e5dd;border-radius:18px;padding:16px;margin:10px 0}
-.deadline{background:#fff7e8;border:1px solid #efd9a8;border-radius:14px;padding:12px 14px;font-size:13px;margin:14px 0}
-.category-tabs{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none;-webkit-overflow-scrolling:touch}.category-tabs::-webkit-scrollbar{display:none}
-.category-tab{flex:0 0 auto;width:auto;min-height:40px;margin:0;padding:8px 13px;border-radius:999px;background:#fff;color:#222;border:1px solid #ddd8cf;font-size:13px;font-weight:700;white-space:nowrap}
-.category-tab.active{background:#222;color:#fff;border-color:#222}.category-tab:disabled{opacity:.35}
-.product-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.product-main{flex:1;min-width:0}.name{font-weight:800;font-size:16px}.category{font-size:11px;color:#777}.price{font-size:15px;font-weight:700;margin-top:3px}
-.qty-wrap{width:78px}.product select{width:78px;min-height:42px;margin:0}
-.detail-toggle{width:auto;min-height:38px;margin:10px 0 0;padding:7px 10px;background:#f0efec;color:#222;border-radius:10px;font-size:12px;font-weight:700}
-.product-details{margin-top:10px;border-top:1px solid #eee8de;padding-top:10px}.desc{font-size:13px;color:#555;white-space:pre-wrap}.detail{font-size:12px;color:#666;background:#faf9f7;border-radius:10px;padding:10px;margin-top:8px;white-space:pre-wrap}
-label{display:block;font-size:14px;margin:15px 0 6px}input,select,textarea,button,.button{font:inherit;border-radius:10px;min-height:46px;padding:10px 12px}input,select,textarea{width:100%;border:1px solid #d4d0c8;background:#fff}textarea{min-height:90px}
-button,.button{display:block;text-align:center;width:100%;border:0;background:#222;color:#fff;text-decoration:none;cursor:pointer;margin-top:14px}.secondary{background:#eee;color:#222}button:disabled{opacity:.55;cursor:default}
-#status{font-size:14px;color:#8a3425}#total{font-size:22px;font-weight:700}.hidden{display:none!important}a{color:#222}#success{border:1px solid #aac8ac;background:#f2f9f1}.trap{position:absolute;left:-9999px}#products:empty:before{content:'商品を読み込んでいます…';color:#777}
-.empty-category{background:#fff;border:1px solid #e9e5dd;border-radius:16px;padding:20px;text-align:center;color:#777;font-size:13px}
-</style>
-</head>
-<body>
-<main>
-<div class="sub">HAIR CARE ORDER</div>
-<h1>いつものヘアケアを、<br>次のご来店に。</h1>
-<p id="sellerText" class="sub">商品を選んでお取り置き。お支払いとお渡しはサロンで。</p>
-<div class="deadline"><b>ご注文はご来店の7日前まで</b><br>注文後、担当者が確認して商品を発注します。</div>
-<div id="loading" role="status" class="sub"></div>
-<form id="orderForm">
-<h2>悩み・目的から選ぶ</h2>
-<div id="categoryTabs" class="category-tabs" aria-label="悩み・目的"></div>
-<div id="products"></div>
-<div id="external"></div>
-<div class="card">
-<label for="name">お名前（予約時のお名前）</label><input id="name" autocomplete="name" maxlength="100" required>
-<label for="contact">LINEのお名前 / 電話番号などの連絡先</label><input id="contact" maxlength="150" placeholder="LINE名 / 電話番号など">
-<p class="sub">連絡先を入力するか、下からLINEのQRコードを添付してください。</p>
-<label for="lineQrFile">LINE QRコード（任意）</label><input id="lineQrFile" type="file" accept="image/png,image/jpeg,image/webp" onchange="handleLineQr(event)">
-<img id="lineQrPreview" class="hidden" alt="LINE QRコードプレビュー" style="width:180px;max-width:100%;margin:12px auto 0;border-radius:14px;border:1px solid #e5e1da;display:block">
-<button id="removeLineQrButton" type="button" class="secondary hidden" onclick="removeLineQr()">QRコード画像を外す</button>
-<p class="sub">LINEの「マイQRコード」のスクショでOKです。</p>
-<label for="visit">ご来店・受取予定日</label><input id="visit" type="date" required>
-<label for="note">ご要望（任意）</label><textarea id="note" maxlength="500"></textarea>
-<div class="trap" aria-hidden="true"><label for="website">Website</label><input id="website" tabindex="-1" autocomplete="off"></div>
-</div>
-<div class="card"><span class="sub">お取り置き合計（税込）</span><div id="total">¥0</div><p class="sub">注文後、担当者のSalon Managerに記録されます。必要に応じてLINE等で確認のご連絡をする場合があります。</p><button id="submit" disabled>お取り置きを申し込む</button><p id="status" role="status"></p></div>
-</form>
-<div id="success" class="card hidden" role="status"></div>
-<div id="lineLink"></div>
-</main>
-<script>
-const API_BASE='https://salon-manager-kzgvsz7r97-star.vercel.app/api';
-const RETAIL_CONCERNS=['ダメージケア','くせ・広がり','乾燥・パサつき','スタイリング','コテ・アイロン'];
-const params=new URLSearchParams(location.search);
-const staffId=(params.get('staff')||'').trim();
-const $=id=>document.getElementById(id);
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const yen=n=>'¥'+Number(n||0).toLocaleString('ja-JP');
-let catalog=[];let settings={};let seller=null;let orderId=crypto.randomUUID();let sending=false;let lastMessage='';let lineQrData='';let activeConcern='ダメージケア';const quantities={};
+import crypto from 'crypto';
 
-function categoryForProduct(p){
-  const raw=`${p?.category||''} ${p?.name||''}`.normalize('NFKC').toLowerCase();
-  if(/シャンプー|shampoo/.test(raw))return 'シャンプー';
-  if(/トリートメント|treatment|ヘアマスク|マスク/.test(raw))return 'トリートメント';
-  if(/スプレー|spray|ミスト|mist/.test(raw))return 'スプレー';
-  if(/電子機器|リファ|refa|ドライヤー|dryer|アイロン|iron|コテ|カールアイロン|ストレートアイロン|ブラシ/.test(raw))return '電子機器';
-  return 'オイル';
+const ORIGINS=new Set([
+  'https://kzgvsz7r97-star.github.io',
+  'https://salon-manager-kzgvsz7r97-star.vercel.app'
+]);
+const DATE=/^\d{4}-\d{2}-\d{2}$/;
+const TIME=/^([01]\d|2[0-3]):[0-5]\d$/;
+const STATUS=new Set(['booked','visited','cancelled','noshow']);
+const BOOKING_TYPE=new Set(['','free','designated']);
+const ORDER_STATUS=new Set(['new','ordered','ready','completed','cancelled']);
+
+function cors(req,res){
+  const origin=req.headers.origin||'';
+  if(ORIGINS.has(origin))res.setHeader('Access-Control-Allow-Origin',origin);
+  res.setHeader('Vary','Origin');
+  res.setHeader('Cache-Control','no-store');
+  res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers','Content-Type, Authorization, X-Backup-Key');
 }
-function concernForProduct(p){
-  if(RETAIL_CONCERNS.includes(String(p?.concern||'')))return String(p.concern);
 
-  const raw=`${p?.name||''} ${p?.category||''} ${p?.description||''} ${p?.recommended||''}`.normalize('NFKC').toLowerCase();
-
-  if(/リファ|refa|クレイツ|create|ドライヤー|dryer|アイロン|iron|コテ|カールアイロン|ストレートアイロン|ブラシ/.test(raw))return 'コテ・アイロン';
-  if(/スプレー|spray|ミスト|mist|トリエ|スタイリング|キープ|hold|ワックス|wax|バーム|balm/.test(raw))return 'スタイリング';
-  if(/hita|ヒタ|くせ|クセ|うねり|広がり|まとまりにく|湿気/.test(raw))return 'くせ・広がり';
-  if(/オルキデ|orchid|乾燥|パサつき|保湿|うるおい|潤い|moisture/.test(raw))return '乾燥・パサつき';
-  if(/ファイバープレックス|fibreplex|リケラ|likera|ダメージ|補修|repair|ブリーチ|bleach|ボンド|bond/.test(raw))return 'ダメージケア';
-
-  const type=categoryForProduct(p);
-  if(type==='スプレー')return 'スタイリング';
-  if(type==='電子機器')return 'コテ・アイロン';
-  if(type==='オイル')return '乾燥・パサつき';
-  return 'ダメージケア';
+function body(req){
+  if(typeof req.body==='string'){
+    try{return JSON.parse(req.body);}catch{return {};}
+  }
+  return req.body||{};
 }
-function salonProducts(){return catalog.filter(p=>p.fulfillment!=='external')}
-function concernCount(concern){return salonProducts().filter(p=>concernForProduct(p)===concern).length}
-function setConcern(concern){activeConcern=concern;renderCategoryTabs();renderProducts()}
-function renderCategoryTabs(){
-  const host=$('categoryTabs');if(!host)return;
-  host.innerHTML=RETAIL_CONCERNS.map(concern=>`<button type="button" class="category-tab ${activeConcern===concern?'active':''}" onclick="setConcern('${concern}')">${concern}</button>`).join('');
+
+function admin(req){
+  return !!process.env.BACKUP_KEY&&req.headers['x-backup-key']===process.env.BACKUP_KEY;
 }
-function removeLineQr(){lineQrData='';const file=$('lineQrFile');if(file)file.value='';const preview=$('lineQrPreview');if(preview){preview.removeAttribute('src');preview.classList.add('hidden')}$('removeLineQrButton')?.classList.add('hidden')}
-async function handleLineQr(event){
-  const file=event.target.files?.[0];if(!file){removeLineQr();return}
-  if(!['image/png','image/jpeg','image/webp'].includes(file.type)){removeLineQr();return alert('PNG・JPEG・WebPの画像を選んでください')}
-  if(file.size>8*1024*1024){removeLineQr();return alert('画像は8MB以下にしてください')}
+
+async function rest(path,options={}){
+  if(!process.env.SUPABASE_URL||!process.env.SUPABASE_SECRET_KEY)
+    throw new Error('Storage is not configured');
+
+  const r=await fetch(process.env.SUPABASE_URL+'/rest/v1/'+path,{
+    ...options,
+    headers:{
+      'Content-Type':'application/json',
+      apikey:process.env.SUPABASE_SECRET_KEY,
+      Authorization:'Bearer '+process.env.SUPABASE_SECRET_KEY,
+      ...options.headers
+    }
+  });
+
+  const raw=await r.text();
+
+  if(!r.ok){
+    const e=new Error(raw||'Storage request failed');
+    e.status=r.status;
+    try{e.code=JSON.parse(raw).code;}catch{}
+    throw e;
+  }
+
+  return raw?JSON.parse(raw):null;
+}
+
+function normalizeUsername(v){
+  return String(v||'').trim().toLowerCase();
+}
+
+function validUsername(v){
+  return /^[a-z0-9._-]{3,40}$/.test(normalizeUsername(v));
+}
+
+function validPassword(v){
+  return typeof v==='string'&&v.length>=8&&v.length<=128;
+}
+
+function hashPassword(password){
+  const salt=crypto.randomBytes(16).toString('hex');
+  const hash=crypto.scryptSync(password,salt,32).toString('hex');
+  return `scrypt$${salt}$${hash}`;
+}
+
+function verifyPassword(password,stored){
   try{
-    const raw=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=reject;reader.readAsDataURL(file)});
-    const img=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=reject;image.src=raw});
-    const max=1000,scale=Math.min(1,max/Math.max(img.width,img.height));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.width*scale));canvas.height=Math.max(1,Math.round(img.height*scale));const ctx=canvas.getContext('2d');if(!ctx)throw new Error('canvas');ctx.drawImage(img,0,0,canvas.width,canvas.height);
-    let data=canvas.toDataURL('image/png');if(data.length>900000)data=canvas.toDataURL('image/jpeg',0.9);if(data.length>1200000){removeLineQr();return alert('QR画像をもう少し小さくして選び直してください')}
-    lineQrData=data;const preview=$('lineQrPreview');preview.src=data;preview.classList.remove('hidden');$('removeLineQrButton')?.classList.remove('hidden');
-  }catch(e){console.error(e);removeLineQr();alert('QR画像を読み込めませんでした')}
+    const [kind,salt,hex]=String(stored||'').split('$');
+    if(kind!=='scrypt'||!salt||!hex)return false;
+
+    const a=crypto.scryptSync(password,salt,32);
+    const b=Buffer.from(hex,'hex');
+
+    return a.length===b.length&&crypto.timingSafeEqual(a,b);
+  }catch{
+    return false;
+  }
 }
-function httpsURL(v){try{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password?u.href:''}catch{return ''}}
-function offsetDate(n){const now=new Date();const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);const d=new Date(parts+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
-$('visit').min=offsetDate(7);$('visit').max=offsetDate(180);
-function setQty(id,value){quantities[String(id)]=Math.max(0,Math.min(5,Number(value)||0));updateTotal()}
-function selectedItems(){return salonProducts().map(p=>({productId:p.id,quantity:Number(quantities[String(p.id)]||0)})).filter(i=>i.quantity>0)}
-function totalPrice(){return selectedItems().reduce((sum,i)=>sum+(catalog.find(p=>p.id===i.productId)?.price||0)*i.quantity,0)}
-function updateTotal(){$('total').textContent=yen(totalPrice());$('submit').disabled=sending||!selectedItems().length}
-function toggleProductDetails(id){const panel=$('details-'+id),button=$('detailbtn-'+id);if(!panel||!button)return;const opening=panel.classList.contains('hidden');panel.classList.toggle('hidden',!opening);button.textContent=opening?'閉じる ▲':'詳しく見る ▼'}
-function productDetails(p){
-  if(!p.description&&!p.recommended&&!p.usage)return '';
-  return `<button id="detailbtn-${esc(p.id)}" type="button" class="detail-toggle" onclick="toggleProductDetails('${esc(p.id)}')">詳しく見る ▼</button><div id="details-${esc(p.id)}" class="product-details hidden">${p.description?`<div class="desc">${esc(p.description)}</div>`:''}${p.recommended?`<div class="detail"><b>おすすめの人</b><br>${esc(p.recommended)}</div>`:''}${p.usage?`<div class="detail"><b>使い方</b><br>${esc(p.usage)}</div>`:''}</div>`;
+
+function sessionSecret(){
+  const root=process.env.SALON_SESSION_SECRET||process.env.SALON_APP_KEY;
+
+  if(!root)throw new Error('Session secret is not configured');
+
+  return crypto
+    .createHmac('sha256',root)
+    .update('salon-manager-staff-session-v1')
+    .digest();
 }
-function renderProducts(){
-  const salon=salonProducts();const current=salon.filter(p=>concernForProduct(p)===activeConcern);const external=catalog.filter(p=>p.fulfillment==='external');
-  $('products').innerHTML=current.length?current.map(p=>`<div class="card product"><div class="product-head"><div class="product-main"><div class="name">${esc(p.name)}</div><div class="category">${esc(categoryForProduct(p))}</div><div class="price">${yen(p.price)}</div></div><div class="qty-wrap"><select aria-label="${esc(p.name)}の数量" onchange="setQty('${esc(p.id)}',this.value)">${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${Number(quantities[String(p.id)]||0)===n?'selected':''}>${n}</option>`).join('')}</select></div></div>${productDetails(p)}</div>`).join(''):`<div class="empty-category">この悩み・目的の商品はまだありません。</div>`;
-  $('external').innerHTML=external.length?`<h2>外部購入商品</h2>${external.map(p=>`<div class="card"><div class="name">${esc(p.name)}</div><div class="category">${esc(categoryForProduct(p))}</div>${productDetails(p)}${httpsURL(p.externalUrl)?`<a class="button secondary" href="${esc(httpsURL(p.externalUrl))}" target="_blank" rel="noopener noreferrer">購入ページを開く</a>`:''}</div>`).join('')}`:'';
-  updateTotal();
+
+function signSession(user){
+  const payload={
+    sub:user.id,
+    staffId:user.staff_id,
+    exp:Math.floor(Date.now()/1000)+60*60*24*30
+  };
+
+  const data=Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig=crypto
+    .createHmac('sha256',sessionSecret())
+    .update(data)
+    .digest('base64url');
+
+  return data+'.'+sig;
 }
-async function loadCatalog(){
-  $('loading').textContent='商品を読み込んでいます…';
+
+function readSession(req){
+  const auth=String(req.headers.authorization||'');
+  const token=auth.startsWith('Bearer ')?auth.slice(7):'';
+  const parts=token.split('.');
+
+  if(parts.length!==2)return null;
+
   try{
-    const url=staffId?`${API_BASE}/apstorefront?staff=${encodeURIComponent(staffId)}`:`${API_BASE}/catalog`;const r=await fetch(url,{cache:'no-store'});const b=await r.json();if(!r.ok)throw new Error(b.error||'商品を読み込めませんでした');seller=b.seller||null;catalog=(b.products||[]).map(p=>({...p,fulfillment:p.fulfillment||'salon'}));settings=b.settings||{};
-    const firstAvailable=RETAIL_CONCERNS.find(concern=>concernCount(concern)>0);if(firstAvailable)activeConcern=firstAvailable;
-    if(seller?.name)$('sellerText').textContent=`${seller.name}のお取り置き商品です。お支払いとお渡しはサロンで。`;
-    renderCategoryTabs();renderProducts();
-    if(settings.lineUrl&&httpsURL(settings.lineUrl))$('lineLink').innerHTML=`<a class="button secondary" href="${esc(httpsURL(settings.lineUrl))}" target="_blank" rel="noopener noreferrer">公式LINEで相談する</a>`;
-    $('loading').textContent='';
-  }catch(e){$('loading').textContent=e.message;$('products').innerHTML=''}
-}
-$('orderForm').addEventListener('submit',async e=>{
-  e.preventDefault();if(sending)return;const items=selectedItems();if(!items.length)return;const visit=$('visit').value;if(!visit||visit<offsetDate(7)){$('status').textContent='受取日は7日後以降を選んでください。';return}
-  sending=true;updateTotal();$('status').textContent='送信中…';const contact=$('contact').value.trim();if(!contact&&!lineQrData){sending=false;updateTotal();$('status').textContent='連絡先を入力するか、LINEのQRコードを添付してください。';return}
-  const payload={id:orderId,customerName:$('name').value.trim(),contact,lineQr:lineQrData,visitDate:visit,note:$('note').value.trim(),website:$('website').value,items,expectedTotal:totalPrice(),staffId};
-  try{const r=await fetch(`${API_BASE}/orders`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const b=await r.json();if(!r.ok)throw new Error(b.error||'注文できませんでした');$('orderForm').classList.add('hidden');$('success').classList.remove('hidden');$('success').innerHTML=`<b>お申し込みありがとうございます。</b><br><br>受取予定日：${esc(visit)}<br>合計：${yen(b.total)}<br><br>担当者に注文が届きました。商品を発注して準備します。`;lastMessage='success'}catch(err){$('status').textContent=err.message;lastMessage=err.message}finally{sending=false;updateTotal()}
-});
-loadCatalog();
-</script>
-</body>
-</html>
+    const [data,sig]=parts;
+
+    const expected=crypto
+      .createHmac('sha256',sessionSecret())
+      .update(data)
+      .digest('base64url');
+
+    const a=Buffer.from(sig);
+    const b=Buffer.from
