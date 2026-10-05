@@ -178,6 +178,7 @@ button{border:0;background:#111;color:#fff;border-radius:12px;padding:12px 14px;
 const STAFF_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/staff';
 const TOKEN_KEY='salonManagerStaffToken';
 const SOURCE_CHOICES=['HOT PEPPER Beauty','楽天ビューティ','minimo','Nailie','OZmall','SHAiRE','Instagram','LINE','Google・自社予約','その他'];
+const RETAIL_CATEGORIES=['シャンプー','トリートメント','オイル','スプレー','電子機器'];
 const pad=n=>String(n).padStart(2,'0');
 const localISO=(d=new Date())=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const todayISO=localISO();
@@ -526,9 +527,41 @@ async function deleteSale(id){
   try{const r=await api({method:'POST',body:JSON.stringify({action:'deleteSale',id})});applyState(r);renderAll()}catch(e){alert(e.message)}
 }
 
+function canonicalStaffProductCategory(category,name=''){
+  const raw=`${category||''} ${name||''}`.normalize('NFKC').toLowerCase();
+  if(/シャンプー|shampoo/.test(raw))return 'シャンプー';
+  if(/トリートメント|treatment|ヘアマスク|マスク/.test(raw))return 'トリートメント';
+  if(/スプレー|spray|ミスト|mist/.test(raw))return 'スプレー';
+  if(/電子機器|リファ|refa|ドライヤー|dryer|アイロン|iron|コテ|カールアイロン|ストレートアイロン|ブラシ/.test(raw))return '電子機器';
+  return 'オイル';
+}
+
 function selectedProducts(){
   return (state.profile?.retailCatalog||[]).filter(p=>p.active!==false);
 }
+async function moveStaffProduct(id,dir){
+  const products=[...(state.profile?.retailCatalog||[])];
+  const i=products.findIndex(p=>String(p.id)===String(id));
+  const j=i+Number(dir||0);
+  if(i<0||j<0||j>=products.length)return;
+
+  [products[i],products[j]]=[products[j],products[i]];
+
+  try{
+    const r=await api({
+      method:'POST',
+      body:JSON.stringify({
+        action:'reorderStaffProducts',
+        ids:products.map(p=>String(p.id))
+      })
+    });
+    applyState(r);
+    renderAll();
+  }catch(e){
+    alert(e.message||'商品順を変更できませんでした');
+  }
+}
+
 function renderRetail(){
   if(!$('retailStats'))return;
   const m=monthString(viewMonth),rows=state.retail.filter(x=>monthKey(x.date)===m),sales=rows.reduce((a,x)=>a+Number(x.amount||0),0),qty=rows.reduce((a,x)=>a+Number(x.quantity||1),0);
@@ -537,9 +570,10 @@ function renderRetail(){
   $('orderNotifySetup').innerHTML=`<div class="card"><b>注文通知</b><div class="small" style="margin-top:5px">注文はアプリに保存され、${linked?'LINEにも通知されます。':'LINE通知はまだ未設定です。'}</div><button class="${linked?'ghost':'blue'}" style="width:100%;margin-top:8px" onclick="openOrderNotificationSettings()">${linked?'LINE通知設定を変更':'LINE通知を設定'}</button></div>`;
   renderStaffOrders();
   const products=state.profile?.retailCatalog||[];
-  $('retailProductList').innerHTML=products.length?products.map(p=>`<div class="product-row"><div class="main"><div class="name">${esc(p.name)}${p.active===false?' <span class="badge">停止中</span>':''}</div><div class="meta">${esc(p.category||'その他')} ・ 販売 ${yen(p.price||0)}${p.cost?` ・ 仕入 ${yen(p.cost)}`:''}</div>${p.description?`<div class="small" style="margin-top:6px">${esc(p.description)}</div>`:''}<div class="actions"><button class="soft" onclick="openProductLink('${p.id}')">仕入れ先</button><button class="ghost" onclick="copyProductLink('${p.id}')">URLコピー</button><button onclick="staffProductForm('${p.id}')">編集</button></div></div></div>`).join(''):'<div class="empty">扱いたい商品を自分で登録できます</div>';
+  $('retailProductList').innerHTML=products.length?products.map((p,i)=>`<div class="product-row"><div class="main"><div class="name">${esc(p.name)}${p.active===false?' <span class="badge">停止中</span>':''}</div><div class="meta">${esc(canonicalStaffProductCategory(p.category,p.name))} ・ 販売 ${yen(p.price||0)}${p.cost?` ・ 仕入 ${yen(p.cost)}`:''}</div>${p.description?`<div class="small" style="margin-top:6px">${esc(p.description)}</div>`:''}<div class="actions"><button class="ghost" onclick="moveStaffProduct('${p.id}',-1)" ${i===0?'disabled':''}>↑</button><button class="ghost" onclick="moveStaffProduct('${p.id}',1)" ${i===products.length-1?'disabled':''}>↓</button><button class="soft" onclick="openProductLink('${p.id}')">仕入れ先</button><button onclick="staffProductForm('${p.id}')">編集</button></div></div></div>`).join(''):'<div class="empty">扱いたい商品を自分で登録できます</div>';
   $('retailHistory').innerHTML=state.retail.length?[...state.retail].sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<div class="item"><div class="t">${esc(x.product)} ${yen(x.amount)}</div><div class="s">${esc(x.date)} ・ ${Number(x.quantity||1)}点 ・ ${esc(x.customer||'顧客未指定')}${x.source==='customer-order'?' ・ お客様注文':''}</div>${x.source!=='customer-order'?`<button class="danger" style="margin-top:8px" onclick="deleteRetail('${x.id}')">削除</button>`:''}</div>`).join(''):'<div class="empty">販売履歴はありません</div>';
 }
+
 function staffOrderLineQr(order){
   return (order?.items||[])
     .map(i=>String(i.customerLineQr||''))
@@ -732,7 +766,7 @@ function staffProductForm(id=''){
       supplierUrl:'',
       price:0,
       cost:0,
-      category:'その他',
+      category:'オイル',
       description:'',
       recommended:'',
       usage:'',
@@ -758,11 +792,9 @@ function staffProductForm(id=''){
     >
 
     <label>カテゴリ</label>
-    <input
-      id="spCategory"
-      value="${esc(p.category||'その他')}"
-      placeholder="ミルク / オイル / ReFa など"
-    >
+    <select id="spCategory">
+      ${RETAIL_CATEGORIES.map(c=>`<option value="${c}" ${canonicalStaffProductCategory(p.category,p.name)===c?'selected':''}>${c}</option>`).join('')}
+    </select>
 
     <label>公式商品HP URL</label>
     <input
@@ -1005,10 +1037,10 @@ async function saveStaffProduct(id=''){
       )||0,
 
     category:
-      $('spCategory')
-        .value
-        .trim()
-      ||'その他',
+      canonicalStaffProductCategory(
+        $('spCategory').value,
+        $('spName').value
+      ),
 
     description:
       $('spDescription')
