@@ -174,148 +174,311 @@ function unique(list){
 
 function makeCopy(text,title){
 
-  const source=
+  const productName=
+    String(title||'')
+      .split('|')[0]
+      .trim();
+
+  let source=
     (
-      String(title||'')+
+      productName+
       ' '+
       String(text||'')
     )
-    .toLowerCase();
+    .replace(/\s+/g,' ')
+    .trim();
+
+  // 商品名が本文内にあれば、その商品付近から読む
+  const productIndex=
+    source.indexOf(productName);
+
+  if(productName && productIndex>=0){
+    source=
+      source.slice(productIndex);
+  }
+
+  // 関連商品・ラインナップ以降を切って、
+  // 他商品の情報が混ざるのを防ぐ
+  const stopWords=[
+    ' ラインナップ ',
+    ' 関連商品 ',
+    ' RELATED PRODUCTS ',
+    ' RELATED ITEMS ',
+    ' RECOMMEND '
+  ];
+
+  let cut=
+    source.length;
+
+  stopWords.forEach(word=>{
+
+    const i=
+      source.indexOf(word,100);
+
+    if(i>=0 && i<cut){
+      cut=i;
+    }
+  });
+
+  source=
+    source
+      .slice(0,cut)
+      .slice(0,6000);
+
+  const lower=
+    source.toLowerCase();
 
   const description=[];
   const recommended=[];
   const usage=[];
 
+
+  // =========================
+  // スプレー
+  // =========================
+
   if(
-    /補修|ダメージ|ケラチン|cmc|タンパク|protein|repair/
-      .test(source)
+    /スプレー|spray/
+      .test(
+        (
+          productName+
+          ' '+
+          source.slice(0,1000)
+        )
+        .toLowerCase()
+      )
+  ){
+
+    const hard=
+      /しっかりハード|ハード|hard|strong hold|強力/
+        .test(lower);
+
+    const quick=
+      /瞬間セット|速乾|クイック|quick/
+        .test(lower);
+
+    const soft=
+      /ふんわり|やわらか|軽やか|soft/
+        .test(lower);
+
+
+    if(quick && hard){
+
+      description.push(
+        '瞬間的にセットしやすく、しっかりハードな仕上がりでスタイルをキープするヘアスプレーです。'
+      );
+
+    }else if(hard){
+
+      description.push(
+        'しっかりしたセット力で、仕上げたスタイルをキープしやすいハードタイプのヘアスプレーです。'
+      );
+
+    }else if(soft){
+
+      description.push(
+        '固めすぎず、軽さや動きを残しながら仕上げやすいヘアスプレーです。'
+      );
+
+    }else{
+
+      description.push(
+        'スタイリングの仕上げに使いやすいヘアスプレーです。'
+      );
+    }
+
+
+    if(hard){
+
+      recommended.push(
+        'スタイルをしっかりキープしたい方'
+      );
+
+      recommended.push(
+        '前髪や顔まわりなど、崩したくない部分がある方'
+      );
+
+      recommended.push(
+        '巻き髪やスタイリングを長持ちさせたい方'
+      );
+
+    }else{
+
+      recommended.push(
+        'スタイリングの仕上げにスプレーを使いたい方'
+      );
+    }
+
+
+    usage.push(
+      'スタイリングの仕上げに、キープしたい部分へ少量ずつスプレーしてください。使用距離や使用量は商品表示に従って調整してください。'
+    );
+
+
+    return {
+
+      description:
+        unique(description)
+          .join(' '),
+
+      recommended:
+        unique(recommended)
+          .slice(0,4)
+          .map(x=>'・'+x)
+          .join('\n'),
+
+      usage:
+        unique(usage)
+          .join(' ')
+    };
+  }
+
+
+  // =========================
+  // ヘアオイル
+  // =========================
+
+  if(
+    /オイル|oil/
+      .test(lower)
   ){
 
     description.push(
-      'ダメージ部分を補修し、扱いやすい質感へ整えるヘアケアアイテムです。'
+      '髪の質感を整え、毛先のまとまりやツヤを出しやすくするヘアオイルです。'
     );
 
+    if(
+      /ダメージ|補修|repair/
+        .test(lower)
+    ){
+
+      recommended.push(
+        'カラーやブリーチなどによるダメージが気になる方'
+      );
+    }
+
+    if(
+      /乾燥|パサつき|保湿|うるお/
+        .test(lower)
+    ){
+
+      recommended.push(
+        '乾燥やパサつきが気になる方'
+      );
+    }
+
     recommended.push(
-      'カラーやブリーチ、アイロンなどによるダメージが気になる方'
+      'ツヤやまとまりのある仕上がりにしたい方'
+    );
+
+    usage.push(
+      'タオルドライ後または仕上げに、毛先を中心へ少量ずつなじませてください。'
     );
   }
 
-  if(
-    /保湿|うるお|潤い|moist|hydrate|乾燥/
-      .test(source)
+
+  // =========================
+  // ヘアミルク
+  // =========================
+
+  else if(
+    /ミルク|エマルジョン|milk|emulsion/
+      .test(lower)
   ){
 
     description.push(
-      '髪にうるおいを与え、乾燥によるパサつきを抑えます。'
+      '髪にうるおいを与え、扱いやすい質感に整える洗い流さないトリートメントです。'
     );
 
     recommended.push(
       '乾燥やパサつきが気になる方'
     );
-  }
-
-  if(
-    /熱|ヒート|ドライヤー|アイロン|heat/
-      .test(source)
-  ){
-
-    description.push(
-      'ドライヤーやアイロンを使う毎日のケアにも取り入れやすいアイテムです。'
-    );
 
     recommended.push(
-      'ドライヤーやアイロンをよく使う方'
+      '毛先のまとまりを良くしたい方'
     );
-  }
-
-  if(
-    /くせ|クセ|うねり|まとまり|広がり|frizz/
-      .test(source)
-  ){
-
-    description.push(
-      '広がりやうねりを抑え、まとまりやすい髪に整えます。'
-    );
-
-    recommended.push(
-      '広がり・うねり・まとまりにくさが気になる方'
-    );
-  }
-
-  if(
-    /ツヤ|艶|shine|gloss/
-      .test(source)
-  ){
-
-    description.push(
-      '自然なツヤ感のある仕上がりを目指せます。'
-    );
-
-    recommended.push(
-      'ツヤのある仕上がりが好きな方'
-    );
-  }
-
-  if(
-    /ミルク|emulsion|cream|クリーム/
-      .test(source)
-  ){
 
     usage.push(
-      'タオルドライ後の髪に適量をなじませ、毛先中心に塗布してから乾かしてください。'
+      'タオルドライ後の髪に適量をなじませ、毛先を中心に塗布してから乾かしてください。'
     );
   }
 
-  if(
-    /オイル|oil/
-      .test(source)
-  ){
 
-    usage.push(
-      '乾かす前または仕上げに、毛先中心へ少量ずつなじませてください。'
-    );
-  }
+  // =========================
+  // シャンプー
+  // =========================
 
-  if(
+  else if(
     /シャンプー|shampoo/
-      .test(source)
+      .test(lower)
   ){
+
+    description.push(
+      '髪と頭皮を洗いながら、毎日のヘアケアをサポートするシャンプーです。'
+    );
+
+    recommended.push(
+      '毎日のホームケアから髪を整えたい方'
+    );
 
     usage.push(
       '髪と頭皮をしっかり濡らし、適量を泡立てて洗ったあと十分にすすいでください。'
     );
   }
 
-  if(
-    /トリートメント|treatment|mask|マスク/
-      .test(source)
+
+  // =========================
+  // トリートメント
+  // =========================
+
+  else if(
+    /トリートメント|treatment|ヘアマスク|mask/
+      .test(lower)
   ){
+
+    description.push(
+      'シャンプー後の髪をケアし、手触りやまとまりを整えるトリートメントです。'
+    );
+
+    if(
+      /ダメージ|補修|repair/
+        .test(lower)
+    ){
+
+      recommended.push(
+        'カラーやブリーチなどによるダメージが気になる方'
+      );
+    }
+
+    recommended.push(
+      '手触りやまとまりを整えたい方'
+    );
 
     usage.push(
       'シャンプー後に水気を切り、中間〜毛先を中心になじませてからすすいでください。'
     );
   }
 
-  if(!description.length){
+
+  // =========================
+  // その他
+  // =========================
+
+  else{
 
     description.push(
-      '公式商品情報をもとに、毎日のホームケアに取り入れやすい特徴をまとめたアイテムです。'
+      `${productName || 'こちらの商品'}の公式商品情報をもとに、特徴をまとめています。`
     );
-  }
-
-  if(!recommended.length){
 
     recommended.push(
-      '自宅でもサロン帰りの質感をキープしたい方'
+      '自宅でのヘアケアやスタイリングを整えたい方'
     );
-  }
-
-  if(!usage.length){
 
     usage.push(
-      '使用量やタイミングは商品表示に従い、髪の長さ・量に合わせて調整してください。'
+      '使用量やタイミングは商品表示に従って使用してください。'
     );
   }
+
 
   return {
 
@@ -332,9 +495,8 @@ function makeCopy(text,title){
 
     usage:
       unique(usage)
-        .slice(0,3)
+        .slice(0,2)
         .join(' ')
-
   };
 }
 
