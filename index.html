@@ -1625,10 +1625,11 @@ async function publishOwnerProductOrder(){
   const line=db.orderSettings?.lineUrl||'';
   const products=ownerProductsInOrder()
     .filter(p=>p.public)
-    .map(({id,name,category,price,description,recommended,usage})=>({
+    .map(({id,name,category,concern,price,description,recommended,usage})=>({
       id,
       name,
       category:canonicalProductCategory(category,name),
+      concern:canonicalProductConcern(concern,name,category,description,recommended),
       price,
       fulfillment:'salon',
       externalUrl:'',
@@ -1683,7 +1684,7 @@ function renderRetail(){
   const products=ownerProductsInOrder();
   $('productList').innerHTML=products.length?products.map((x,i)=>`<div class="product-item">
     ${x.imageData?`<img class="product-thumb" src="${x.imageData}" alt="${esc(x.name)}">`:`<div class="product-thumb-empty">NO<br>PHOTO</div>`}
-    <div class="product-main" onclick="productForm(${db.products.findIndex(p=>String(p.id)===String(x.id))})"><div class="product-name">${esc(x.name)}</div><div class="product-meta">${esc(canonicalProductCategory(x.category,x.name))} ・ 販売 ${yen(x.price)}${Number(x.cost||0)?` ・ 仕入 ${yen(x.cost)}`:''} ${x.public?'・ 掲載中':'・ 非掲載'}</div>${x.description?`<div class="small" style="margin-top:5px">${esc(x.description)}</div>`:''}</div>
+    <div class="product-main" onclick="productForm(${db.products.findIndex(p=>String(p.id)===String(x.id))})"><div class="product-name">${esc(x.name)}</div><div class="product-meta">${esc(canonicalProductConcern(x.concern,x.name,x.category,x.description,x.recommended))} ・ ${esc(canonicalProductCategory(x.category,x.name))} ・ 販売 ${yen(x.price)}${Number(x.cost||0)?` ・ 仕入 ${yen(x.cost)}`:''} ${x.public?'・ 掲載中':'・ 非掲載'}</div>${x.description?`<div class="small" style="margin-top:5px">${esc(x.description)}</div>`:''}</div>
     <div style="display:flex;flex-direction:column;gap:5px">
       <div style="display:flex;gap:5px">
         <button class="ghost" style="padding:8px 10px" onclick="moveOwnerProduct('${x.id}',-1)" ${i===0?'disabled':''}>↑</button>
@@ -3129,6 +3130,30 @@ function productForm(i){
       }
     </select>
 
+    <label>悩み・目的</label>
+
+    <select id="pConcern">
+      ${
+        RETAIL_CONCERNS
+          .map(
+            c=>`
+              <option
+                ${canonicalProductConcern(
+                  x.concern,
+                  x.name,
+                  x.category,
+                  x.description,
+                  x.recommended
+                )===c?'selected':''}
+              >
+                ${c}
+              </option>
+            `
+          )
+          .join('')
+      }
+    </select>
+
     <label>公式商品HP URL</label>
 
     <input
@@ -3540,6 +3565,15 @@ function saveProduct(i){
       canonicalProductCategory(
         $('pCategory').value,
         $('pName').value
+      ),
+
+    concern:
+      canonicalProductConcern(
+        $('pConcern').value,
+        $('pName').value,
+        $('pCategory').value,
+        $('pDescription').value,
+        $('pRecommended').value
       ),
 
     officialUrl,
@@ -4120,6 +4154,7 @@ function mergeImport(){
 
 // Additional fields keep the existing V2 data and backup format.
 const PRODUCT_CATEGORIES=['シャンプー','トリートメント','オイル','スプレー','電子機器'];
+const RETAIL_CONCERNS=['ダメージケア','くせ・広がり','乾燥・パサつき','スタイリング','コテ・アイロン'];
 const ORDER_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/orders';
 const CATALOG_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/catalog';
 const STAFF_ADMIN_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/staff';
@@ -4184,6 +4219,24 @@ function canonicalProductCategory(category,name=''){
   return 'オイル';
 }
 
+function canonicalProductConcern(concern,name='',category='',description='',recommended=''){
+  if(RETAIL_CONCERNS.includes(String(concern||'')))return String(concern);
+
+  const raw=`${name||''} ${category||''} ${description||''} ${recommended||''}`.normalize('NFKC').toLowerCase();
+
+  if(/リファ|refa|クレイツ|create|ドライヤー|dryer|アイロン|iron|コテ|カールアイロン|ストレートアイロン|ブラシ/.test(raw))return 'コテ・アイロン';
+  if(/スプレー|spray|ミスト|mist|トリエ|スタイリング|キープ|hold|ワックス|wax|バーム|balm/.test(raw))return 'スタイリング';
+  if(/hita|ヒタ|くせ|クセ|うねり|広がり|まとまりにく|湿気/.test(raw))return 'くせ・広がり';
+  if(/オルキデ|orchid|乾燥|パサつき|保湿|うるおい|潤い|moisture/.test(raw))return '乾燥・パサつき';
+  if(/ファイバープレックス|fibreplex|リケラ|likera|ダメージ|補修|repair|ブリーチ|bleach|ボンド|bond/.test(raw))return 'ダメージケア';
+
+  const type=canonicalProductCategory(category,name);
+  if(type==='スプレー')return 'スタイリング';
+  if(type==='電子機器')return 'コテ・アイロン';
+  if(type==='オイル')return '乾燥・パサつき';
+  return 'ダメージケア';
+}
+
 function migrateExtras(){
   db.goalPlans ||= {};db.orderSettings ||= {};db.seenOrders ||= [];
   db.syncDeleted ||= {bookings:{},customers:{},products:{},sales:{},retail:{}};
@@ -4196,6 +4249,7 @@ function migrateExtras(){
   db.products.forEach((p,index)=>{
     p.id ||= uid();
     p.category=canonicalProductCategory(p.category,p.name);
+    p.concern=canonicalProductConcern(p.concern,p.name,p.category,p.description,p.recommended);
     if(!Number.isFinite(Number(p.sortOrder)))p.sortOrder=index;
     p.sortOrder=Number(p.sortOrder);
     p.description ||= '';p.recommended ||= '';p.usage ||= '';p.cost=Number(p.cost||0);
