@@ -290,7 +290,7 @@ export default async function handler(req,res){
       return res.status(400).json({ok:false,error:'注文を確認してください'});
 
     if(
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
       ||!name
       ||name.length>100
       ||!contact
