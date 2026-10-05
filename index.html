@@ -1642,49 +1642,629 @@ function deleteCustomer(id){
 function saleForm(){modal(`<h3>売上を追加</h3><div class="note" style="margin-bottom:10px">通常の技術売上は予約の料金から自動集計されます。ここは予約外の売上を記録したい時だけ使ってください。</div><label>日付</label><input id="sDate" type="date" value="${todayISO}"><label>顧客名</label><input id="sCustomer"><label>金額</label><input id="sAmount" type="number"><label>メニュー</label><input id="sMenu"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveSale()">保存</button></div>`)}
 function saveSale(){db.sales.push({id:uid(),date:$('sDate').value,customer:$('sCustomer').value.trim(),amount:+$('sAmount').value||0,menu:$('sMenu').value.trim()});const c=db.customers.find(x=>normalizeName(x.name)===normalizeName($('sCustomer').value));if(c)c.lastVisit=$('sDate').value;save();closeModal()}
 function retailChooser(){modal('<h3>店販</h3><button style="width:100%;margin-bottom:8px" onclick="retailSaleForm()">販売を記録</button><button class="ghost" style="width:100%" onclick="productForm()">商品を追加</button>')}
-function productForm(i){
-  migrateExtras();const x=Number.isInteger(i)?db.products[i]:{};productImageDraft=x.imageData||'';
-  modal(`<h3>${Number.isInteger(i)?'商品を編集':'商品を追加'}</h3>
-    <div class="note" style="margin-bottom:10px">お客様から注文が入ったら自分で発注する商品を登録します。仕入れ先URL・仕入れ値はお客様には表示されません。</div>
-    <label>商品写真</label><img id="pImagePreview" class="product-preview ${productImageDraft?'':'hidden'}" ${productImageDraft?`src="${productImageDraft}"`:''} alt="商品写真プレビュー">
-    <input id="pImageFile" type="file" accept="image/*" onchange="handleProductImage(event)">
-    <button type="button" class="ghost" style="width:100%;margin-bottom:10px" onclick="removeProductImage()">写真を外す</button>
-    <label>商品名</label><input id="pName" value="${esc(x.name||'')}">
-    <label>カテゴリ</label><select id="pCategory">${PRODUCT_CATEGORIES.map(c=>`<option ${x.category===c?'selected':''}>${c}</option>`).join('')}</select>
-    <label>商品説明</label><textarea id="pDescription" placeholder="どんな商品か">${esc(x.description||'')}</textarea>
-    <label>おすすめの人</label><textarea id="pRecommended" placeholder="こんな悩みの方におすすめ">${esc(x.recommended||'')}</textarea>
-    <label>使い方</label><textarea id="pUsage" placeholder="使用量・タイミングなど">${esc(x.usage||'')}</textarea>
-    <button type="button" class="ghost" style="width:100%;margin-bottom:10px" onclick="makeOwnerProductCopyDraft()">説明文のたたき台を作る</button>
-    <label>販売価格</label><input id="pPrice" type="number" min="0" value="${Number(x.price||0)}">
-    <label>仕入れ値</label><input id="pCost" type="number" min="0" value="${Number(x.cost||0)}">
-    <label>仕入れ先URL</label><input id="pSupplierUrl" type="url" value="${esc(x.supplierUrl||x.externalUrl||'')}" placeholder="https://...">
-    <label><input id="pPublic" type="checkbox" style="width:auto" ${x.public?'checked':''}> お客様の商品注文ページに掲載</label>
-    <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveProduct(${Number.isInteger(i)?i:-1})">保存</button></div>
-    ${Number.isInteger(i)?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteProduct(${i})">この商品を削除</button>`:''}`);
+ucts.splice(i,1);save();closeModal();}function productForm(i){
+  migrateExtras();
+
+  const x=
+    Number.isInteger(i)
+      ?db.products[i]
+      :{};
+
+  productImageDraft=
+    x.imageData||'';
+
+  modal(`
+    <h3>
+      ${Number.isInteger(i)?'商品を編集':'商品を追加'}
+    </h3>
+
+    <div
+      class="note"
+      style="margin-bottom:10px"
+    >
+      公式商品HPのURLを貼ると、
+      商品説明・おすすめ・使い方を自動で作れます。
+      仕入れ先URL・仕入れ値はお客様には表示されません。
+    </div>
+
+    <label>商品写真</label>
+
+    <img
+      id="pImagePreview"
+      class="product-preview ${productImageDraft?'':'hidden'}"
+      ${productImageDraft?`src="${productImageDraft}"`:''}
+      alt="商品写真プレビュー"
+    >
+
+    <input
+      id="pImageFile"
+      type="file"
+      accept="image/*"
+      onchange="handleProductImage(event)"
+    >
+
+    <button
+      type="button"
+      class="ghost"
+      style="width:100%;margin-bottom:10px"
+      onclick="removeProductImage()"
+    >
+      写真を外す
+    </button>
+
+    <label>商品名</label>
+
+    <input
+      id="pName"
+      value="${esc(x.name||'')}"
+    >
+
+    <label>カテゴリ</label>
+
+    <select id="pCategory">
+      ${
+        PRODUCT_CATEGORIES
+          .map(
+            c=>`
+              <option
+                ${x.category===c?'selected':''}
+              >
+                ${c}
+              </option>
+            `
+          )
+          .join('')
+      }
+    </select>
+
+    <label>公式商品HP URL</label>
+
+    <input
+      id="pOfficialUrl"
+      type="url"
+      value="${esc(x.officialUrl||'')}"
+      placeholder="https://..."
+    >
+
+    <button
+      id="pCopyBtn"
+      type="button"
+      class="blue"
+      style="width:100%;margin-bottom:8px"
+      onclick="makeOwnerProductCopyFromHP()"
+    >
+      HPから説明文を作る
+    </button>
+
+    <div
+      id="pCopyStatus"
+      class="small"
+      style="margin-bottom:10px"
+    ></div>
+
+    <label>商品説明</label>
+
+    <textarea
+      id="pDescription"
+      placeholder="どんな商品か"
+    >${esc(x.description||'')}</textarea>
+
+    <label>おすすめの人</label>
+
+    <textarea
+      id="pRecommended"
+      placeholder="こんな悩みの方におすすめ"
+    >${esc(x.recommended||'')}</textarea>
+
+    <label>使い方</label>
+
+    <textarea
+      id="pUsage"
+      placeholder="使用量・タイミングなど"
+    >${esc(x.usage||'')}</textarea>
+
+    <label>販売価格</label>
+
+    <input
+      id="pPrice"
+      type="number"
+      min="0"
+      value="${Number(x.price||0)}"
+    >
+
+    <label>仕入れ値</label>
+
+    <input
+      id="pCost"
+      type="number"
+      min="0"
+      value="${Number(x.cost||0)}"
+    >
+
+    <label>仕入れ先URL</label>
+
+    <input
+      id="pSupplierUrl"
+      type="url"
+      value="${esc(x.supplierUrl||x.externalUrl||'')}"
+      placeholder="https://..."
+    >
+
+    <label>
+      <input
+        id="pPublic"
+        type="checkbox"
+        style="width:auto"
+        ${x.public?'checked':''}
+      >
+      お客様の商品注文ページに掲載
+    </label>
+
+    <div class="actions">
+
+      <button
+        class="ghost"
+        onclick="closeModal()"
+      >
+        閉じる
+      </button>
+
+      <button
+        onclick="saveProduct(${Number.isInteger(i)?i:-1})"
+      >
+        保存
+      </button>
+
+    </div>
+
+    ${
+      Number.isInteger(i)
+        ?`
+          <button
+            class="danger"
+            style="width:100%;margin-top:8px"
+            onclick="deleteProduct(${i})"
+          >
+            この商品を削除
+          </button>
+        `
+        :''
+    }
+  `);
 }
-function makeOwnerProductCopyDraft(){
-  const name=$('pName').value.trim(),cat=$('pCategory').value||'ヘアケア';if(!name)return alert('先に商品名を入力してください');
-  if(!$('pDescription').value.trim())$('pDescription').value=`${name}は、毎日のホームケアに取り入れやすい${cat}アイテムです。髪の状態や仕上がりの好みに合わせてご提案します。`;
-  if(!$('pRecommended').value.trim())$('pRecommended').value='サロン帰りの質感をできるだけ長く保ちたい方、毎日のケアを見直したい方におすすめです。';
-  if(!$('pUsage').value.trim())$('pUsage').value='使用量やタイミングは髪質・長さに合わせて調整してください。ご来店時にも使い方をご説明します。';
+
+async function makeOwnerProductCopyFromHP(){
+
+  const url=
+    $('pOfficialUrl')
+      .value
+      .trim();
+
+  if(!url){
+    return alert(
+      '公式商品HPのURLを貼ってください'
+    );
+  }
+
+  if(!/^https:\/\//i.test(url)){
+    return alert(
+      'https:// から始まるURLを入力してください'
+    );
+  }
+
+  const button=
+    $('pCopyBtn');
+
+  const status=
+    $('pCopyStatus');
+
+  button.disabled=true;
+
+  button.textContent=
+    'HPを読み込み中…';
+
+  status.textContent=
+    '公式商品情報を確認しています…';
+
+  try{
+
+    const r=
+      await fetch(
+        'https://salon-manager-kzgvsz7r97-star.vercel.app/api/product-copy',
+        {
+          method:'POST',
+
+          headers:{
+            'Content-Type':
+              'application/json'
+          },
+
+          body:
+            JSON.stringify({
+              url
+            })
+        }
+      );
+
+    const b=
+      await r.json()
+        .catch(
+          ()=>({})
+        );
+
+    if(!r.ok){
+
+      throw new Error(
+        b.error||
+        '商品HPを読み込めませんでした'
+      );
+    }
+
+    if(
+      !$('pName')
+        .value
+        .trim()
+      &&
+      b.title
+    ){
+
+      $('pName').value=
+        b.title;
+    }
+
+    $('pDescription').value=
+      b.description||'';
+
+    $('pRecommended').value=
+      b.recommended||'';
+
+    $('pUsage').value=
+      b.usage||'';
+
+    status.textContent=
+      '説明文を作成しました。内容を確認して保存してください。';
+
+  }catch(e){
+
+    status.textContent=
+      e.message||
+      '商品HPを読み込めませんでした';
+
+  }finally{
+
+    button.disabled=false;
+
+    button.textContent=
+      'HPから説明文を作る';
+  }
 }
+
 function handleProductImage(event){
-  const file=event.target.files&&event.target.files[0];if(!file)return;
-  if(file.size>12*1024*1024){alert('写真サイズが大きすぎます。別の写真を選んでください');event.target.value='';return;}
-  const img=new Image(),url=URL.createObjectURL(file);
-  img.onload=()=>{try{const max=480,scale=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);productImageDraft=canvas.toDataURL('image/jpeg',0.78);const preview=$('pImagePreview');if(preview){preview.src=productImageDraft;preview.classList.remove('hidden');}}finally{URL.revokeObjectURL(url);}};
-  img.onerror=()=>{URL.revokeObjectURL(url);alert('写真を読み込めませんでした');};img.src=url;
+
+  const file=
+    event.target.files&&
+    event.target.files[0];
+
+  if(!file)return;
+
+  if(
+    file.size>
+    12*1024*1024
+  ){
+
+    alert(
+      '写真サイズが大きすぎます。別の写真を選んでください'
+    );
+
+    event.target.value='';
+
+    return;
+  }
+
+  const img=
+    new Image();
+
+  const url=
+    URL.createObjectURL(
+      file
+    );
+
+  img.onload=()=>{
+
+    try{
+
+      const max=480;
+
+      const scale=
+        Math.min(
+          1,
+          max/
+          Math.max(
+            img.naturalWidth,
+            img.naturalHeight
+          )
+        );
+
+      const canvas=
+        document.createElement(
+          'canvas'
+        );
+
+      canvas.width=
+        Math.max(
+          1,
+          Math.round(
+            img.naturalWidth*
+            scale
+          )
+        );
+
+      canvas.height=
+        Math.max(
+          1,
+          Math.round(
+            img.naturalHeight*
+            scale
+          )
+        );
+
+      const ctx=
+        canvas.getContext(
+          '2d'
+        );
+
+      ctx.fillStyle='#fff';
+
+      ctx.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+      ctx.drawImage(
+        img,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+      productImageDraft=
+        canvas.toDataURL(
+          'image/jpeg',
+          0.78
+        );
+
+      const preview=
+        $('pImagePreview');
+
+      if(preview){
+
+        preview.src=
+          productImageDraft;
+
+        preview.classList
+          .remove(
+            'hidden'
+          );
+      }
+
+    }finally{
+
+      URL.revokeObjectURL(
+        url
+      );
+    }
+  };
+
+  img.onerror=()=>{
+
+    URL.revokeObjectURL(
+      url
+    );
+
+    alert(
+      '写真を読み込めませんでした'
+    );
+  };
+
+  img.src=url;
 }
-function removeProductImage(){productImageDraft='';const p=$('pImagePreview');if(p){p.removeAttribute('src');p.classList.add('hidden');}const f=$('pImageFile');if(f)f.value='';}
+
+function removeProductImage(){
+
+  productImageDraft='';
+
+  const p=
+    $('pImagePreview');
+
+  if(p){
+
+    p.removeAttribute(
+      'src'
+    );
+
+    p.classList
+      .add(
+        'hidden'
+      );
+  }
+
+  const f=
+    $('pImageFile');
+
+  if(f){
+    f.value='';
+  }
+}
+
 function saveProduct(i){
-  const old=i>=0?db.products[i]:{},supplierUrl=$('pSupplierUrl').value.trim();
-  const o={...old,id:old.id||uid(),name:$('pName').value.trim(),category:$('pCategory').value,description:$('pDescription').value.trim(),recommended:$('pRecommended').value.trim(),usage:$('pUsage').value.trim(),price:Number($('pPrice').value),cost:Number($('pCost').value)||0,supplierUrl,stock:0,fulfillment:'salon',externalUrl:'',public:$('pPublic').checked,imageData:productImageDraft||''};
-  if(!o.name||!Number.isFinite(o.price)||o.price<0||!Number.isFinite(o.cost)||o.cost<0)return alert('商品名・販売価格・仕入れ値を確認してください');
-  if(!safeHTTPS(o.supplierUrl))return alert('https:// から始まる仕入れ先URLを入力してください');
-  if(o.public&&o.price<=0)return alert('注文ページに載せる商品の販売価格を入力してください');
-  if(i>=0)db.products[i]=o;else db.products.push(o);save();closeModal();
+
+  const old=
+    i>=0
+      ?db.products[i]
+      :{};
+
+  const supplierUrl=
+    $('pSupplierUrl')
+      .value
+      .trim();
+
+  const officialUrl=
+    $('pOfficialUrl')
+      .value
+      .trim();
+
+  const o={
+
+    ...old,
+
+    id:
+      old.id||
+      uid(),
+
+    name:
+      $('pName')
+        .value
+        .trim(),
+
+    category:
+      $('pCategory')
+        .value,
+
+    officialUrl,
+
+    description:
+      $('pDescription')
+        .value
+        .trim(),
+
+    recommended:
+      $('pRecommended')
+        .value
+        .trim(),
+
+    usage:
+      $('pUsage')
+        .value
+        .trim(),
+
+    price:
+      Number(
+        $('pPrice').value
+      ),
+
+    cost:
+      Number(
+        $('pCost').value
+      )||0,
+
+    supplierUrl,
+
+    stock:0,
+
+    fulfillment:
+      'salon',
+
+    externalUrl:'',
+
+    public:
+      $('pPublic').checked,
+
+    imageData:
+      productImageDraft||''
+  };
+
+  if(
+    !o.name||
+    !Number.isFinite(o.price)||
+    o.price<0||
+    !Number.isFinite(o.cost)||
+    o.cost<0
+  ){
+
+    return alert(
+      '商品名・販売価格・仕入れ値を確認してください'
+    );
+  }
+
+  if(
+    o.officialUrl&&
+    !safeHTTPS(
+      o.officialUrl
+    )
+  ){
+
+    return alert(
+      '公式商品HP URLを確認してください'
+    );
+  }
+
+  if(
+    !safeHTTPS(
+      o.supplierUrl
+    )
+  ){
+
+    return alert(
+      'https:// から始まる仕入れ先URLを入力してください'
+    );
+  }
+
+  if(
+    o.public&&
+    o.price<=0
+  ){
+
+    return alert(
+      '注文ページに載せる商品の販売価格を入力してください'
+    );
+  }
+
+  if(i>=0){
+
+    db.products[i]=o;
+
+  }else{
+
+    db.products.push(o);
+  }
+
+  save();
+
+  closeModal();
 }
-function deleteProduct(i){const p=db.products[i];if(!p)return;if(!confirm(`${p.name}を削除しますか？\n過去の販売履歴は残ります。`))return;markDeleted('products',p.id);db.products.splice(i,1);save();closeModal();}
+
+function deleteProduct(i){
+
+  const p=
+    db.products[i];
+
+  if(!p)return;
+
+  if(
+    !confirm(
+      `${p.name}を削除しますか？\n過去の販売履歴は残ります。`
+    )
+  ){
+    return;
+  }
+
+  markDeleted(
+    'products',
+    p.id
+  );
+
+  db.products.splice(
+    i,
+    1
+  );
+
+  save();
+
+  closeModal();
+}
 function retailSaleForm(){
   migrateExtras();const products=db.products;if(!products.length)return alert('商品を追加してください');
   modal(`<h3>店販を記録</h3><label>日付</label><input id="rDate" type="date" value="${todayISO}"><label>商品</label><select id="rProduct" onchange="updateRetailAmount()">${products.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select><label>数量</label><input id="rQuantity" type="number" min="1" max="100" step="1" value="1" oninput="updateRetailAmount()"><label>顧客名</label><input id="rCustomer"><label>金額（合計）</label><input id="rAmount" type="number" min="0" value="${Number(products[0].price||0)}"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveRetail()">保存</button></div>`);
