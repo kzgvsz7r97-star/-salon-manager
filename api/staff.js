@@ -551,6 +551,7 @@ async function staffHandler(req,res,session){
     const name=String(raw.name||'').trim().slice(0,150);
     const category=String(raw.category||'その他').trim().slice(0,80)||'その他';
     const supplierUrl=safeHTTPS(raw.supplierUrl||raw.url);
+    const officialUrl=safeHTTPS(raw.officialUrl);
     const price=Math.max(0,Math.min(1000000,Math.round(Number(raw.price)||0)));
     const cost=Math.max(0,Math.min(1000000,Math.round(Number(raw.cost)||0)));
     const description=String(raw.description||'').trim().slice(0,1500);
