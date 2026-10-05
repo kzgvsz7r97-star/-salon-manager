@@ -102,7 +102,10 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
 .analysis-card{background:#fff;border-radius:14px;padding:12px}
 .analysis-card .l{font-size:11px;color:#777}.analysis-card .v{font-size:19px;font-weight:850;margin-top:4px}
 .analysis-source{background:#fff;border-radius:13px;padding:10px 12px;margin:6px 0}
-.trend-table{width:100%;border-collapse:collapse;background:#fff;border-radius:14px;overflow:hidden;font-size:11px}.trend-table th,.trend-table td{padding:9px 6px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap}.trend-table th:first-child,.trend-table td:first-child{text-align:left}.trend-table tr:last-child td{border-bottom:0}.staff-summary{background:#fff;border-radius:14px;padding:12px;margin:7px 0}.staff-summary .name{font-weight:850}.staff-summary .meta{font-size:11px;color:#777;line-height:1.55;margin-top:4px}.staff-source-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.staff-source-grid label{background:#f6f6f6;border-radius:10px;padding:8px;font-size:12px}.staff-pill{display:inline-block;font-size:10px;padding:4px 7px;border-radius:99px;background:#eee;margin:3px 3px 0 0}
+.trend-table{width:100%;border-collapse:collapse;background:#fff;border-radius:14px;overflow:hidden;font-size:11px}.trend-table th,.trend-table td{padding:9px 6px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap}.trend-table th:first-child,.trend-table td:first-child{text-align:left}.trend-table tr:last-child td{border-bottom:0}
+.staff-summary{background:#fff;border-radius:14px;padding:12px;margin:7px 0}.staff-summary .name{font-weight:850}.staff-summary .meta{font-size:11px;color:#777;line-height:1.55;margin-top:4px}.staff-source-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.staff-source-grid label{background:#f6f6f6;border-radius:10px;padding:8px;font-size:12px}.staff-pill{display:inline-block;font-size:10px;padding:4px 7px;border-radius:99px;background:#eee;margin:3px 3px 0 0}
+.order-status-row{display:flex;gap:8px;align-items:center;margin-top:8px}.order-status-row>*{flex:1}
+
 .check-card{background:#fff;border-radius:14px;padding:11px 12px;margin:8px 0}
 .check-card label{display:block;margin:7px 0;font-size:14px}
 .duplicate-candidate{background:#fff;border-radius:14px;padding:12px;margin:8px 0}
@@ -388,6 +391,7 @@ function ownerStaff(){return (db.staffProfiles||[]).find(x=>x.role==='owner')||(
 function staffById(id){return (db.staffProfiles||[]).find(x=>x.id===id)||ownerStaff()}
 function staffName(id){return staffById(id)?.name||'自分'}
 function staffAllowedSources(id){const p=staffById(id);return Array.isArray(p?.sources)&&p.sources.length?p.sources:['SHAiRE','Nailie','minimo','Instagram','その他']}
+
 function reminderCandidates(){
   const now=todayISO;
   return db.customers.map(c=>{
@@ -1009,7 +1013,11 @@ function renderBookings(){
   if(next==='missing')a=a.filter(x=>!x.isModel&&!nextBookingTakenForBooking(x));
 
   const staffFilter=$('bookingFilterStaff');
-  if(staffFilter){const current=staffFilter.value;staffFilter.innerHTML='<option value="">全担当者</option>'+ (db.staffProfiles||[]).filter(p=>p.active!==false).map(p=>`<option value="${esc(p.id)}" ${current===p.id?'selected':''}>${esc(p.name)}</option>`).join('');}
+  if(staffFilter){
+    const current=staffFilter.value;
+    staffFilter.innerHTML='<option value="">全担当者</option>'+ (db.staffProfiles||[]).filter(p=>p.active!==false).map(p=>`<option value="${esc(p.id)}" ${current===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
+    staffFilter.value=current;
+  }
 
   a.sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
 
@@ -1248,15 +1256,15 @@ function renderStaffAnalysis(m){
     const bookings=db.bookings.filter(x=>monthKey(x.date)===m&&!x.isModel&&(x.staffId||ownerStaff()?.id)===p.id);
     const visits=bookings.filter(isVisitedBooking),newCount=visits.filter(x=>x.newGuest).length,repeatCount=visits.filter(x=>!x.newGuest).length;
     const revenue=bookings.filter(x=>x.paymentComplete&&isActiveBooking(x)).reduce((a,x)=>a+Number(x.price||0),0);
+    const retail=db.retail.filter(x=>monthKey(x.date)===m&&(x.staffId||ownerStaff()?.id)===p.id).reduce((a,x)=>a+Number(x.amount||0),0);
     const free=visits.filter(x=>x.bookingType==='free').length,designated=visits.filter(x=>x.bookingType==='designated').length;
-    return {p,visits,newCount,repeatCount,revenue,free,designated};
+    return {p,visits,newCount,repeatCount,revenue,retail,free,designated};
   });
-  host.innerHTML=rows.length?rows.map(x=>`<div class="staff-summary"><div class="name">${esc(x.p.name)}${x.p.role==='owner'?' <span class="staff-pill">親</span>':''}</div><div class="meta">実来店 ${x.visits.length}人 ・ 新規 ${x.newCount} / 再来 ${x.repeatCount}<br>フリー ${x.free} / 指名 ${x.designated} ・ 確定売上 ${yen(x.revenue)}<br>媒体 ${esc((x.p.sources||[]).join(' / ')||'未設定')}</div></div>`).join(''):empty('スタッフ設定がありません');
+  host.innerHTML=rows.length?rows.map(x=>`<div class="staff-summary"><div class="name">${esc(x.p.name)}${x.p.role==='owner'?' <span class="staff-pill">親</span>':''}</div><div class="meta">実来店 ${x.visits.length}人 ・ 新規 ${x.newCount} / 再来 ${x.repeatCount}<br>フリー ${x.free} / 指名 ${x.designated} ・ 技術 ${yen(x.revenue)} ・ 店販 ${yen(x.retail)}<br>媒体 ${esc((x.p.sources||[]).join(' / ')||'未設定')}</div></div>`).join(''):empty('スタッフ設定がありません');
 }
 function renderMonthlyAnalysis(){
   const host=$('monthlyAnalysis'),srcHost=$('analysisSources');if(!host||!srcHost)return;
-  const m=monthString(analysisMonth),s=analysisStats(m);
-  const months=recentAnalysisMonths(m,4);
+  const m=monthString(analysisMonth),s=analysisStats(m),months=recentAnalysisMonths(m,4);
   host.innerHTML=`<div class="analysis-grid">
     <div class="analysis-card"><div class="l">実来店</div><div class="v">${s.visits.length}人</div></div>
     <div class="analysis-card"><div class="l">新規 / 再来</div><div class="v">${s.newVisits.length} / ${s.repeatVisits.length}</div></div>
@@ -1301,14 +1309,13 @@ function renderSales(){
   renderMonthlyAnalysis();
 }
 function renderRetail(){
-  migrateExtras();
-  renderRetailSummary();renderOrders();
+  migrateExtras();renderRetailSummary();renderOrders();
   $('productList').innerHTML=db.products.length?db.products.map((x,i)=>`<div class="product-item">
     ${x.imageData?`<img class="product-thumb" src="${x.imageData}" alt="${esc(x.name)}">`:`<div class="product-thumb-empty">NO<br>PHOTO</div>`}
-    <div class="product-main" onclick="productForm(${i})"><div class="product-name">${esc(x.name)}</div><div class="product-meta">${esc(x.category)} ・ ${x.fulfillment==='external'?'B happyで購入':`販売価格 ${yen(x.price)} ・ 在庫 ${Number(x.stock||0)}`} ${x.public?'・掲載中':''}</div></div>
+    <div class="product-main" onclick="productForm(${i})"><div class="product-name">${esc(x.name)}</div><div class="product-meta">${esc(x.category)} ・ 販売 ${yen(x.price)}${Number(x.cost||0)?` ・ 仕入 ${yen(x.cost)}`:''} ${x.public?'・ 掲載中':'・ 非掲載'}</div>${x.description?`<div class="small" style="margin-top:5px">${esc(x.description)}</div>`:''}</div>
     <button class="ghost product-edit" onclick="productForm(${i})">編集</button>
   </div>`).join(''):empty('商品を追加してください');
-  $('retailHistory').innerHTML=db.retail.length?[...db.retail].sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<div class="item"><div class="t">${esc(x.product)} ${yen(x.amount)}</div><div class="s">${esc(x.date)} ・ ${esc(x.customer||'顧客未指定')}</div></div>`).join(''):empty('販売履歴はまだありません');
+  $('retailHistory').innerHTML=db.retail.length?[...db.retail].sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<div class="item"><div class="t">${esc(x.product)} ${yen(x.amount)}</div><div class="s">${esc(x.date)} ・ ${Number(x.quantity||1)}点 ・ ${esc(x.customer||'顧客未指定')}${x.source==='customer-order'?' ・ お客様注文':''}</div></div>`).join(''):empty('販売履歴はまだありません');
 }
 
 function timeToMin(t){
@@ -1583,18 +1590,15 @@ function bookingForm(x={}){
   ${x.id?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteBooking('${x.id}')">削除</button>`:''}`);
 }
 function staffSourceOptions(staffId,current=''){
-  const all=['SHAiRE','Nailie','minimo','Instagram','その他'];
-  const allowed=staffAllowedSources(staffId);
-  const list=[...allowed];
+  const allowed=staffAllowedSources(staffId),list=[...allowed];
   if(current&&!list.includes(current))list.push(current);
-  return list.map(v=>`<option value="${esc(v)}" ${v===current?'selected':''}>${esc(v)}</option>`).join('') || all.map(v=>`<option>${v}</option>`).join('');
+  return list.map(v=>`<option value="${esc(v)}" ${v===current?'selected':''}>${esc(v)}</option>`).join('');
 }
 function updateBookingSourceOptions(){
-  const staff=$('fStaff')?.value||ownerStaff()?.id||'';
-  const source=$('fSource');if(!source)return;
-  const current=source.value;
+  const staff=$('fStaff')?.value||ownerStaff()?.id||'',source=$('fSource');if(!source)return;
+  const current=source.value,allowed=staffAllowedSources(staff);
   source.innerHTML=staffSourceOptions(staff,current);
-  if(!staffAllowedSources(staff).includes(current))source.value=staffAllowedSources(staff)[0]||'その他';
+  if(!allowed.includes(current))source.value=allowed[0]||'その他';
 }
 function saveBooking(id){
   const prev=id?(db.bookings.find(x=>x.id===id)||{}):{};
@@ -1641,60 +1645,55 @@ function retailChooser(){modal('<h3>店販</h3><button style="width:100%;margin-
 function productForm(i){
   migrateExtras();const x=Number.isInteger(i)?db.products[i]:{};productImageDraft=x.imageData||'';
   modal(`<h3>${Number.isInteger(i)?'商品を編集':'商品を追加'}</h3>
-    <label>商品写真</label>
-    <img id="pImagePreview" class="product-preview ${productImageDraft?'':'hidden'}" ${productImageDraft?`src="${productImageDraft}"`:''} alt="商品写真プレビュー">
+    <div class="note" style="margin-bottom:10px">お客様から注文が入ったら自分で発注する商品を登録します。仕入れ先URL・仕入れ値はお客様には表示されません。</div>
+    <label>商品写真</label><img id="pImagePreview" class="product-preview ${productImageDraft?'':'hidden'}" ${productImageDraft?`src="${productImageDraft}"`:''} alt="商品写真プレビュー">
     <input id="pImageFile" type="file" accept="image/*" onchange="handleProductImage(event)">
     <button type="button" class="ghost" style="width:100%;margin-bottom:10px" onclick="removeProductImage()">写真を外す</button>
     <label>商品名</label><input id="pName" value="${esc(x.name||'')}">
     <label>カテゴリ</label><select id="pCategory">${PRODUCT_CATEGORIES.map(c=>`<option ${x.category===c?'selected':''}>${c}</option>`).join('')}</select>
+    <label>商品説明</label><textarea id="pDescription" placeholder="どんな商品か">${esc(x.description||'')}</textarea>
+    <label>おすすめの人</label><textarea id="pRecommended" placeholder="こんな悩みの方におすすめ">${esc(x.recommended||'')}</textarea>
+    <label>使い方</label><textarea id="pUsage" placeholder="使用量・タイミングなど">${esc(x.usage||'')}</textarea>
+    <button type="button" class="ghost" style="width:100%;margin-bottom:10px" onclick="makeOwnerProductCopyDraft()">説明文のたたき台を作る</button>
     <label>販売価格</label><input id="pPrice" type="number" min="0" value="${Number(x.price||0)}">
-    <label>在庫</label><input id="pStock" type="number" min="0" step="1" value="${Number(x.stock||0)}">
-    <label>購入方法</label><select id="pFulfillment"><option value="salon" ${x.fulfillment!=='external'?'selected':''}>サロン受取</option><option value="external" ${x.fulfillment==='external'?'selected':''}>ReFa / B happy</option></select>
-    <label>B happyのURL（ReFaのみ）</label><input id="pLink" type="url" value="${esc(x.externalUrl||'')}">
-    <label><input id="pPublic" type="checkbox" style="width:auto" ${x.public?'checked':''}> 注文ページに掲載</label>
+    <label>仕入れ値</label><input id="pCost" type="number" min="0" value="${Number(x.cost||0)}">
+    <label>仕入れ先URL</label><input id="pSupplierUrl" type="url" value="${esc(x.supplierUrl||x.externalUrl||'')}" placeholder="https://...">
+    <label><input id="pPublic" type="checkbox" style="width:auto" ${x.public?'checked':''}> お客様の商品注文ページに掲載</label>
     <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveProduct(${Number.isInteger(i)?i:-1})">保存</button></div>
     ${Number.isInteger(i)?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteProduct(${i})">この商品を削除</button>`:''}`);
+}
+function makeOwnerProductCopyDraft(){
+  const name=$('pName').value.trim(),cat=$('pCategory').value||'ヘアケア';if(!name)return alert('先に商品名を入力してください');
+  if(!$('pDescription').value.trim())$('pDescription').value=`${name}は、毎日のホームケアに取り入れやすい${cat}アイテムです。髪の状態や仕上がりの好みに合わせてご提案します。`;
+  if(!$('pRecommended').value.trim())$('pRecommended').value='サロン帰りの質感をできるだけ長く保ちたい方、毎日のケアを見直したい方におすすめです。';
+  if(!$('pUsage').value.trim())$('pUsage').value='使用量やタイミングは髪質・長さに合わせて調整してください。ご来店時にも使い方をご説明します。';
 }
 function handleProductImage(event){
   const file=event.target.files&&event.target.files[0];if(!file)return;
   if(file.size>12*1024*1024){alert('写真サイズが大きすぎます。別の写真を選んでください');event.target.value='';return;}
   const img=new Image(),url=URL.createObjectURL(file);
-  img.onload=()=>{
-    try{
-      const max=480,scale=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
-      const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
-      const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
-      productImageDraft=canvas.toDataURL('image/jpeg',0.78);
-      const preview=$('pImagePreview');if(preview){preview.src=productImageDraft;preview.classList.remove('hidden');}
-    }finally{URL.revokeObjectURL(url);}
-  };
-  img.onerror=()=>{URL.revokeObjectURL(url);alert('写真を読み込めませんでした');};
-  img.src=url;
+  img.onload=()=>{try{const max=480,scale=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);productImageDraft=canvas.toDataURL('image/jpeg',0.78);const preview=$('pImagePreview');if(preview){preview.src=productImageDraft;preview.classList.remove('hidden');}}finally{URL.revokeObjectURL(url);}};
+  img.onerror=()=>{URL.revokeObjectURL(url);alert('写真を読み込めませんでした');};img.src=url;
 }
 function removeProductImage(){productImageDraft='';const p=$('pImagePreview');if(p){p.removeAttribute('src');p.classList.add('hidden');}const f=$('pImageFile');if(f)f.value='';}
 function saveProduct(i){
-  const old=i>=0?db.products[i]:{};
-  const o={...old,id:old.id||uid(),name:$('pName').value.trim(),category:$('pCategory').value,price:Number($('pPrice').value),stock:Number($('pStock').value),fulfillment:$('pFulfillment').value,externalUrl:$('pLink').value.trim(),public:$('pPublic').checked,imageData:productImageDraft||''};
-  if(!o.name||!Number.isFinite(o.price)||o.price<0||!Number.isInteger(o.stock)||o.stock<0)return alert('商品名・価格・在庫を確認してください');
-  if(o.fulfillment==='external'&&!safeHTTPS(o.externalUrl))return alert('B happyの https:// から始まるURLを入力してください');
-  if(o.public&&o.fulfillment==='salon'&&o.price<=0)return alert('注文ページに載せる商品の価格を入力してください');
+  const old=i>=0?db.products[i]:{},supplierUrl=$('pSupplierUrl').value.trim();
+  const o={...old,id:old.id||uid(),name:$('pName').value.trim(),category:$('pCategory').value,description:$('pDescription').value.trim(),recommended:$('pRecommended').value.trim(),usage:$('pUsage').value.trim(),price:Number($('pPrice').value),cost:Number($('pCost').value)||0,supplierUrl,stock:0,fulfillment:'salon',externalUrl:'',public:$('pPublic').checked,imageData:productImageDraft||''};
+  if(!o.name||!Number.isFinite(o.price)||o.price<0||!Number.isFinite(o.cost)||o.cost<0)return alert('商品名・販売価格・仕入れ値を確認してください');
+  if(!safeHTTPS(o.supplierUrl))return alert('https:// から始まる仕入れ先URLを入力してください');
+  if(o.public&&o.price<=0)return alert('注文ページに載せる商品の販売価格を入力してください');
   if(i>=0)db.products[i]=o;else db.products.push(o);save();closeModal();
 }
-function deleteProduct(i){
-  const p=db.products[i];if(!p)return;
-  if(!confirm(`${p.name}を削除しますか？\n販売履歴は残ります。`))return;
-  markDeleted('products',p.id);
-  db.products.splice(i,1);save();closeModal();
-}
+function deleteProduct(i){const p=db.products[i];if(!p)return;if(!confirm(`${p.name}を削除しますか？\n過去の販売履歴は残ります。`))return;markDeleted('products',p.id);db.products.splice(i,1);save();closeModal();}
 function retailSaleForm(){
-  migrateExtras();const products=db.products.filter(p=>p.fulfillment!=='external');if(!products.length)return alert('サロンで販売する商品を追加してください');
+  migrateExtras();const products=db.products;if(!products.length)return alert('商品を追加してください');
   modal(`<h3>店販を記録</h3><label>日付</label><input id="rDate" type="date" value="${todayISO}"><label>商品</label><select id="rProduct" onchange="updateRetailAmount()">${products.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select><label>数量</label><input id="rQuantity" type="number" min="1" max="100" step="1" value="1" oninput="updateRetailAmount()"><label>顧客名</label><input id="rCustomer"><label>金額（合計）</label><input id="rAmount" type="number" min="0" value="${Number(products[0].price||0)}"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveRetail()">保存</button></div>`);
 }
 function updateRetailAmount(){const p=db.products.find(p=>p.id===$('rProduct').value);$('rAmount').value=Number(p?.price||0)*Number($('rQuantity').value||1);}
 function saveRetail(){
   const p=db.products.find(p=>p.id===$('rProduct').value),quantity=Number($('rQuantity').value),amount=Number($('rAmount').value);
   if(!p||!Number.isInteger(quantity)||quantity<1||quantity>100||!Number.isFinite(amount)||amount<0||!$('rDate').value)return alert('商品・数量・金額・日付を確認してください');
-  db.retail.push({id:uid(),date:$('rDate').value,product:p.name,productId:p.id,category:p.category,quantity,customer:$('rCustomer').value.trim(),amount});p.stock=Math.max(0,Number(p.stock||0)-quantity);save();closeModal();
+  db.retail.push({id:uid(),date:$('rDate').value,product:p.name,productId:p.id,category:p.category,quantity,customer:$('rCustomer').value.trim(),amount,staffId:ownerStaff()?.id||'owner',source:'manual'});save();closeModal();
 }
 
 /* SHAiRE screenshot import */
@@ -2135,9 +2134,9 @@ function mergeImport(){
 const PRODUCT_CATEGORIES=['ミルク','オイル','スプレー','シャンプー','トリートメント','ReFa','その他'];
 const ORDER_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/orders';
 const CATALOG_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/catalog';
-let remoteOrders=[],ordersBusy=false,orderNotice='';
 const STAFF_ADMIN_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/staff';
 let staffLoginAccounts=[];
+let remoteOrders=[],ordersBusy=false,orderNotice='';
 function openStaffSettings(){
   migrateExtras();
   modal(`<h3>スタッフ・予約設定</h3>
@@ -2150,24 +2149,18 @@ function openStaffSettings(){
   refreshStaffAccounts();
 }
 async function refreshStaffAccounts(){
-  const status=$('staffAccountStatus');
-  const key=getCloudBackupKey();
+  const status=$('staffAccountStatus'),key=getCloudBackupKey();
   if(!key){if(status)status.textContent='同期キーが未設定のためログイン設定を読み込めません';return;}
   try{
     const r=await fetch(STAFF_ADMIN_API+'?admin=1',{headers:{'X-Backup-Key':key}}),body=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error(body.error||'取得できませんでした');
-    staffLoginAccounts=body.users||[];
-    if(status)status.textContent='個別ログイン設定を読み込みました';
-    renderStaffSettingsList();
+    staffLoginAccounts=body.users||[];if(status)status.textContent='個別ログイン設定を読み込みました';renderStaffSettingsList();
   }catch(e){if(status)status.textContent='ログイン設定を読み込めません。Vercel/Supabase設定を確認してください。';}
 }
 function accountForStaff(id){return staffLoginAccounts.find(x=>x.staff_id===id)||null}
 function renderStaffSettingsList(){
   const host=$('staffSettingsList');if(!host)return;
-  host.innerHTML=(db.staffProfiles||[]).map(p=>{
-    const a=accountForStaff(p.id);
-    return `<div class="item"><div class="t">${esc(p.name)}${p.role==='owner'?' <span class="staff-pill">親</span>':''}${p.active===false?' <span class="staff-pill">停止中</span>':''}${a?` <span class="staff-pill">ログイン${a.active===false?'停止':'設定済み'}</span>`:''}</div><div class="s">${esc((p.sources||[]).join(' / ')||'媒体未設定')}</div><div class="actions"><button class="ghost" onclick="staffForm('${p.id}')">担当設定</button>${p.role==='owner'?'<button class="soft" disabled>管理者</button>':`<button onclick="staffLoginForm('${p.id}')">ログイン設定</button>`}</div></div>`;
-  }).join('');
+  host.innerHTML=(db.staffProfiles||[]).map(p=>{const a=accountForStaff(p.id);return `<div class="item"><div class="t">${esc(p.name)}${p.role==='owner'?' <span class="staff-pill">親</span>':''}${p.active===false?' <span class="staff-pill">停止中</span>':''}${a?` <span class="staff-pill">ログイン${a.active===false?'停止':'設定済み'}</span>`:''}</div><div class="s">${esc((p.sources||[]).join(' / ')||'媒体未設定')}</div><div class="actions"><button class="ghost" onclick="staffForm('${p.id}')">担当設定</button>${p.role==='owner'?'<button class="soft" disabled>管理者</button>':`<button onclick="staffLoginForm('${p.id}')">ログイン設定</button>`}</div></div>`;}).join('');
 }
 function staffForm(id=''){
   const p=(db.staffProfiles||[]).find(x=>x.id===id)||{id:'',name:'',role:'staff',active:true,sources:['SHAiRE','Nailie','minimo','Instagram','その他']};
@@ -2176,44 +2169,24 @@ function staffForm(id=''){
 }
 function saveStaff(id=''){
   const name=$('staffName').value.trim(),sources=[...document.querySelectorAll('.staffSource:checked')].map(x=>x.value),role=$('staffRole').value,active=$('staffActive').checked;
-  if(!name)return alert('スタッフ名を入力してください');
-  if(!sources.length)return alert('予約媒体を1つ以上選んでください');
+  if(!name)return alert('スタッフ名を入力してください');if(!sources.length)return alert('予約媒体を1つ以上選んでください');
   if(role==='owner'&&(db.staffProfiles||[]).some(x=>x.role==='owner'&&x.id!==id))return alert('親 / 管理者は1人にしてください');
   const obj={id:id||uid(),name,role,active,sources};
-  if(id)db.staffProfiles=db.staffProfiles.map(x=>x.id===id?{...x,...obj}:x);else db.staffProfiles.push(obj);
-  save();openStaffSettings();
+  if(id)db.staffProfiles=db.staffProfiles.map(x=>x.id===id?{...x,...obj}:x);else db.staffProfiles.push(obj);save();openStaffSettings();
 }
 function staffLoginForm(staffId){
-  const p=(db.staffProfiles||[]).find(x=>x.id===staffId);if(!p)return;
-  const a=accountForStaff(staffId);
-  modal(`<h3>${esc(p.name)}のログイン設定</h3>
-    <div class="note" style="margin-bottom:10px">このアカウントでは${esc(p.name)}さん自身の予約・顧客・売上だけ表示されます。</div>
-    <label>ユーザー名</label><input id="staffLoginUser" autocapitalize="none" value="${esc(a?.username||'')}">
-    <label>${a?'新しいパスワード（変更しない場合は空欄）':'初回パスワード（8文字以上）'}</label><input id="staffLoginPass" type="password" autocomplete="new-password">
-    <label><input id="staffLoginActive" type="checkbox" style="width:auto" ${a?.active===false?'':'checked'}> ログインを有効にする</label>
-    <div class="actions"><button class="ghost" onclick="openStaffSettings()">戻る</button><button onclick="saveStaffLogin('${staffId}')">保存</button></div>
-    <div id="staffLoginStatus" class="small" style="margin-top:8px"></div>`);
+  const p=(db.staffProfiles||[]).find(x=>x.id===staffId);if(!p)return;const a=accountForStaff(staffId);
+  modal(`<h3>${esc(p.name)}のログイン設定</h3><div class="note" style="margin-bottom:10px">このアカウントでは${esc(p.name)}さん自身の予約・顧客・売上だけ表示されます。</div><label>ユーザー名</label><input id="staffLoginUser" autocapitalize="none" value="${esc(a?.username||'')}"><label>${a?'新しいパスワード（変更しない場合は空欄）':'初回パスワード（8文字以上）'}</label><input id="staffLoginPass" type="password" autocomplete="new-password"><label><input id="staffLoginActive" type="checkbox" style="width:auto" ${a?.active===false?'':'checked'}> ログインを有効にする</label><div class="actions"><button class="ghost" onclick="openStaffSettings()">戻る</button><button onclick="saveStaffLogin('${staffId}')">保存</button></div><div id="staffLoginStatus" class="small" style="margin-top:8px"></div>`);
 }
 async function saveStaffLogin(staffId){
   const p=(db.staffProfiles||[]).find(x=>x.id===staffId);if(!p)return;
-  const username=$('staffLoginUser').value.trim().toLowerCase(),password=$('staffLoginPass').value,active=$('staffLoginActive').checked,key=getCloudBackupKey();
-  if(!key)return;
+  const username=$('staffLoginUser').value.trim().toLowerCase(),password=$('staffLoginPass').value,active=$('staffLoginActive').checked,key=getCloudBackupKey();if(!key)return;
   if(!/^[a-z0-9._-]{3,40}$/.test(username))return alert('ユーザー名は英小文字・数字・._-で3文字以上にしてください');
-  if(!accountForStaff(staffId)&&password.length<8)return alert('初回パスワードは8文字以上にしてください');
-  if(password&&password.length<8)return alert('パスワードは8文字以上にしてください');
+  if(!accountForStaff(staffId)&&password.length<8)return alert('初回パスワードは8文字以上にしてください');if(password&&password.length<8)return alert('パスワードは8文字以上にしてください');
   const status=$('staffLoginStatus');if(status)status.textContent='保存中…';
-  try{
-    const r=await fetch(STAFF_ADMIN_API,{method:'POST',headers:{'Content-Type':'application/json','X-Backup-Key':key},body:JSON.stringify({action:'adminSave',staffId,username,password,active,role:'staff'})});
-    const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.error||'保存できませんでした');
-    if(status)status.textContent='保存しました';
-    await refreshStaffAccounts();openStaffSettings();
-  }catch(e){if(status)status.textContent=e.message;}
+  try{const r=await fetch(STAFF_ADMIN_API,{method:'POST',headers:{'Content-Type':'application/json','X-Backup-Key':key},body:JSON.stringify({action:'adminSave',staffId,username,password,active,role:'staff'})});const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.error||'保存できませんでした');if(status)status.textContent='保存しました';await refreshStaffAccounts();openStaffSettings();}catch(e){if(status)status.textContent=e.message;}
 }
-async function copyStaffPortalUrl(){
-  const url=new URL('staff.html',location.href).href;
-  try{await navigator.clipboard.writeText(url);alert('スタッフ用ログインURLをコピーしました');}
-  catch{prompt('スタッフ用ログインURL',url);}
-}
+async function copyStaffPortalUrl(){const url=new URL('staff.html',location.href).href;try{await navigator.clipboard.writeText(url);alert('スタッフ用ログインURLをコピーしました');}catch{prompt('スタッフ用ログインURL',url);}}
 function migrateExtras(){
   db.goalPlans ||= {};db.orderSettings ||= {};db.seenOrders ||= [];
   db.syncDeleted ||= {bookings:{},customers:{},products:{},sales:{},retail:{}};
@@ -2222,7 +2195,13 @@ function migrateExtras(){
   if(!db.staffProfiles.some(x=>x.role==='owner'))db.staffProfiles[0].role='owner';
   const ownerId=ownerStaff()?.id||db.staffProfiles[0].id;
   db.bookings.forEach(b=>{b.staffId ||= ownerId;if(!('bookingType' in b))b.bookingType='';});
-  db.products.forEach(p=>{p.id ||= uid();p.category ||= /ミルク|エマルジョン/.test(p.name)?'ミルク':/オイル/.test(p.name)?'オイル':/スプレー/.test(p.name)?'スプレー':/シャンプー/.test(p.name)?'シャンプー':/トリートメント/.test(p.name)?'トリートメント':/リファ|ReFa/i.test(p.name)?'ReFa':'その他';p.fulfillment ||= 'salon';});
+  db.retail.forEach(r=>{r.staffId ||= ownerId;});
+  db.products.forEach(p=>{
+    p.id ||= uid();
+    p.category ||= /ミルク|エマルジョン/.test(p.name)?'ミルク':/オイル/.test(p.name)?'オイル':/スプレー/.test(p.name)?'スプレー':/シャンプー/.test(p.name)?'シャンプー':/トリートメント/.test(p.name)?'トリートメント':/リファ|ReFa/i.test(p.name)?'ReFa':'その他';
+    p.description ||= '';p.recommended ||= '';p.usage ||= '';p.cost=Number(p.cost||0);
+    p.supplierUrl ||= p.externalUrl||'';p.fulfillment='salon';p.externalUrl='';p.stock=0;
+  });
 }
 function safeHTTPS(value){try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password?u.href:'';}catch{return '';}}
 function instagramURL(value){
@@ -2258,11 +2237,9 @@ function saveGoalPlan(){
   db.goalPlans[m]={unit:raw?unit:null,mondayOff:$('planMonday').checked,closedDates:closed};save();closeModal();
 }
 function renderRetailSummary(){
-  const totals=PRODUCT_CATEGORIES.map(cat=>{
-    const products=db.products.filter(p=>p.category===cat);
-    const rows=db.retail.filter(r=>(r.category||db.products.find(p=>p.id===r.productId||p.name===r.product)?.category||'その他')===cat);
-    return `<div class="row" style="margin:7px 0"><b>${cat}</b><span class="small">在庫 ${products.filter(p=>p.fulfillment!=='external').reduce((a,p)=>a+Number(p.stock||0),0)} ／ 販売 ${rows.reduce((a,r)=>a+Number(r.quantity||1),0)} ／ ${yen(rows.reduce((a,r)=>a+Number(r.amount||0),0))}</span></div>`;
-  });$('retailSummary').innerHTML='<b>カテゴリ別集計（全期間）</b>'+totals.join('');
+  const rows=db.retail||[];
+  const qty=rows.reduce((a,r)=>a+Number(r.quantity||1),0),sales=rows.reduce((a,r)=>a+Number(r.amount||0),0),active=db.products.filter(p=>p.public).length;
+  $('retailSummary').innerHTML=`<b>店販まとめ（全期間）</b><div class="small" style="margin-top:7px">掲載商品 ${active}件 ／ 販売 ${qty}点 ／ ${yen(sales)}</div>`;
 }
 function nameDistance(a,b){
   a=normalizeName(a);b=normalizeName(b);const row=Array.from({length:b.length+1},(_,i)=>i);
@@ -2354,13 +2331,29 @@ async function refineImportNames(worker,img,runs,geom,st){
   }
 }
 function openOrderSettings(){
-  modal(`<h3>商品注文ページ</h3><p class="small">掲載する商品にチェックを付けてから「商品を公開」。お客様には注文ページのURLだけを共有できます。</p><label>公式LINEのURL</label><input id="orderLine" type="url" placeholder="https://lin.ee/..." value="${esc(db.orderSettings.lineUrl||'')}"><label>ReFa共通 B happy URL</label><input id="orderBHappy" type="url" value="${esc(db.orderSettings.bHappyUrl||'')}"><button style="width:100%;margin-top:12px" onclick="publishCatalog()">設定を保存して商品を公開</button><button class="ghost" style="width:100%;margin-top:8px" onclick="shareOrderPage()">お客様用URLをコピー</button><p id="publishStatus" role="status" class="small"></p><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button></div>`);
+  const owner=ownerStaff()||{};
+  modal(`<h3>商品注文ページ</h3>
+    <p class="small">掲載商品を公開すると、お客様が注文できます。注文はご来店7日前まで。注文後はSalon Managerに保存され、LINE通知も受け取れます。</p>
+    <label>公式LINEのURL（お客様の相談用）</label><input id="orderLine" type="url" placeholder="https://lin.ee/..." value="${esc(db.orderSettings.lineUrl||'')}">
+    <label>自分への注文LINE通知ID</label><input id="ownerNotifyLineId" value="${esc(owner.notifyLineUserId||'')}" placeholder="Uから始まるLINE連携ID">
+    <div class="small">公式LINEに「連携ID」と送って表示されるIDを貼り付けます。</div>
+    <button style="width:100%;margin-top:12px" onclick="publishCatalog()">設定を保存して商品を公開</button>
+    <button class="ghost" style="width:100%;margin-top:8px" onclick="shareOrderPage()">お客様用URLをコピー</button>
+    <p id="publishStatus" role="status" class="small"></p><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button></div>`);
 }
 async function publishCatalog(){
-  const line=$('orderLine').value.trim(),bHappy=$('orderBHappy').value.trim();if((line&&!safeHTTPS(line))||(bHappy&&!safeHTTPS(bHappy)))return alert('https:// から始まるURLを入力してください');
-  db.orderSettings={...db.orderSettings,lineUrl:line,bHappyUrl:bHappy};save();
+  const line=$('orderLine').value.trim(),lineId=$('ownerNotifyLineId').value.trim();
+  if(line&&!safeHTTPS(line))return alert('公式LINEは https:// から始まるURLを入力してください');
+  if(lineId&&!/^U[0-9a-f]{32}$/i.test(lineId))return alert('LINE連携IDを確認してください');
+  const owner=ownerStaff();if(owner)owner.notifyLineUserId=lineId;
+  db.orderSettings={...db.orderSettings,lineUrl:line};save();
   const key=getCloudBackupKey();if(!key)return;$('publishStatus').textContent='公開中…';
-  try{const r=await fetch(CATALOG_API,{method:'POST',headers:{'Content-Type':'application/json','X-Backup-Key':key},body:JSON.stringify({products:db.products.filter(p=>p.public).map(({id,name,category,price,fulfillment,externalUrl})=>({id,name,category,price,fulfillment,externalUrl})),settings:{lineUrl:line,bHappyUrl:bHappy}})});const body=await r.json();if(!r.ok)throw new Error(body.error||'公開に失敗');$('publishStatus').textContent='商品を公開しました。お客様用URLを共有できます。';}catch(e){$('publishStatus').textContent='公開できませんでした。注文用APIと保存先の設定を確認してください。';}
+  try{
+    const products=db.products.filter(p=>p.public).map(({id,name,category,price,description,recommended,usage})=>({id,name,category,price,fulfillment:'salon',externalUrl:'',description,recommended,usage}));
+    const r=await fetch(CATALOG_API,{method:'POST',headers:{'Content-Type':'application/json','X-Backup-Key':key},body:JSON.stringify({products,settings:{lineUrl:line,bHappyUrl:''}})});const body=await r.json();if(!r.ok)throw new Error(body.error||'公開に失敗');
+    await cloudBackup(key);
+    $('publishStatus').textContent='商品を公開しました。注文が入るとアプリに保存され、LINE通知設定済みならLINEにも届きます。';
+  }catch(e){$('publishStatus').textContent='公開できませんでした。注文用APIと保存先の設定を確認してください。';}
 }
 async function shareOrderPage(){const url=new URL('order.html',location.href).href;try{await navigator.clipboard.writeText(url);alert('お客様用URLをコピーしました');}catch{prompt('このURLをお客様に共有',url);}}
 async function refreshOrders(manual=false){
@@ -2375,13 +2368,15 @@ function viewOrders(){go('retail',document.querySelector('[data-tab="retail"]'))
 function renderOrders(){
   if(!$('orderList'))return;$('orderStatus').textContent=orderNotice||'アプリを開いている間は1分ごとに注文を確認します。';
   const labels={new:'未対応',ordered:'発注済み',ready:'入荷済み',completed:'お渡し済み',cancelled:'キャンセル'};
-  $('orderList').innerHTML=remoteOrders.length?remoteOrders.map(o=>{const deadline=dateOnly(o.visit_date);deadline.setDate(deadline.getDate()-7);const late=localISO(deadline)<todayISO;
-    return `<div class="item"><div class="t">${esc(o.customer_name)} ・ ${esc(labels[o.status]||o.status)}</div><div class="s">受取 ${esc(o.visit_date)} ／ 発注目安 ${localISO(deadline)}${late&&o.status==='new'?' <b>早めに要確認</b>':''}<br>${(o.items||[]).map(i=>`${esc(i.name)} × ${i.quantity}`).join('<br>')}<br>${yen(o.total)}<br>連絡先：${esc(o.contact||'LINEで確認')}<br>${esc(o.note||'')}</div><select aria-label="注文状況" onchange="updateOrderStatus('${o.id}',this.value)">${Object.entries(labels).map(([k,v])=>`<option value="${k}" ${o.status===k?'selected':''}>${v}</option>`).join('')}</select></div>`;
+  $('orderList').innerHTML=remoteOrders.length?remoteOrders.map(o=>{const deadline=dateOnly(o.visit_date);deadline.setDate(deadline.getDate()-7);const late=localISO(deadline)<todayISO;const supplier=(o.items||[]).map(i=>db.products.find(p=>String(p.id)===String(i.productId))?.supplierUrl||'').find(Boolean)||'';
+    return `<div class="item"><div class="t">${esc(o.customer_name)} ・ ${esc(labels[o.status]||o.status)}</div><div class="s">受取 ${esc(o.visit_date)} ／ 発注目安 ${localISO(deadline)}${late&&o.status==='new'?' <b>早めに要確認</b>':''}<br>${(o.items||[]).map(i=>`${esc(i.name)} × ${i.quantity}`).join('<br>')}<br>${yen(o.total)}<br>連絡先：${esc(o.contact||'LINEで確認')}<br>${esc(o.note||'')}</div><div class="order-status-row">${supplier?`<button class="soft" onclick="openOwnerOrderSupplier('${o.id}')">仕入れ先を開く</button>`:''}<select aria-label="注文状況" onchange="updateOrderStatus('${o.id}',this.value)">${Object.entries(labels).map(([k,v])=>`<option value="${k}" ${o.status===k?'selected':''}>${v}</option>`).join('')}</select></div></div>`;
   }).join(''):empty('商品注文はまだありません');
 }
+function openOwnerOrderSupplier(id){const o=remoteOrders.find(x=>x.id===id);const url=(o?.items||[]).map(i=>db.products.find(p=>String(p.id)===String(i.productId))?.supplierUrl||'').find(Boolean);if(!url)return alert('仕入れ先URLがありません');window.open(url,'_blank','noopener,noreferrer');}
 async function updateOrderStatus(id,status){
   const key=localStorage.getItem(CLOUD_BACKUP_KEY_STORAGE);if(!key)return;
-  try{const r=await fetch(ORDER_API,{method:'PATCH',headers:{'Content-Type':'application/json','X-Backup-Key':key},body:JSON.stringify({id,status})});if(!r.ok)throw new Error();await refreshOrders(true);}catch{alert('注文状況を更新できませんでした');renderOrders();}
+  try{const r=await fetch(ORDER_API,{method:'PATCH',headers:{'Content-Type':'application/json','X-Backup-Key':key},body:JSON.stringify({id,status})});const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.error||'更新できませんでした');await refreshOrders(true);if(status==='completed'){await syncFromCloud(true,key);alert('お渡し済みにしました。店販売上へ反映しました');}}
+  catch(e){alert(e.message||'注文状況を更新できませんでした');renderOrders();}
 }
 
 migrateExtras();localStorage.setItem(KEY,JSON.stringify(db));renderAll();setReservationView('list');
