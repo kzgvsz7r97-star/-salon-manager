@@ -215,6 +215,9 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
         <button onclick="exportBackup()">バックアップ保存</button>
         <button class="soft" onclick="document.getElementById('backupImportFile').click()">バックアップ復元</button>
       </div>
+      <button class="soft" style="width:100%;margin-top:8px" onclick="openRecoveryHistory()">自動バックアップ履歴</button>
+      <div id="lastSavedLabel" class="small" style="margin-top:8px">最終保存：確認中…</div>
+      <div class="small" style="margin-top:2px">端末内に直近10世代を自動保存します。</div>
       <button class="blue" style="width:100%;margin-top:8px" onclick="manualCloudSync()">今すぐ同期</button>
       <button class="soft" style="width:100%;margin-top:8px" onclick="openStaffSettings()">スタッフ・予約設定</button>
       <input id="backupImportFile" type="file" accept=".json,application/json" style="display:none" onchange="importBackup(event)">
@@ -433,6 +436,177 @@ let cloudSyncBusy=false;
 let cloudDirty=false;
 let cloudApplying=false;
 
+const LAST_SAVED_STORAGE='salonManagerLastSavedAt';
+const RECOVERY_DB_NAME='salonManagerRecoveryV1';
+const RECOVERY_STORE='snapshots';
+const RECOVERY_LIMIT=10;
+
+function recoveryFingerprint(data){
+  let raw='';
+  try{raw=JSON.stringify(data||{});}catch{return String(Date.now())}
+  let hash=2166136261;
+  for(let i=0;i<raw.length;i++){
+    hash^=raw.charCodeAt(i);
+    hash=Math.imul(hash,16777619);
+  }
+  return raw.length+'-'+(hash>>>0).toString(36);
+}
+
+function openRecoveryDb(){
+  return new Promise((resolve,reject)=>{
+    if(!window.indexedDB){
+      reject(new Error('IndexedDB unavailable'));
+      return;
+    }
+
+    const req=indexedDB.open(RECOVERY_DB_NAME,1);
+    req.onupgradeneeded=()=>{
+      const idb=req.result;
+      if(!idb.objectStoreNames.contains(RECOVERY_STORE)){
+        idb.createObjectStore(RECOVERY_STORE,{keyPath:'id'});
+      }
+    };
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error||new Error('Recovery DB error'));
+  });
+}
+
+async function recoverySnapshots(){
+  const idb=await openRecoveryDb();
+  try{
+    return await new Promise((resolve,reject)=>{
+      const tx=idb.transaction(RECOVERY_STORE,'readonly');
+      const req=tx.objectStore(RECOVERY_STORE).getAll();
+      req.onsuccess=()=>resolve((req.result||[]).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))));
+      req.onerror=()=>reject(req.error||new Error('Recovery read error'));
+    });
+  }finally{
+    idb.close();
+  }
+}
+
+async function createRecoverySnapshot(reason='自動保存'){
+  try{
+    const data=structuredClone(normalizedCloudData(db));
+    const fingerprint=recoveryFingerprint(data);
+    const rows=await recoverySnapshots();
+
+    if(rows[0]?.fingerprint===fingerprint)return false;
+
+    const idb=await openRecoveryDb();
+    try{
+      await new Promise((resolve,reject)=>{
+        const tx=idb.transaction(RECOVERY_STORE,'readwrite');
+        const store=tx.objectStore(RECOVERY_STORE);
+        store.put({
+          id:String(Date.now())+'-'+Math.random().toString(36).slice(2,8),
+          createdAt:new Date().toISOString(),
+          reason:String(reason||'自動保存').slice(0,80),
+          fingerprint,
+          data
+        });
+
+        const remove=rows.slice(RECOVERY_LIMIT-1);
+        remove.forEach(x=>store.delete(x.id));
+
+        tx.oncomplete=()=>resolve();
+        tx.onerror=()=>reject(tx.error||new Error('Recovery write error'));
+        tx.onabort=()=>reject(tx.error||new Error('Recovery write aborted'));
+      });
+    }finally{
+      idb.close();
+    }
+
+    return true;
+  }catch(err){
+    console.warn('Recovery snapshot failed',err);
+    return false;
+  }
+}
+
+function savedTimeLabel(iso){
+  if(!iso)return '記録なし';
+  const d=new Date(iso);
+  if(Number.isNaN(d.getTime()))return '記録なし';
+  return new Intl.DateTimeFormat('ja-JP',{
+    month:'numeric',
+    day:'numeric',
+    hour:'2-digit',
+    minute:'2-digit'
+  }).format(d);
+}
+
+function updateLastSavedLabel(){
+  const el=$('lastSavedLabel');
+  if(!el)return;
+  el.textContent='最終保存：'+savedTimeLabel(localStorage.getItem(LAST_SAVED_STORAGE)||'');
+}
+
+function stampLocalSave(reason='自動保存'){
+  const at=new Date().toISOString();
+  localStorage.setItem(LAST_SAVED_STORAGE,at);
+  updateLastSavedLabel();
+  createRecoverySnapshot(reason);
+}
+
+async function openRecoveryHistory(){
+  let rows=[];
+  try{
+    rows=await recoverySnapshots();
+  }catch(err){
+    console.error(err);
+    return alert('自動バックアップ履歴を開けませんでした');
+  }
+
+  modal(`<h3>自動バックアップ履歴</h3>
+    <div class="small" style="margin-bottom:10px">直近10世代まで、この端末内に保存しています。復元前にも現在の状態を1世代保存します。</div>
+    ${rows.length
+      ?rows.map(x=>{
+        const d=x.data||{};
+        const count=Array.isArray(d.bookings)?d.bookings.length:0;
+        const customers=Array.isArray(d.customers)?d.customers.length:0;
+        const when=savedTimeLabel(x.createdAt);
+        return `<div class="item">
+          <div class="t">${esc(when)} ・ ${esc(x.reason||'自動保存')}</div>
+          <div class="s">予約 ${count}件 / 顧客 ${customers}人</div>
+          <button class="soft" style="width:100%;margin-top:8px" onclick="restoreRecoverySnapshot('${esc(x.id)}')">この状態に戻す</button>
+        </div>`;
+      }).join('')
+      :'<div class="empty">自動バックアップはまだありません</div>'}
+    <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button></div>`);
+}
+
+async function restoreRecoverySnapshot(id){
+  let rows=[];
+  try{rows=await recoverySnapshots();}
+  catch{return alert('バックアップを読み込めませんでした')}
+
+  const snap=rows.find(x=>x.id===id);
+  if(!snap)return alert('バックアップが見つかりません');
+
+  const data=normalizedCloudData(snap.data||{});
+  const bookingCount=data.bookings.length;
+  const customerCount=data.customers.length;
+
+  const ok=confirm(
+    `この状態に戻しますか？\n\n${savedTimeLabel(snap.createdAt)}\n予約 ${bookingCount}件 / 顧客 ${customerCount}人\n\n現在の状態も復元前バックアップとして残します。`
+  );
+  if(!ok)return;
+
+  await createRecoverySnapshot('復元前');
+
+  db=data;
+  localStorage.setItem(KEY,JSON.stringify(db));
+  localStorage.setItem(LAST_SAVED_STORAGE,new Date().toISOString());
+  cloudDirty=true;
+  renderAll();
+  updateLastSavedLabel();
+  await createRecoverySnapshot('履歴から復元');
+  closeModal();
+  syncStatus('自動バックアップから復元しました。内容を確認後「今すぐ同期」を押してください');
+  alert('復元しました。内容を確認してから「今すぐ同期」を押してください');
+}
+
 function getCloudBackupKey(){
   let key=localStorage.getItem(CLOUD_BACKUP_KEY_STORAGE)||'';
   if(key)return key;
@@ -639,11 +813,14 @@ async function postCloudSnapshot(key,data){
 function applySyncedDb(data){
   cloudApplying=true;
   try{
+    const before=recoveryFingerprint(normalizedCloudData(db));
     db=normalizedCloudData(data);
     migrateExtras();
     localStorage.setItem(KEY,JSON.stringify(db));
     renderAll();
     if(reservationView==='week')renderReservationWeek();
+    if(before!==recoveryFingerprint(db))stampLocalSave('クラウド同期');
+    else updateLastSavedLabel();
   }finally{
     cloudApplying=false;
   }
@@ -698,6 +875,7 @@ async function syncFromCloud(force=false,keyOverride=''){
 
 function save(){
   localStorage.setItem(KEY,JSON.stringify(db));
+  stampLocalSave('自動保存');
   renderAll();
 
   if(!cloudApplying){
@@ -1594,6 +1772,8 @@ async function importBackup(event){
     );
     if(!ok){event.target.value='';return;}
 
+    await createRecoverySnapshot('復元前');
+
     db={
       ...structuredClone(initial),
       ...restored,
@@ -1606,6 +1786,7 @@ async function importBackup(event){
     };
 
     localStorage.setItem(KEY,JSON.stringify(db));
+    stampLocalSave('ファイルから復元');
     renderAll();
     if(status)status.textContent=`復元完了：予約 ${bookingCount}件 / 顧客 ${customerCount}件`;
     alert('バックアップを復元しました');
@@ -4004,6 +4185,8 @@ async function updateOrderStatus(id,status){
 }
 
 migrateExtras();localStorage.setItem(KEY,JSON.stringify(db));renderAll();setReservationView('list');
+updateLastSavedLabel();
+createRecoverySnapshot('起動時');
 setInterval(()=>{if(!document.hidden)refreshOrders(false);},60000);
 setInterval(()=>{if(!document.hidden)syncFromCloud(false);},15000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){refreshOrders(false);syncFromCloud(false);}});
