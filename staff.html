@@ -443,6 +443,10 @@ function renderWeek(){
 function bookingForm(id=''){
   const b=id?state.bookings.find(x=>x.id===id)||{}:{};
   const sources=state.profile?.sources?.length?state.profile.sources:['その他'];
+  const linkedId=b.nextBookingId||(b.id?`${b.id}-next`:'');
+  const linked=linkedId?state.bookings.find(x=>x.id===linkedId)||{}:{};
+  const nextVisible=!!(b.nextBookingTaken||b.nextBookingId||linked.id);
+
   modal(`<h3>${id?'予約を編集':'予約を追加'}</h3>
     <label>日付</label><input id="fDate" type="date" value="${esc(b.date||todayISO)}">
     <div class="row"><div><label>開始</label><input id="fTime" type="time" value="${esc(b.time||'11:00')}"></div><div><label>終了</label><input id="fEnd" type="time" value="${esc(b.end||'13:00')}"></div></div>
@@ -453,12 +457,34 @@ function bookingForm(id=''){
     <label>予約媒体</label><select id="fSource">${sources.map(x=>`<option ${b.source===x?'selected':''}>${esc(x)}</option>`).join('')}</select>
     <label>新規 / 再来</label><select id="fNew"><option value="new" ${b.newGuest?'selected':''}>新規</option><option value="repeat" ${b.newGuest===false?'selected':''}>再来</option></select>
     <label>来店ステータス</label><select id="fStatus"><option value="booked" ${bookingStatus(b)==='booked'?'selected':''}>予約中</option><option value="visited" ${bookingStatus(b)==='visited'?'selected':''}>来店済み</option><option value="cancelled" ${bookingStatus(b)==='cancelled'?'selected':''}>キャンセル</option><option value="noshow" ${bookingStatus(b)==='noshow'?'selected':''}>無断キャンセル</option></select>
+
     <div class="card"><b>次回予約・フォロー</b>
-      <label><input id="fNext" type="checkbox" style="width:auto" ${b.nextBookingTaken?'checked':''}> 次回予約あり</label><br>
+      <label><input id="fNext" type="checkbox" style="width:auto" onchange="toggleNextBookingFields()" ${nextVisible?'checked':''}> 次回予約が取れた</label>
+
+      <div id="nextBookingFields" class="${nextVisible?'':'hidden'}" style="margin:8px 0 12px">
+        <label>次回来店日</label>
+        <input id="fNextDate" type="date" value="${esc(linked.date||'')}">
+
+        <div class="row">
+          <div>
+            <label>次回時間</label>
+            <input id="fNextTime" type="time" value="${esc(linked.time||b.time||'11:00')}">
+          </div>
+
+          <div>
+            <label>次回メニュー</label>
+            <input id="fNextMenu" value="${esc(linked.menu||b.menu||'')}">
+          </div>
+        </div>
+
+        <div class="small">保存すると次回予約がカレンダーにも自動で追加されます。</div>
+      </div>
+
       <label><input id="fAfter" type="checkbox" style="width:auto" ${b.followAftercare?'checked':''}> 当日アフター送信済み</label><br>
       <label><input id="fWeek" type="checkbox" style="width:auto" ${b.followWeek?'checked':''}> 1週間前連絡済み</label><br>
       <label><input id="fTwo" type="checkbox" style="width:auto" ${b.follow2Days?'checked':''}> 2日前連絡済み</label>
     </div>
+
     <label><input id="fPaid" type="checkbox" style="width:auto" ${b.paymentComplete?'checked':''}> 決済完了</label>
     <h3 style="margin-top:18px">施術カルテ</h3>
     <label>薬剤 / 配合</label><textarea id="fFormula">${esc(b.formula||'')}</textarea>
@@ -466,10 +492,133 @@ function bookingForm(id=''){
     <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveBooking('${id}')">保存</button></div>
     ${id?`<button class="danger" style="width:100%;margin-top:8px" onclick="deleteBooking('${id}')">削除</button>`:''}`);
 }
-async function saveBooking(id){
-  const b={id:id||'',date:$('fDate').value,time:$('fTime').value,end:$('fEnd').value,customer:$('fCustomer').value.trim(),menu:$('fMenu').value.trim(),price:Number($('fPrice').value)||0,bookingType:$('fType').value,source:$('fSource').value,newGuest:$('fNew').value==='new',status:$('fStatus').value,nextBookingTaken:$('fNext').checked,followAftercare:$('fAfter').checked,followWeek:$('fWeek').checked,follow2Days:$('fTwo').checked,paymentComplete:$('fPaid').checked,formula:$('fFormula').value,visitNote:$('fVisitNote').value};
-  try{const r=await api({method:'POST',body:JSON.stringify({action:'upsertBooking',booking:b})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
+
+function toggleNextBookingFields(){
+  const host=$('nextBookingFields');
+  if(!host)return;
+  host.classList.toggle('hidden',!$('fNext')?.checked);
 }
+
+function nextBookingEndTime(start,end,nextStart){
+  const startMin=timeMin(start);
+  const endMin=timeMin(end);
+  const nextMin=timeMin(nextStart);
+  const duration=endMin>startMin?endMin-startMin:120;
+  const total=Math.max(0,Math.min(23*60+59,nextMin+duration));
+  return `${pad(Math.floor(total/60))}:${pad(total%60)}`;
+}
+
+async function saveBooking(id){
+  const prev=id?state.bookings.find(x=>x.id===id)||{}:{};
+  const originalId=id||crypto.randomUUID();
+  const linkedId=prev.nextBookingId||`${originalId}-next`;
+  const linkedExists=state.bookings.some(x=>x.id===linkedId);
+  const nextTaken=!!$('fNext')?.checked;
+  const nextDate=nextTaken?$('fNextDate')?.value||'':'';
+  const nextTime=nextTaken?$('fNextTime')?.value||'':'';
+  const nextMenu=nextTaken?$('fNextMenu')?.value.trim()||'':'';
+
+  if(nextTaken){
+    if(!nextDate||!nextTime||!nextMenu){
+      return alert('次回来店日・時間・メニューを入力してください');
+    }
+
+    if(nextDate<=$('fDate').value){
+      return alert('次回来店日は今回の予約より後の日付にしてください');
+    }
+  }
+
+  let removeLinked=false;
+
+  if(!nextTaken&&linkedExists){
+    if(!confirm('次回予約として作成した予約もカレンダーから削除しますか？'))return;
+    removeLinked=true;
+  }
+
+  const b={
+    id:originalId,
+    date:$('fDate').value,
+    time:$('fTime').value,
+    end:$('fEnd').value,
+    customer:$('fCustomer').value.trim(),
+    menu:$('fMenu').value.trim(),
+    price:Number($('fPrice').value)||0,
+    bookingType:$('fType').value,
+    source:$('fSource').value,
+    newGuest:$('fNew').value==='new',
+    status:$('fStatus').value,
+    nextBookingTaken:nextTaken,
+    followAftercare:$('fAfter').checked,
+    followWeek:$('fWeek').checked,
+    follow2Days:$('fTwo').checked,
+    paymentComplete:$('fPaid').checked,
+    formula:$('fFormula').value,
+    visitNote:$('fVisitNote').value
+  };
+
+  try{
+    const originalResult=await api({
+      method:'POST',
+      body:JSON.stringify({action:'upsertBooking',booking:b})
+    });
+
+    applyState(originalResult);
+
+    if(nextTaken){
+      const currentLinked=state.bookings.find(x=>x.id===linkedId)||{};
+      const nextBooking={
+        id:linkedId,
+        date:nextDate,
+        time:nextTime,
+        end:nextBookingEndTime(b.time,b.end,nextTime),
+        customer:b.customer,
+        menu:nextMenu,
+        price:nextMenu===b.menu?b.price:Number(currentLinked.price||0),
+        bookingType:b.bookingType,
+        source:b.source,
+        newGuest:false,
+        status:'booked',
+        nextBookingTaken:false,
+        followAftercare:false,
+        followWeek:false,
+        follow2Days:false,
+        paymentComplete:false,
+        formula:currentLinked.formula||'',
+        visitNote:currentLinked.visitNote||''
+      };
+
+      try{
+        const nextResult=await api({
+          method:'POST',
+          body:JSON.stringify({action:'upsertBooking',booking:nextBooking})
+        });
+        applyState(nextResult);
+      }catch(nextError){
+        try{
+          const rollback={...b,nextBookingTaken:false};
+          const rollbackResult=await api({
+            method:'POST',
+            body:JSON.stringify({action:'upsertBooking',booking:rollback})
+          });
+          applyState(rollbackResult);
+        }catch{}
+        throw nextError;
+      }
+    }else if(removeLinked){
+      const deleteResult=await api({
+        method:'POST',
+        body:JSON.stringify({action:'deleteBooking',id:linkedId})
+      });
+      applyState(deleteResult);
+    }
+
+    closeModal();
+    renderAll();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
 async function deleteBooking(id){
   if(!confirm('この予約を削除しますか？'))return;
   try{const r=await api({method:'POST',body:JSON.stringify({action:'deleteBooking',id})});applyState(r);closeModal();renderAll()}catch(e){alert(e.message)}
