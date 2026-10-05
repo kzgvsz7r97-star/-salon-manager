@@ -32,8 +32,8 @@ button,.button{display:block;text-align:center;width:100%;border:0;background:#2
 <div class="deadline"><b>ご注文はご来店の7日前まで</b><br>注文後、担当者が確認して商品を発注します。</div>
 <div id="loading" role="status" class="sub"></div>
 <form id="orderForm">
-<h2>商品を選ぶ</h2>
-<div id="categoryTabs" class="category-tabs" aria-label="商品カテゴリ"></div>
+<h2>悩み・目的から選ぶ</h2>
+<div id="categoryTabs" class="category-tabs" aria-label="悩み・目的"></div>
 <div id="products"></div>
 <div id="external"></div>
 <div class="card">
@@ -55,13 +55,13 @@ button,.button{display:block;text-align:center;width:100%;border:0;background:#2
 </main>
 <script>
 const API_BASE='https://salon-manager-kzgvsz7r97-star.vercel.app/api';
-const RETAIL_CATEGORIES=['シャンプー','トリートメント','オイル','スプレー','電子機器'];
+const RETAIL_CONCERNS=['ダメージケア','くせ・広がり','乾燥・パサつき','スタイリング','コテ・アイロン'];
 const params=new URLSearchParams(location.search);
 const staffId=(params.get('staff')||'').trim();
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const yen=n=>'¥'+Number(n||0).toLocaleString('ja-JP');
-let catalog=[];let settings={};let seller=null;let orderId=crypto.randomUUID();let sending=false;let lastMessage='';let lineQrData='';let activeCategory='シャンプー';const quantities={};
+let catalog=[];let settings={};let seller=null;let orderId=crypto.randomUUID();let sending=false;let lastMessage='';let lineQrData='';let activeConcern='ダメージケア';const quantities={};
 
 function categoryForProduct(p){
   const raw=`${p?.category||''} ${p?.name||''}`.normalize('NFKC').toLowerCase();
@@ -71,12 +71,27 @@ function categoryForProduct(p){
   if(/電子機器|リファ|refa|ドライヤー|dryer|アイロン|iron|コテ|カールアイロン|ストレートアイロン|ブラシ/.test(raw))return '電子機器';
   return 'オイル';
 }
+function concernForProduct(p){
+  const raw=`${p?.name||''} ${p?.category||''} ${p?.description||''} ${p?.recommended||''}`.normalize('NFKC').toLowerCase();
+
+  if(/リファ|refa|クレイツ|create|ドライヤー|dryer|アイロン|iron|コテ|カールアイロン|ストレートアイロン|ブラシ/.test(raw))return 'コテ・アイロン';
+  if(/スプレー|spray|ミスト|mist|トリエ|スタイリング|キープ|hold|ワックス|wax|バーム|balm/.test(raw))return 'スタイリング';
+  if(/hita|ヒタ|くせ|クセ|うねり|広がり|まとまりにく|湿気/.test(raw))return 'くせ・広がり';
+  if(/オルキデ|orchid|乾燥|パサつき|保湿|うるおい|潤い|moisture/.test(raw))return '乾燥・パサつき';
+  if(/ファイバープレックス|fibreplex|リケラ|likera|ダメージ|補修|repair|ブリーチ|bleach|ボンド|bond/.test(raw))return 'ダメージケア';
+
+  const type=categoryForProduct(p);
+  if(type==='スプレー')return 'スタイリング';
+  if(type==='電子機器')return 'コテ・アイロン';
+  if(type==='オイル')return '乾燥・パサつき';
+  return 'ダメージケア';
+}
 function salonProducts(){return catalog.filter(p=>p.fulfillment!=='external')}
-function categoryCount(cat){return salonProducts().filter(p=>categoryForProduct(p)===cat).length}
-function setCategory(cat){activeCategory=cat;renderCategoryTabs();renderProducts()}
+function concernCount(concern){return salonProducts().filter(p=>concernForProduct(p)===concern).length}
+function setConcern(concern){activeConcern=concern;renderCategoryTabs();renderProducts()}
 function renderCategoryTabs(){
   const host=$('categoryTabs');if(!host)return;
-  host.innerHTML=RETAIL_CATEGORIES.map(cat=>`<button type="button" class="category-tab ${activeCategory===cat?'active':''}" onclick="setCategory('${cat}')">${cat}</button>`).join('');
+  host.innerHTML=RETAIL_CONCERNS.map(concern=>`<button type="button" class="category-tab ${activeConcern===concern?'active':''}" onclick="setConcern('${concern}')">${concern}</button>`).join('');
 }
 function removeLineQr(){lineQrData='';const file=$('lineQrFile');if(file)file.value='';const preview=$('lineQrPreview');if(preview){preview.removeAttribute('src');preview.classList.add('hidden')}$('removeLineQrButton')?.classList.add('hidden')}
 async function handleLineQr(event){
@@ -104,8 +119,8 @@ function productDetails(p){
   return `<button id="detailbtn-${esc(p.id)}" type="button" class="detail-toggle" onclick="toggleProductDetails('${esc(p.id)}')">詳しく見る ▼</button><div id="details-${esc(p.id)}" class="product-details hidden">${p.description?`<div class="desc">${esc(p.description)}</div>`:''}${p.recommended?`<div class="detail"><b>おすすめの人</b><br>${esc(p.recommended)}</div>`:''}${p.usage?`<div class="detail"><b>使い方</b><br>${esc(p.usage)}</div>`:''}</div>`;
 }
 function renderProducts(){
-  const salon=salonProducts();const current=salon.filter(p=>categoryForProduct(p)===activeCategory);const external=catalog.filter(p=>p.fulfillment==='external');
-  $('products').innerHTML=current.length?current.map(p=>`<div class="card product"><div class="product-head"><div class="product-main"><div class="name">${esc(p.name)}</div><div class="category">${esc(categoryForProduct(p))}</div><div class="price">${yen(p.price)}</div></div><div class="qty-wrap"><select aria-label="${esc(p.name)}の数量" onchange="setQty('${esc(p.id)}',this.value)">${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${Number(quantities[String(p.id)]||0)===n?'selected':''}>${n}</option>`).join('')}</select></div></div>${productDetails(p)}</div>`).join(''):`<div class="empty-category">このカテゴリの商品はまだありません。</div>`;
+  const salon=salonProducts();const current=salon.filter(p=>concernForProduct(p)===activeConcern);const external=catalog.filter(p=>p.fulfillment==='external');
+  $('products').innerHTML=current.length?current.map(p=>`<div class="card product"><div class="product-head"><div class="product-main"><div class="name">${esc(p.name)}</div><div class="category">${esc(categoryForProduct(p))}</div><div class="price">${yen(p.price)}</div></div><div class="qty-wrap"><select aria-label="${esc(p.name)}の数量" onchange="setQty('${esc(p.id)}',this.value)">${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${Number(quantities[String(p.id)]||0)===n?'selected':''}>${n}</option>`).join('')}</select></div></div>${productDetails(p)}</div>`).join(''):`<div class="empty-category">この悩み・目的の商品はまだありません。</div>`;
   $('external').innerHTML=external.length?`<h2>外部購入商品</h2>${external.map(p=>`<div class="card"><div class="name">${esc(p.name)}</div><div class="category">${esc(categoryForProduct(p))}</div>${productDetails(p)}${httpsURL(p.externalUrl)?`<a class="button secondary" href="${esc(httpsURL(p.externalUrl))}" target="_blank" rel="noopener noreferrer">購入ページを開く</a>`:''}</div>`).join('')}`:'';
   updateTotal();
 }
@@ -113,7 +128,7 @@ async function loadCatalog(){
   $('loading').textContent='商品を読み込んでいます…';
   try{
     const url=staffId?`${API_BASE}/apstorefront?staff=${encodeURIComponent(staffId)}`:`${API_BASE}/catalog`;const r=await fetch(url,{cache:'no-store'});const b=await r.json();if(!r.ok)throw new Error(b.error||'商品を読み込めませんでした');seller=b.seller||null;catalog=(b.products||[]).map(p=>({...p,fulfillment:p.fulfillment||'salon'}));settings=b.settings||{};
-    const firstAvailable=RETAIL_CATEGORIES.find(cat=>categoryCount(cat)>0);if(firstAvailable)activeCategory=firstAvailable;
+    const firstAvailable=RETAIL_CONCERNS.find(concern=>concernCount(concern)>0);if(firstAvailable)activeConcern=firstAvailable;
     if(seller?.name)$('sellerText').textContent=`${seller.name}のお取り置き商品です。お支払いとお渡しはサロンで。`;
     renderCategoryTabs();renderProducts();
     if(settings.lineUrl&&httpsURL(settings.lineUrl))$('lineLink').innerHTML=`<a class="button secondary" href="${esc(httpsURL(settings.lineUrl))}" target="_blank" rel="noopener noreferrer">公式LINEで相談する</a>`;
