@@ -1642,7 +1642,7 @@ function deleteCustomer(id){
 function saleForm(){modal(`<h3>売上を追加</h3><div class="note" style="margin-bottom:10px">通常の技術売上は予約の料金から自動集計されます。ここは予約外の売上を記録したい時だけ使ってください。</div><label>日付</label><input id="sDate" type="date" value="${todayISO}"><label>顧客名</label><input id="sCustomer"><label>金額</label><input id="sAmount" type="number"><label>メニュー</label><input id="sMenu"><div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button><button onclick="saveSale()">保存</button></div>`)}
 function saveSale(){db.sales.push({id:uid(),date:$('sDate').value,customer:$('sCustomer').value.trim(),amount:+$('sAmount').value||0,menu:$('sMenu').value.trim()});const c=db.customers.find(x=>normalizeName(x.name)===normalizeName($('sCustomer').value));if(c)c.lastVisit=$('sDate').value;save();closeModal()}
 function retailChooser(){modal('<h3>店販</h3><button style="width:100%;margin-bottom:8px" onclick="retailSaleForm()">販売を記録</button><button class="ghost" style="width:100%" onclick="productForm()">商品を追加</button>')}
-ucts.splice(i,1);save();closeModal();}function productForm(i){
+function productForm(i){
   migrateExtras();
 
   const x=
