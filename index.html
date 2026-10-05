@@ -3276,7 +3276,7 @@ async function makeOwnerProductCopyFromHP(){
     'HPを読み込み中…';
 
   status.textContent=
-    '公式商品情報を確認しています…';
+    `「${$('pCategory').value}」の商品情報を中心に確認しています…`;
 
   try{
 
@@ -3293,7 +3293,14 @@ async function makeOwnerProductCopyFromHP(){
 
           body:
             JSON.stringify({
-              url
+              url,
+              productName:
+                $('pName')
+                  .value
+                  .trim(),
+              category:
+                $('pCategory')
+                  .value
             })
         }
       );
@@ -3312,18 +3319,6 @@ async function makeOwnerProductCopyFromHP(){
       );
     }
 
-    if(
-      !$('pName')
-        .value
-        .trim()
-      &&
-      b.title
-    ){
-
-      $('pName').value=
-        b.title;
-    }
-
     $('pDescription').value=
       b.description||'';
 
@@ -3334,7 +3329,7 @@ async function makeOwnerProductCopyFromHP(){
       b.usage||'';
 
     status.textContent=
-      '説明文を作成しました。内容を確認して保存してください。';
+      `${b.focusLabel||$('pCategory').value}の情報を中心に説明文を作成しました。内容を確認して保存してください。`;
 
   }catch(e){
 
