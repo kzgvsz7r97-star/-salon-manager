@@ -72,6 +72,8 @@ function categoryForProduct(p){
   return 'オイル';
 }
 function concernForProduct(p){
+  if(RETAIL_CONCERNS.includes(String(p?.concern||'')))return String(p.concern);
+
   const raw=`${p?.name||''} ${p?.category||''} ${p?.description||''} ${p?.recommended||''}`.normalize('NFKC').toLowerCase();
 
   if(/リファ|refa|クレイツ|create|ドライヤー|dryer|アイロン|iron|コテ|カールアイロン|ストレートアイロン|ブラシ/.test(raw))return 'コテ・アイロン';
