@@ -201,6 +201,56 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
   font-weight:850;
 }
 
+.order-summary-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:7px;
+  margin:10px 0;
+}
+.order-summary-chip{
+  background:#f5f3ef;
+  border-radius:12px;
+  padding:9px 8px;
+  text-align:center;
+}
+.order-summary-chip .n{
+  display:block;
+  font-size:20px;
+  font-weight:900;
+  line-height:1.1;
+}
+.order-summary-chip .l{
+  display:block;
+  font-size:10px;
+  color:#777;
+  margin-top:3px;
+}
+.order-filter-grid{
+  display:grid;
+  grid-template-columns:1.25fr .9fr;
+  gap:8px;
+  margin-top:8px;
+}
+.order-priority-new{
+  border-left:4px solid #111;
+}
+.order-priority-ready{
+  border-left:4px solid #7a6a42;
+}
+.order-status-badge{
+  display:inline-block;
+  font-size:10px;
+  font-weight:850;
+  padding:3px 7px;
+  border-radius:999px;
+  background:#eee;
+  margin-left:5px;
+  vertical-align:1px;
+}
+@media(max-width:420px){
+  .order-filter-grid{grid-template-columns:1fr}
+}
+
 </style>
 </head>
 <body>
@@ -364,7 +414,38 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
     <div class="row auto" style="margin-bottom:10px"><h2 style="margin:0;flex:1">店販</h2><button onclick="productForm()">＋ 商品を追加</button></div>
     <div id="productList" class="list"></div>
     <div id="retailSummary" class="card"></div>
-    <h2>お客様の商品注文</h2><div class="card"><button onclick="openOrderSettings()">商品注文ページの設定</button> <button class="ghost" onclick="refreshOrders(true)">注文を更新</button><div id="orderStatus" class="small" role="status"></div></div><div id="orderList" class="list"></div>
+    <h2>お客様の商品注文</h2>
+    <div class="card">
+      <div class="row auto">
+        <button onclick="openOrderSettings()">商品注文ページの設定</button>
+        <button class="ghost" onclick="refreshOrders(true)">注文を更新</button>
+      </div>
+
+      <div id="orderSummary" class="order-summary-grid"></div>
+
+      <div class="order-filter-grid">
+        <input
+          id="orderFilterName"
+          placeholder="お客様名で検索"
+          oninput="renderOrders()"
+        >
+        <select
+          id="orderFilterStatus"
+          onchange="renderOrders()"
+        >
+          <option value="active" selected>対応中のみ</option>
+          <option value="">すべて</option>
+          <option value="new">未対応</option>
+          <option value="ordered">発注済み</option>
+          <option value="ready">入荷済み</option>
+          <option value="completed">お渡し済み</option>
+          <option value="cancelled">キャンセル</option>
+        </select>
+      </div>
+
+      <div id="orderStatus" class="small" role="status" style="margin-top:8px"></div>
+    </div>
+    <div id="orderList" class="list"></div>
     <h2>販売履歴</h2><div id="retailHistory" class="list"></div>
   </section>
 </div>
@@ -4288,7 +4369,44 @@ async function refreshOrders(manual=false){
   catch{orderNotice='注文を取得できません。APIと保存先の設定を確認してください。';if(manual)renderOrders();}
   finally{ordersBusy=false;}
 }
-function renderOrderNotice(){const host=$('orderNotice');if(!host)return;const unseen=remoteOrders.filter(o=>o.status==='new'&&!db.seenOrders.includes(o.id));host.innerHTML=unseen.length?`<button class="blue" style="width:100%;margin-top:10px" onclick="viewOrders()">新しい商品注文 ${unseen.length}件</button>`:'';}
+function renderOrderNotice(){
+  const host=$('orderNotice');
+  if(!host)return;
+
+  const active=
+    remoteOrders.filter(
+      o=>
+        o.status==='new'||
+        o.status==='ordered'||
+        o.status==='ready'
+    );
+
+  const unseen=
+    remoteOrders.filter(
+      o=>
+        o.status==='new'&&
+        !db.seenOrders.includes(o.id)
+    );
+
+  const newCount=
+    active.filter(o=>o.status==='new').length;
+
+  if(!active.length){
+    host.innerHTML='';
+    return;
+  }
+
+  host.innerHTML=`
+    <button
+      class="${unseen.length?'blue':'soft'}"
+      style="width:100%;margin-top:10px"
+      onclick="viewOrders()"
+    >
+      商品注文 対応中 ${active.length}件
+      ${newCount?`（未対応 ${newCount}件）`:''}
+    </button>
+  `;
+}
 function viewOrders(){go('retail',document.querySelector('[data-tab="retail"]'));db.seenOrders=[...new Set([...db.seenOrders,...remoteOrders.map(o=>o.id)])];localStorage.setItem(KEY,JSON.stringify(db));renderOrderNotice();$('orderList').scrollIntoView({behavior:'smooth'});}
 function customerOrderLineQr(order){
   return (order?.items||[])
@@ -4312,14 +4430,117 @@ function renderOrders(){
     cancelled:'キャンセル'
   };
 
+  const priority={
+    new:0,
+    ordered:1,
+    ready:2,
+    completed:3,
+    cancelled:4
+  };
+
+  const counts={
+    new:remoteOrders.filter(o=>o.status==='new').length,
+    ordered:remoteOrders.filter(o=>o.status==='ordered').length,
+    ready:remoteOrders.filter(o=>o.status==='ready').length
+  };
+
+  const summary=$('orderSummary');
+
+  if(summary){
+    summary.innerHTML=`
+      <div class="order-summary-chip">
+        <span class="n">${counts.new}</span>
+        <span class="l">未対応</span>
+      </div>
+      <div class="order-summary-chip">
+        <span class="n">${counts.ordered}</span>
+        <span class="l">発注済み</span>
+      </div>
+      <div class="order-summary-chip">
+        <span class="n">${counts.ready}</span>
+        <span class="l">入荷済み</span>
+      </div>
+    `;
+  }
+
+  const statusFilter=
+    $('orderFilterStatus')?.value??'active';
+
+  const nameFilter=
+    ($('orderFilterName')?.value||'')
+      .trim()
+      .toLowerCase();
+
+  let rows=
+    [...remoteOrders]
+      .filter(o=>{
+        if(
+          statusFilter==='active'&&
+          !['new','ordered','ready'].includes(o.status)
+        ){
+          return false;
+        }
+
+        if(
+          statusFilter&&
+          statusFilter!=='active'&&
+          o.status!==statusFilter
+        ){
+          return false;
+        }
+
+        if(
+          nameFilter&&
+          !String(o.customer_name||'')
+            .toLowerCase()
+            .includes(nameFilter)
+        ){
+          return false;
+        }
+
+        return true;
+      })
+      .sort((a,b)=>{
+        const pa=priority[a.status]??99;
+        const pb=priority[b.status]??99;
+
+        if(pa!==pb)return pa-pb;
+
+        const activeA=
+          ['new','ordered','ready'].includes(a.status);
+
+        const activeB=
+          ['new','ordered','ready'].includes(b.status);
+
+        if(activeA&&activeB){
+          const va=String(a.visit_date||'9999-12-31');
+          const vb=String(b.visit_date||'9999-12-31');
+          if(va!==vb)return va.localeCompare(vb);
+        }
+
+        return String(b.created_at||'')
+          .localeCompare(
+            String(a.created_at||'')
+          );
+      });
+
   $('orderList').innerHTML=
-    remoteOrders.length
-      ?remoteOrders.map(o=>{
+    rows.length
+      ?rows.map(o=>{
         const deadline=dateOnly(o.visit_date);
-        deadline.setDate(deadline.getDate()-7);
+
+        if(deadline){
+          deadline.setDate(deadline.getDate()-7);
+        }
+
+        const deadlineISO=
+          deadline
+            ?localISO(deadline)
+            :'';
 
         const late=
-          localISO(deadline)<todayISO;
+          deadlineISO&&
+          deadlineISO<todayISO;
 
         const supplier=
           (o.items||[])
@@ -4340,13 +4561,24 @@ function renderOrders(){
           o.contact||
           (lineQr?'QRコード添付あり':'LINEで確認');
 
-        return `<div class="item">
+        const itemClass=
+          o.status==='new'
+            ?' order-priority-new'
+            :o.status==='ready'
+              ?' order-priority-ready'
+              :'';
+
+        return `<div class="item${itemClass}">
           <div class="t">
-            ${esc(o.customer_name)} ・ ${esc(labels[o.status]||o.status)}
+            ${esc(o.customer_name)}
+            <span class="order-status-badge">
+              ${esc(labels[o.status]||o.status)}
+            </span>
           </div>
 
           <div class="s">
-            受取 ${esc(o.visit_date)} ／ 発注目安 ${localISO(deadline)}
+            受取 ${esc(o.visit_date)}
+            ${deadlineISO?` ／ 発注目安 ${deadlineISO}`:''}
             ${late&&o.status==='new'?' <b>早めに要確認</b>':''}
             <br>
             ${(o.items||[]).map(i=>`${esc(i.name)} × ${i.quantity}`).join('<br>')}
@@ -4383,7 +4615,7 @@ function renderOrders(){
           </div>
         </div>`;
       }).join('')
-      :empty('商品注文はまだありません');
+      :empty('条件に合う商品注文はありません');
 }
 
 function openOwnerLineQr(id){
