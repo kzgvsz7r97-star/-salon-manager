@@ -4416,13 +4416,6 @@ const category:text(
   p.category||'その他',
   80
 )||'その他',
-
-concern:text(
-  p.concern||'',
-  80
-),
-
-price:Number(p.price||0),
 async function shareOrderPage(){const url=new URL('order.html',location.href).href;try{await navigator.clipboard.writeText(url);alert('お客様用URLをコピーしました');}catch{prompt('このURLをお客様に共有',url);}}
 async function refreshOrders(manual=false){
   const key=localStorage.getItem(CLOUD_BACKUP_KEY_STORAGE);if(!key){if(manual){getCloudBackupKey();return refreshOrders(false);}return;}
