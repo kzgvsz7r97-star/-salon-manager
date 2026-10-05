@@ -3681,7 +3681,23 @@ function saveProduct(i){
 
   save();
 
-  closeModal();
+closeModal();
+
+publishOwnerProductOrder()
+  .then(published=>{
+    if(!published){
+      alert(
+        '商品は保存しました。お客様ページへ反映するには商品注文ページの設定から一度公開してください。'
+      );
+    }
+  })
+  .catch(e=>{
+    console.error(e);
+
+    alert(
+      '商品は保存しましたが、お客様ページへの反映に失敗しました。商品注文ページの設定から再公開してください。'
+    );
+  });
 }
 
 function deleteProduct(i){
