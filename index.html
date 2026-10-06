@@ -1544,6 +1544,55 @@ function mergeCustomers(keepId,removeId){
   save();
 
   alert(`${removeName} を ${keepName} に統合しました`);
+}function openManualCustomerMerge(keepId){
+  const keep=db.customers.find(
+    x=>String(x.id)===String(keepId)
+  );
+  if(!keep)return;
+
+  const others=db.customers
+    .filter(x=>String(x.id)!==String(keepId))
+    .sort((a,b)=>
+      String(a.name||'').localeCompare(
+        String(b.name||''),
+        'ja'
+      )
+    );
+
+  if(!others.length){
+    return alert('統合できる他の顧客がいません');
+  }
+
+  modal(`
+    <h3>顧客を統合</h3>
+
+    <div class="note" style="margin-bottom:12px">
+      <b>${esc(keep.name)}</b> を残して、
+      選んだ顧客の予約・売上・カルテをまとめます。
+    </div>
+
+    <label>統合する顧客</label>
+
+    <select id="manualMergeCustomer">
+      ${others.map(c=>`
+        <option value="${esc(c.id)}">
+          ${esc(c.name)}
+        </option>
+      `).join('')}
+    </select>
+
+    <div class="actions">
+      <button class="ghost" onclick="closeModal()">キャンセル</button>
+      <button onclick="
+        mergeCustomers(
+          '${keepId}',
+          document.getElementById('manualMergeCustomer').value
+        )
+      ">
+        この顧客に統合
+      </button>
+    </div>
+  `);
 }
 function renderCustomers(){
   const q=($('customerSearch').value||'').toLowerCase();
