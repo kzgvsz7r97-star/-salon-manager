@@ -1646,7 +1646,7 @@ function openCustomerChart(id){
     </div>
 
     <button class="blue" style="width:100%;margin:14px 0 12px" onclick="bookingForm({customer:'${esc(c.name).replace(/'/g,"&#39;")}',newGuest:false})">このお客様の予約を追加</button>
-
+    <button class="ghost" style="width:100%;margin:0 0 12px" onclick="openManualCustomerMerge('${id}')">他の顧客と統合</button>
     <h3 style="margin-top:14px">来店・予約履歴</h3>
     ${hist.length?hist.map(b=>`<div class="history-row" onclick="editBooking('${b.id}')">
       <div class="title">${esc(b.date)} ${esc(b.time)} ・ ${esc(b.menu||'メニュー未入力')} <span class="status-badge ${statusClass(b)}">${statusLabel(b)}</span></div>
