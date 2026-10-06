@@ -1447,13 +1447,103 @@ function duplicateCustomerPairs(){
 function renderDuplicateCandidates(){
   const host=$('duplicateCandidates');if(!host)return;
   const pairs=duplicateCustomerPairs();
+
   host.innerHTML=pairs.length?`<h2 style="margin-top:14px">統合候補</h2>
-    <div class="note" style="margin:0 4px 8px">候補だけ表示します。自動では統合しません。</div>
+    <div class="note" style="margin:0 4px 8px">同じお客様なら、残したい方へ統合できます。</div>
     ${pairs.map(x=>`<div class="duplicate-candidate">
       <div class="names">${esc(x.a.name)} ⇄ ${esc(x.b.name)}</div>
       <div class="reason">${esc(x.reasons.join('・'))}</div>
-      <div class="actions"><button class="ghost" onclick="openCustomerChart('${x.a.id}')">${esc(x.a.name)}を見る</button><button class="ghost" onclick="openCustomerChart('${x.b.id}')">${esc(x.b.name)}を見る</button></div>
+
+      <div class="actions">
+        <button class="ghost" onclick="openCustomerChart('${x.a.id}')">${esc(x.a.name)}を見る</button>
+        <button class="ghost" onclick="openCustomerChart('${x.b.id}')">${esc(x.b.name)}を見る</button>
+      </div>
+
+      <div class="actions" style="margin-top:6px">
+        <button onclick="mergeCustomers('${x.a.id}','${x.b.id}')">${esc(x.a.name)}に統合</button>
+        <button onclick="mergeCustomers('${x.b.id}','${x.a.id}')">${esc(x.b.name)}に統合</button>
+      </div>
     </div>`).join('')}`:'';
+}
+
+function mergeCustomers(keepId,removeId){
+  const keep=db.customers.find(x=>String(x.id)===String(keepId));
+  const remove=db.customers.find(x=>String(x.id)===String(removeId));
+
+  if(!keep||!remove||keep.id===remove.id)return;
+
+  const keepName=String(keep.name||'').trim();
+  const removeName=String(remove.name||'').trim();
+
+  if(!keepName||!removeName)return alert('顧客名を確認してください');
+
+  if(!confirm(
+    `${removeName} の予約・売上・カルテ情報を\n${keepName} に統合しますか？\n\n統合後、${removeName} の顧客データは削除されます。`
+  ))return;
+
+  const isRemoveName=value=>
+    normalizeName(value||'')===normalizeName(removeName);
+
+  db.bookings=(db.bookings||[]).map(b=>
+    isRemoveName(b.customer)
+      ?{...b,customer:keepName}
+      :b
+  );
+
+  db.sales=(db.sales||[]).map(s=>
+    isRemoveName(s.customer)
+      ?{...s,customer:keepName}
+      :s
+  );
+
+  db.retail=(db.retail||[]).map(r=>
+    isRemoveName(r.customer)
+      ?{...r,customer:keepName}
+      :r
+  );
+
+  const notes=[keep.note,remove.note]
+    .map(x=>String(x||'').trim())
+    .filter(Boolean);
+
+  const lastVisit=[
+    keep.lastVisit,
+    remove.lastVisit
+  ]
+    .filter(Boolean)
+    .sort()
+    .pop()||'';
+
+  const merged={
+    ...remove,
+    ...keep,
+    id:keep.id,
+    name:keepName,
+    kana:keep.kana||remove.kana||'',
+    instagram:keep.instagram||remove.instagram||'',
+    lineUserId:keep.lineUserId||remove.lineUserId||'',
+    note:[...new Set(notes)].join('\n\n'),
+    lastVisit,
+    reminderSnoozeUntil:
+      hasFutureBooking(keepName)
+        ?''
+        :(
+          [keep.reminderSnoozeUntil,remove.reminderSnoozeUntil]
+            .filter(Boolean)
+            .sort()
+            .pop()||''
+        )
+  };
+
+  db.customers=db.customers
+    .map(x=>String(x.id)===String(keep.id)?merged:x)
+    .filter(x=>String(x.id)!==String(remove.id));
+
+  markDeleted('customers',remove.id);
+
+  save();
+
+  alert(`${removeName} を ${keepName} に統合しました`);
 }
 function renderCustomers(){
   const q=($('customerSearch').value||'').toLowerCase();
