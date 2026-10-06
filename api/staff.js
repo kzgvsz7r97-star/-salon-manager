@@ -1118,6 +1118,7 @@ async function staffHandler(req,res,session){
       id:existing?.id||uid(),
       name,
       category,
+            concern,
       officialUrl,
       supplierUrl,
       price,
