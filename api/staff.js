@@ -1025,7 +1025,18 @@ async function staffHandler(req,res,session){
         .slice(0,80)
       ||
       'その他';
-
+    const concern=
+      [
+        'ダメージケア',
+        'くせ・広がり',
+        '乾燥・パサつき',
+        'スタイリング',
+        'コテ・アイロン'
+      ].includes(
+        String(raw.concern||'')
+      )
+        ?String(raw.concern)
+        :String(existing?.concern||'');
     const supplierUrl=
       safeHTTPS(
         raw.supplierUrl||
