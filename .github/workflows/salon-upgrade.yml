@@ -23,22 +23,31 @@ jobs:
           path = Path("index.html")
           text = path.read_text()
 
-          old = """  // 売上は決済完了した予約のみ。未決済は見込みに残す
-  const bookingSales=b.filter(x=>x.paymentComplete).reduce((a,x)=>a+Number(x.price||0),0);
-  const bookingForecast=b.reduce((a,x)=>a+Number(x.price||0),0);"""
+          old_sales = "const bookingSales=b.filter(x=>x.paymentComplete).reduce((a,x)=>a+Number(x.price||0),0);"
+          new_sales = "const bookingSales=normal.filter(x=>x.paymentComplete).reduce((a,x)=>a+Number(x.price||0),0);"
 
-          new = """  // 売上・見込みは通常客のみ。モデルは人数だけ別集計
-  const bookingSales=normal.filter(x=>x.paymentComplete).reduce((a,x)=>a+Number(x.price||0),0);
-  const bookingForecast=normal.reduce((a,x)=>a+Number(x.price||0),0);"""
+          old_forecast = "const bookingForecast=b.reduce((a,x)=>a+Number(x.price||0),0);"
+          new_forecast = "const bookingForecast=normal.reduce((a,x)=>a+Number(x.price||0),0);"
 
-          if old not in text:
-              raise SystemExit("monthStats target not found")
+          if old_sales in text:
+              text = text.replace(old_sales, new_sales, 1)
+          elif new_sales not in text:
+              raise SystemExit("bookingSales target not found")
 
-          text = text.replace(old, new, 1)
+          if old_forecast in text:
+              text = text.replace(old_forecast, new_forecast, 1)
+          elif new_forecast not in text:
+              raise SystemExit("bookingForecast target not found")
+
+          text = text.replace(
+              "// 売上は決済完了した予約のみ。未決済は見込みに残す",
+              "// 売上・見込みは通常客のみ。モデルは人数だけ別集計",
+              1
+          )
+
           path.write_text(text)
           PY
 
-          grep -q "売上・見込みは通常客のみ" index.html
           grep -q "const bookingSales=normal.filter" index.html
           grep -q "const bookingForecast=normal.reduce" index.html
 
