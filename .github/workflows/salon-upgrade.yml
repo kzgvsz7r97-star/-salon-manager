@@ -1,4 +1,4 @@
-name: 数字ロジック統一
+name: 月目標 新規再来分解
 
 on:
   workflow_dispatch:
@@ -14,15 +14,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Add metrics consistency layer
+      - name: Add automatic new repeat target split
         shell: bash
         run: |
-          cat > metrics-consistency.js <<'JS'
+          cat > target-breakdown.js <<'JS'
           (() => {
-            if (window.__metricsConsistencyV1) return;
-            window.__metricsConsistencyV1 = true;
+            if (window.__targetBreakdownV1) return;
+            window.__targetBreakdownV1 = true;
 
-            const MATURITY_DAYS = 45;
+            const LOOKBACK_DAYS = 90;
 
             const stamp = b =>
               `${b?.date || ''} ${b?.time || ''}`;
@@ -40,14 +40,6 @@ jobs:
               );
             }
 
-            function customerKey(b) {
-              if (b?.customerId) {
-                return `id:${String(b.customerId)}`;
-              }
-
-              return `name:${normalizeName(b?.customer || '')}`;
-            }
-
             function visitedBefore(first) {
               return (db.bookings || []).some(b =>
                 !b.isModel &&
@@ -57,7 +49,7 @@ jobs:
               );
             }
 
-            function isTrueNewVisit(b) {
+            function trueNewVisit(b) {
               return !!(
                 b &&
                 !b.isModel &&
@@ -67,514 +59,295 @@ jobs:
               );
             }
 
-            function explicitNextTaken(b) {
-              return !!(
-                b?.nextBookingTaken ||
-                b?.nextBookingId ||
-                b?.nextBookingDate
+            function averagePrice(rows, fallback) {
+              const prices = rows
+                .map(x => Number(x.price || 0))
+                .filter(x => Number.isFinite(x) && x > 0);
+
+              if (!prices.length) {
+                return Math.max(1, Number(fallback || 0));
+              }
+
+              return Math.round(
+                prices.reduce((a, x) => a + x, 0) /
+                prices.length
               );
             }
 
-            function linkedNext(first) {
-              if (!first) return null;
+            function recentHistory() {
+              const start = dateOnly(todayISO);
+              start.setDate(start.getDate() - LOOKBACK_DAYS);
+              const startISO = localISO(start);
 
-              if (first.nextBookingId) {
-                const linked = (db.bookings || []).find(
-                  b =>
-                    String(b.id) ===
-                    String(first.nextBookingId)
-                );
-
-                if (linked) return linked;
-              }
-
-              if (first.nextBookingDate) {
-                const candidates = (db.bookings || [])
-                  .filter(
-                    b =>
-                      !b.isModel &&
-                      sameCustomer(first, b) &&
-                      b.date === first.nextBookingDate &&
-                      stamp(b) > stamp(first)
-                  )
-                  .sort((a, b) =>
-                    stamp(a).localeCompare(stamp(b))
-                  );
-
-                if (first.nextBookingTime) {
-                  const exact = candidates.find(
-                    b => b.time === first.nextBookingTime
-                  );
-
-                  if (exact) return exact;
-                }
-
-                return candidates[0] || null;
-              }
-
-              return null;
+              return (db.bookings || []).filter(b =>
+                !b.isModel &&
+                b.date >= startISO &&
+                b.date < todayISO &&
+                isVisitedBooking(b)
+              );
             }
 
-            function laterVisits(first) {
-              return (db.bookings || [])
-                .filter(
-                  b =>
-                    !b.isModel &&
-                    sameCustomer(first, b) &&
-                    stamp(b) > stamp(first)
+            function currentTargetBreakdown() {
+              const month = monthKey(todayISO);
+              const stats = monthStats(month);
+              const plan = goalPlanStats(month, stats);
+
+              const goal = Number(getGoal(month) || 0);
+              const gap = Math.max(0, Number(plan.gap || 0));
+              const fallbackUnit = Math.max(
+                1,
+                Number(plan.unit || stats.avg || 10000)
+              );
+
+              const history = recentHistory();
+              const histNew = history.filter(trueNewVisit);
+              const histRepeat = history.filter(
+                b => !trueNewVisit(b)
+              );
+
+              const currentVisits = (db.bookings || []).filter(b =>
+                !b.isModel &&
+                monthKey(b.date) === month &&
+                isVisitedBooking(b)
+              );
+
+              const currentNew = currentVisits.filter(trueNewVisit);
+              const currentRepeat = currentVisits.filter(
+                b => !trueNewVisit(b)
+              );
+
+              const newAvg = averagePrice(
+                histNew.length >= 2 ? histNew : currentNew,
+                fallbackUnit
+              );
+
+              const repeatAvg = averagePrice(
+                histRepeat.length >= 2 ? histRepeat : currentRepeat,
+                fallbackUnit
+              );
+
+              let newShare = 0.4;
+
+              if (history.length >= 5) {
+                newShare = histNew.length / history.length;
+              } else if (currentVisits.length >= 3) {
+                newShare = currentNew.length / currentVisits.length;
+              }
+
+              newShare = Math.max(
+                0,
+                Math.min(1, Number(newShare || 0))
+              );
+
+              const repeatShare = 1 - newShare;
+
+              const blendedUnit = Math.max(
+                1,
+                Math.round(
+                  newAvg * newShare +
+                  repeatAvg * repeatShare
                 )
-                .sort((a, b) =>
-                  stamp(a).localeCompare(stamp(b))
-                );
-            }
+              );
 
-            function journey(first) {
-              const later = laterVisits(first);
-              const second =
-                later.find(isVisitedBooking) || null;
-              const linked = linkedNext(first);
-              const nextTaken = explicitNextTaken(first);
+              if (!gap) {
+                return {
+                  month,
+                  goal,
+                  forecast: Number(stats.forecast || 0),
+                  gap: 0,
+                  newNeed: 0,
+                  repeatNeed: 0,
+                  totalNeed: 0,
+                  perDay: 0,
+                  remainingDays: Number(plan.days || 0),
+                  newAvg,
+                  repeatAvg,
+                  newShare,
+                  expectedRevenue: 0
+                };
+              }
 
-              let nextOutcome = 'none';
+              let totalNeed = Math.ceil(gap / blendedUnit);
+              let newNeed = Math.round(totalNeed * newShare);
+              let repeatNeed = Math.max(0, totalNeed - newNeed);
 
-              if (nextTaken) {
-                if (second) {
-                  nextOutcome = 'returned';
-                } else if (
-                  linked &&
-                  ['cancelled', 'noshow'].includes(
-                    bookingStatus(linked)
-                  )
-                ) {
-                  nextOutcome = 'failed';
-                } else if (
-                  linked &&
-                  isActiveBooking(linked) &&
-                  linked.date >= todayISO
-                ) {
-                  nextOutcome = 'pending';
+              let expectedRevenue =
+                newNeed * newAvg +
+                repeatNeed * repeatAvg;
+
+              // 丸めで不足する場合だけ1人ずつ追加。
+              while (expectedRevenue < gap && totalNeed < 999) {
+                const currentTotal = newNeed + repeatNeed;
+                const currentNewShare =
+                  currentTotal > 0 ? newNeed / currentTotal : 0;
+
+                if (currentNewShare < newShare) {
+                  newNeed += 1;
+                  expectedRevenue += newAvg;
                 } else {
-                  nextOutcome = 'unknown';
+                  repeatNeed += 1;
+                  expectedRevenue += repeatAvg;
                 }
+
+                totalNeed = newNeed + repeatNeed;
               }
 
+              const remainingDays = Number(plan.days || 0);
+              const perDay = remainingDays
+                ? Math.ceil(totalNeed / remainingDays * 10) / 10
+                : null;
+
               return {
-                first,
-                second,
-                linked,
-                nextTaken,
-                nextOutcome,
-                mature:
-                  daysBetween(first.date, todayISO) >=
-                  MATURITY_DAYS
+                month,
+                goal,
+                forecast: Number(stats.forecast || 0),
+                gap,
+                newNeed,
+                repeatNeed,
+                totalNeed,
+                perDay,
+                remainingDays,
+                newAvg,
+                repeatAvg,
+                newShare,
+                expectedRevenue
               };
             }
 
-            function newCohortForMonth(month) {
-              const rows = (db.bookings || [])
-                .filter(
-                  b =>
-                    !b.isModel &&
-                    b.newGuest &&
-                    monthKey(b.date) === month &&
-                    isVisitedBooking(b)
-                )
-                .sort((a, b) =>
-                  stamp(a).localeCompare(stamp(b))
-                );
+            window.getGoalTargetBreakdown =
+              currentTargetBreakdown;
 
-              const map = new Map();
+            function ensureStyle() {
+              if (document.getElementById('targetBreakdownStyle')) return;
 
-              rows.forEach(b => {
-                if (visitedBefore(b)) return;
+              const style = document.createElement('style');
+              style.id = 'targetBreakdownStyle';
 
-                const key = customerKey(b);
-
-                if (!map.has(key)) {
-                  map.set(key, b);
+              style.textContent = `
+                .goal-split-line{
+                  margin:7px 0 2px;
+                  padding:8px 9px;
+                  border-radius:10px;
+                  background:#f7f7f7;
+                  font-size:11px;
+                  line-height:1.45;
                 }
-              });
 
-              return [...map.values()];
-            }
+                .goal-split-line b{
+                  font-size:12px;
+                }
 
-            // 全画面の「次回予約取得」は、明示保存された次回予約データだけで判定。
-            nextBookingTakenForBooking = function (b) {
-              return explicitNextTaken(b);
-            };
-
-            analysisStats = function (m) {
-              const all = (db.bookings || []).filter(
-                x =>
-                  monthKey(x.date) === m &&
-                  !x.isModel
-              );
-
-              const visits = all.filter(isVisitedBooking);
-
-              const newVisits = visits.filter(
-                isTrueNewVisit
-              );
-
-              const repeatVisits = visits.filter(
-                b => !isTrueNewVisit(b)
-              );
-
-              const nextTaken =
-                visits.filter(explicitNextTaken).length;
-
-              const nextRate =
-                visits.length
-                  ? Math.round(
-                      nextTaken /
-                        visits.length *
-                        100
-                    )
-                  : 0;
-
-              const newNextTaken =
-                newVisits.filter(explicitNextTaken).length;
-
-              const repeatNextTaken =
-                repeatVisits.filter(explicitNextTaken).length;
-
-              const newNextRate =
-                newVisits.length
-                  ? Math.round(
-                      newNextTaken /
-                        newVisits.length *
-                        100
-                    )
-                  : 0;
-
-              const repeatNextRate =
-                repeatVisits.length
-                  ? Math.round(
-                      repeatNextTaken /
-                        repeatVisits.length *
-                        100
-                    )
-                  : 0;
-
-              const paidRevenue = all
-                .filter(
-                  x =>
-                    x.paymentComplete &&
-                    isActiveBooking(x)
-                )
-                .reduce(
-                  (a, x) =>
-                    a + Number(x.price || 0),
-                  0
-                );
-
-              const avg =
-                visits.length
-                  ? Math.round(
-                      paidRevenue /
-                        visits.length
-                    )
-                  : 0;
-
-              const cancels =
-                all.filter(
-                  x =>
-                    bookingStatus(x) ===
-                    'cancelled'
-                ).length;
-
-              const noshows =
-                all.filter(
-                  x =>
-                    bookingStatus(x) ===
-                    'noshow'
-                ).length;
-
-              const freeVisits =
-                visits.filter(
-                  x =>
-                    x.bookingType ===
-                    'free'
-                ).length;
-
-              const designatedVisits =
-                visits.filter(
-                  x =>
-                    x.bookingType ===
-                    'designated'
-                ).length;
-
-              const cohort =
-                newCohortForMonth(m);
-
-              const journeys =
-                cohort.map(journey);
-
-              const matureJourneys =
-                journeys.filter(
-                  x => x.mature
-                );
-
-              const matureReturned =
-                matureJourneys.filter(
-                  x => !!x.second
-                ).length;
-
-              const secondRate =
-                matureJourneys.length
-                  ? Math.round(
-                      matureReturned /
-                        matureJourneys.length *
-                        100
-                    )
-                  : 0;
-
-              const outcomeKnown =
-                journeys.filter(
-                  x =>
-                    [
-                      'returned',
-                      'failed'
-                    ].includes(
-                      x.nextOutcome
-                    )
-                );
-
-              const outcomeReturned =
-                outcomeKnown.filter(
-                  x =>
-                    x.nextOutcome ===
-                    'returned'
-                ).length;
-
-              const outcomePending =
-                journeys.filter(
-                  x =>
-                    x.nextOutcome ===
-                    'pending'
-                ).length;
-
-              const outcomeUnknown =
-                journeys.filter(
-                  x =>
-                    x.nextOutcome ===
-                    'unknown'
-                ).length;
-
-              const keptRate =
-                outcomeKnown.length
-                  ? Math.round(
-                      outcomeReturned /
-                        outcomeKnown.length *
-                        100
-                    )
-                  : 0;
-
-              return {
-                visits,
-                newVisits,
-                repeatVisits,
-                nextTaken,
-                nextRate,
-                newNextTaken,
-                repeatNextTaken,
-                newNextRate,
-                repeatNextRate,
-                paidRevenue,
-                avg,
-                cancels,
-                noshows,
-                freeVisits,
-                designatedVisits,
-
-                // 旧画面との互換
-                uniqueNew:
-                  matureJourneys.map(
-                    x => x.first
-                  ),
-                secondReturned:
-                  matureReturned,
-                secondRate,
-
-                // 正確性表示用
-                cohort,
-                journeys,
-                matureCount:
-                  matureJourneys.length,
-                maturityWaiting:
-                  journeys.length -
-                  matureJourneys.length,
-                nextOutcomeKnown:
-                  outcomeKnown.length,
-                nextOutcomeReturned:
-                  outcomeReturned,
-                nextOutcomePending:
-                  outcomePending,
-                nextOutcomeUnknown:
-                  outcomeUnknown,
-                keptRate,
-
-                all
-              };
-            };
-
-            renderMonthlyAnalysis = function () {
-              const host = $('monthlyAnalysis');
-              const srcHost = $('analysisSources');
-
-              if (!host || !srcHost) return;
-
-              const m =
-                monthString(analysisMonth);
-
-              const s =
-                analysisStats(m);
-
-              const months =
-                recentAnalysisMonths(
-                  m,
-                  4
-                );
-
-              host.innerHTML = `
-                <div class="analysis-grid">
-                  <div class="analysis-card">
-                    <div class="l">実来店</div>
-                    <div class="v">${s.visits.length}人</div>
-                  </div>
-
-                  <div class="analysis-card">
-                    <div class="l">新規 / 再来</div>
-                    <div class="v">${s.newVisits.length} / ${s.repeatVisits.length}</div>
-                  </div>
-
-                  <div class="analysis-card">
-                    <div class="l">新規 次回予約率</div>
-                    <div class="v">${s.newNextRate}%</div>
-                    <div class="small">${s.newNextTaken}/${s.newVisits.length}・明示予約のみ</div>
-                  </div>
-
-                  <div class="analysis-card">
-                    <div class="l">再来 次回予約率</div>
-                    <div class="v">${s.repeatNextRate}%</div>
-                    <div class="small">${s.repeatNextTaken}/${s.repeatVisits.length}・明示予約のみ</div>
-                  </div>
-
-                  <div class="analysis-card">
-                    <div class="l">2回目実来店率</div>
-                    <div class="v">${s.secondRate}%</div>
-                    <div class="small">初回45日以上 ${s.secondReturned}/${s.matureCount}・判定待ち ${s.maturityWaiting}</div>
-                  </div>
-
-                  <div class="analysis-card">
-                    <div class="l">次回予約→実来店</div>
-                    <div class="v">${s.keptRate}%</div>
-                    <div class="small">結果確定 ${s.nextOutcomeReturned}/${s.nextOutcomeKnown}・待ち ${s.nextOutcomePending}・未確定 ${s.nextOutcomeUnknown}</div>
-                  </div>
-
-                  <div class="analysis-card">
-                    <div class="l">平均単価</div>
-                    <div class="v">${yen(s.avg)}</div>
-                  </div>
-
-                  <div class="analysis-card">
-                    <div class="l">フリー / 指名</div>
-                    <div class="v">${s.freeVisits} / ${s.designatedVisits}</div>
-                  </div>
-
-                  <div class="analysis-card">
-                    <div class="l">キャンセル / 無断</div>
-                    <div class="v">${s.cancels} / ${s.noshows}</div>
-                  </div>
-                </div>
-
-                <h3 style="margin:16px 4px 8px">
-                  3か月前〜今月の推移
-                </h3>
-
-                <div style="overflow:auto">
-                  <table class="trend-table">
-                    <thead>
-                      <tr>
-                        <th>月</th>
-                        <th>新規</th>
-                        <th>2回目実来店</th>
-                        <th>新規次回</th>
-                        <th>再来次回</th>
-                        <th>次回→実来店</th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      ${months.map(mm => {
-                        const a =
-                          analysisStats(mm);
-
-                        return `
-                          <tr>
-                            <td>${Number(mm.slice(5))}月</td>
-                            <td>${a.newVisits.length}</td>
-                            <td>${a.secondRate}%</td>
-                            <td>${a.newNextRate}%</td>
-                            <td>${a.repeatNextRate}%</td>
-                            <td>${a.keptRate}%</td>
-                          </tr>
-                        `;
-                      }).join('')}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div class="small" style="margin:7px 4px 0">
-                  2回目実来店率＝その月の本当の新規のうち、初回来店から45日以上経過した人だけで計算。次回予約率＝明示保存された次回予約のみ。次回予約→実来店率＝来店・キャンセル・無断キャンセルなど結果が確定した分だけで計算します。
-                </div>
+                .goal-split-note{
+                  font-size:9px;
+                  color:#888;
+                  margin-top:2px;
+                }
               `;
 
-              const sources = [
-                'SHAiRE',
-                'Nailie',
-                'minimo',
-                'Instagram',
-                'その他'
-              ];
+              document.head.appendChild(style);
+            }
 
-              srcHost.innerHTML =
-                sources.map(source => {
-                  const xs =
-                    s.visits.filter(
-                      x =>
-                        x.source === source
-                    );
+            function updatePriorityReasons(plan) {
+              const card = document.getElementById('goalAiCard');
+              if (!card) return;
 
-                  const rev =
-                    s.all
-                      .filter(
-                        x =>
-                          x.source === source &&
-                          x.paymentComplete &&
-                          isActiveBooking(x)
-                      )
-                      .reduce(
-                        (a, x) =>
-                          a +
-                          Number(
-                            x.price || 0
-                          ),
-                        0
-                      );
+              const rows = card.querySelectorAll('.goal-ai-row');
 
-                  return `
-                    <div class="analysis-source">
-                      <b>${source}</b>
-                      <div class="small" style="margin-top:4px">
-                        実来店 ${xs.length}人 ・ 確定売上 ${yen(rev)}
-                      </div>
-                    </div>
-                  `;
-                }).join('');
+              rows.forEach(row => {
+                const title =
+                  row.querySelector('.goal-ai-title')?.textContent || '';
 
-              renderStaffAnalysis(m);
+                const reason =
+                  row.querySelector('.goal-ai-reason');
+
+                if (!reason || plan.gap <= 0) return;
+
+                if (title.includes('再来フォロー')) {
+                  reason.textContent =
+                    `再来であと${plan.repeatNeed}人が目安・使える対象から優先`;
+                }
+
+                if (title.includes('新規集客')) {
+                  reason.textContent =
+                    `新規であと${plan.newNeed}人が目安・目標まで${yen(plan.gap)}`;
+                }
+
+                if (title.includes('空き枠')) {
+                  reason.textContent =
+                    `新規あと${plan.newNeed}人が目安・近い空き枠から埋める`;
+                }
+              });
+            }
+
+            function renderTargetBreakdown() {
+              ensureStyle();
+
+              const card = document.getElementById('goalAiCard');
+              if (!card) return;
+
+              const plan = currentTargetBreakdown();
+
+              let host =
+                document.getElementById('goalSplitLine');
+
+              if (!host) {
+                host = document.createElement('div');
+                host.id = 'goalSplitLine';
+                host.className = 'goal-split-line';
+
+                const head =
+                  card.querySelector('.goal-ai-head');
+
+                if (head) {
+                  head.insertAdjacentElement('afterend', host);
+                } else {
+                  card.prepend(host);
+                }
+              }
+
+              if (plan.gap <= 0) {
+                host.innerHTML = `
+                  <b>今月目標達成 ✓</b>
+                  <div class="goal-split-note">
+                    次月予約と再来維持を優先
+                  </div>
+                `;
+              } else {
+                const pace =
+                  plan.perDay == null
+                    ? '—'
+                    : `${plan.perDay}人`;
+
+                host.innerHTML = `
+                  <b>残り目安</b>　
+                  新規 <b>+${plan.newNeed}人</b>
+                   ｜ 再来 <b>+${plan.repeatNeed}人</b>
+                   ｜ 1営業日 <b>${pace}</b>
+                  <div class="goal-split-note">
+                    直近90日の実来店比率・平均単価から自動計算
+                  </div>
+                `;
+              }
+
+              const summary =
+                card.querySelector('.goal-ai-summary');
+
+              if (summary && plan.gap > 0) {
+                summary.textContent =
+                  `今月見込み ${yen(plan.forecast)} / 目標 ${yen(plan.goal)} ・ 残り ${yen(plan.gap)} ・ 必要 ${plan.totalNeed}人`;
+              }
+
+              updatePriorityReasons(plan);
+            }
+
+            const oldRenderHome = renderHome;
+
+            renderHome = function () {
+              oldRenderHome();
+              renderTargetBreakdown();
             };
+
+            renderTargetBreakdown();
           })();
           JS
 
@@ -585,10 +358,10 @@ jobs:
           path = Path("index.html")
           text = path.read_text()
 
-          tag = '<script src="metrics-consistency.js?v=20261008"></script>'
+          tag = '<script src="target-breakdown.js?v=20261008"></script>'
 
           text = re.sub(
-              r'\n?<script src="metrics-consistency\.js[^>]*></script>',
+              r'\n?<script src="target-breakdown\.js[^>]*></script>',
               '',
               text
           )
@@ -601,12 +374,12 @@ jobs:
           path.write_text(text)
           PY
 
-          node --check metrics-consistency.js
+          node --check target-breakdown.js
 
-          grep -q "MATURITY_DAYS = 45" metrics-consistency.js
-          grep -q "明示予約のみ" metrics-consistency.js
-          grep -q "次回予約→実来店" metrics-consistency.js
-          grep -q "metrics-consistency.js?v=20261008" index.html
+          grep -q "直近90日の実来店比率" target-breakdown.js
+          grep -q "新規 <b>+" target-breakdown.js
+          grep -q "再来 <b>+" target-breakdown.js
+          grep -q "target-breakdown.js?v=20261008" index.html
 
       - name: Commit
         shell: bash
@@ -614,12 +387,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add metrics-consistency.js index.html
+          git add target-breakdown.js index.html
 
           if git diff --cached --quiet; then
             echo "No changes"
             exit 0
           fi
 
-          git commit -m "Unify return and next booking metrics"
+          git commit -m "Add automatic new and repeat goal breakdown"
           git push
