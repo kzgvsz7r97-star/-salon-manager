@@ -72,10 +72,13 @@ function jstNow() {
 function makeMessage(month) {
   const copy = MONTH_COPY[month];
 
-  return `こんにちは、KYOです✂️
-
-${copy[0]}
+  return `${copy[0]}
 ${copy[1]}
+
+ご来店周期は1〜1.5ヶ月くらいが目安です◎
+
+※次回予約をいただいている方にも一斉配信しています。
+ご予約の変更などは、分かり次第お早めにご連絡ください🙇‍♂️
 
 髪どうしようか迷っている方も、このLINEにそのまま気軽に相談してください☺️`;
 }
