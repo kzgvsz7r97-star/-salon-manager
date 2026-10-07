@@ -784,39 +784,413 @@
     `);
   };
 
-  async function loadMonthlyLinePreview() {
+  async function loadMonthlyLinePreview(month) {
+  const key = getCloudBackupKey();
+  const status = $('monthlyLineStatus');
+  const preview = $('monthlyLinePreview');
+
+  month =
+    Number(month) ||
+    Number($('monthlyLineMonth')?.value) ||
+    1;
+
+  if (!key) {
+    if (status) {
+      status.textContent =
+        'クラウド同期キーが必要です';
+    }
+    return;
+  }
+
+  if (status) {
+    status.textContent = '確認中…';
+  }
+
+  try {
+    const r = await fetch(
+      MONTHLY_LINE_API +
+        `?preview=1&month=${month}`,
+      {
+        headers: {
+          'X-Backup-Key': key
+        }
+      }
+    );
+
+    const body =
+      await r.json().catch(() => ({}));
+
+    if (!r.ok) {
+      throw new Error(
+        body.error ||
+          '取得できませんでした'
+      );
+    }
+
+    if (preview) {
+      preview.value =
+        body.message || '';
+    }
+
+    if ($('monthlyLineEnabled')) {
+      $('monthlyLineEnabled').checked =
+        body.enabled !== false;
+    }
+
+    const last = body.lastStatus;
+
+    const templateText =
+      body.custom
+        ? '編集した文面を使用中'
+        : '季節テンプレを使用中';
+
+    if (status) {
+      status.textContent =
+        last?.sentAt
+          ? `${templateText} ／ 前回：${new Date(
+              last.sentAt
+            ).toLocaleString('ja-JP')} ／ ${
+              last.ok
+                ? '送信受付済み'
+                : '送信失敗'
+            }`
+          : `${templateText} ／ まだ自動配信履歴はありません`;
+    }
+  } catch (e) {
+    if (status) {
+      status.textContent =
+        e.message;
+    }
+  }
+}
+
+window.changeMonthlyLineMonth =
+  function () {
+    loadMonthlyLinePreview(
+      Number(
+        $('monthlyLineMonth')
+          ?.value
+      )
+    );
+  };
+
+window.openMonthlyLineSettings =
+  async function () {
+    const now = new Date();
+
+    const nextMonth =
+      ((now.getMonth() + 1) % 12) +
+      1;
+
+    const enabled =
+      db.monthlyLineSettings
+        ?.enabled !== false;
+
+    const monthOptions =
+      Array.from(
+        { length: 12 },
+        (_, i) => i + 1
+      )
+        .map(
+          m => `
+            <option
+              value="${m}"
+              ${
+                m === nextMonth
+                  ? 'selected'
+                  : ''
+              }
+            >
+              ${m}月
+            </option>
+          `
+        )
+        .join('');
+
+    modal(`
+      <h3>月初LINE</h3>
+
+      <div
+        class="note"
+        style="margin-bottom:10px"
+      >
+        毎月1日10時ごろに、
+        女性・15〜29歳・友だち追加365日未満へ配信します。
+        <br>
+        文面は月ごとに編集できます。
+      </div>
+
+      <label>
+        <input
+          id="monthlyLineEnabled"
+          type="checkbox"
+          style="width:auto"
+          ${
+            enabled
+              ? 'checked'
+              : ''
+          }
+        >
+        月初LINEを自動配信する
+      </label>
+
+      <label>編集する月</label>
+
+      <select
+        id="monthlyLineMonth"
+        onchange="changeMonthlyLineMonth()"
+      >
+        ${monthOptions}
+      </select>
+
+      <label>配信文面</label>
+
+      <textarea
+        id="monthlyLinePreview"
+        style="min-height:260px"
+      >読み込み中…</textarea>
+
+      <div
+        class="small"
+        style="margin-top:5px"
+      >
+        この文章がそのまま配信されます。
+      </div>
+
+      <div
+        id="monthlyLineStatus"
+        class="small"
+        style="margin-top:8px"
+      >
+        確認中…
+      </div>
+
+      <button
+        class="soft"
+        style="width:100%;margin-top:10px"
+        onclick="testMonthlyLine()"
+      >
+        自分だけにテスト送信
+      </button>
+
+      <button
+        class="ghost"
+        style="width:100%;margin-top:8px"
+        onclick="resetMonthlyLineTemplate()"
+      >
+        季節テンプレに戻す
+      </button>
+
+      <div class="actions">
+        <button
+          class="ghost"
+          onclick="closeModal()"
+        >
+          閉じる
+        </button>
+
+        <button
+          onclick="saveMonthlyLineSettings()"
+        >
+          文面を保存
+        </button>
+      </div>
+    `);
+
+    await loadMonthlyLinePreview(
+      nextMonth
+    );
+  };
+
+window.saveMonthlyLineSettings =
+  async function () {
     const key =
       getCloudBackupKey();
+
+    if (!key) return;
+
+    const month =
+      Number(
+        $('monthlyLineMonth')
+          ?.value
+      );
+
+    const message =
+      String(
+        $('monthlyLinePreview')
+          ?.value || ''
+      ).trim();
+
+    const enabled =
+      !!$('monthlyLineEnabled')
+        ?.checked;
 
     const status =
       $('monthlyLineStatus');
 
-    const preview =
-      $('monthlyLinePreview');
+    if (!message) {
+      return alert(
+        '配信文面を入力してください'
+      );
+    }
 
-    if (!key) {
-      if (status) {
-        status.textContent =
-          'クラウド同期キーが必要です';
-      }
-      return;
+    if (message.length > 5000) {
+      return alert(
+        '文面が長すぎます'
+      );
     }
 
     if (status) {
       status.textContent =
-        '確認中…';
+        '保存中…';
+    }
+
+    db.monthlyLineSettings ||= {};
+    db.monthlyLineSettings.messages ||= {};
+
+    db.monthlyLineSettings.enabled =
+      enabled;
+
+    db.monthlyLineSettings.messages[
+      String(month)
+    ] = message;
+
+    logAudit(
+      '月初LINE文面',
+      `${month}月の文面を保存`
+    );
+
+    save();
+
+    try {
+      await postCloudSnapshot(
+        key,
+        db
+      );
+
+      writeSyncBase(db);
+      cloudDirty = false;
+
+      if (status) {
+        status.textContent =
+          `${month}月の文面を保存しました`;
+      }
+    } catch (e) {
+      if (status) {
+        status.textContent =
+          '端末には保存しましたが、クラウド保存に失敗しました';
+      }
+    }
+  };
+
+window.resetMonthlyLineTemplate =
+  async function () {
+    const key =
+      getCloudBackupKey();
+
+    if (!key) return;
+
+    const month =
+      Number(
+        $('monthlyLineMonth')
+          ?.value
+      );
+
+    if (
+      !confirm(
+        `${month}月の文面を季節テンプレに戻しますか？`
+      )
+    ) {
+      return;
+    }
+
+    db.monthlyLineSettings ||= {};
+    db.monthlyLineSettings.messages ||= {};
+
+    delete db.monthlyLineSettings
+      .messages[String(month)];
+
+    logAudit(
+      '月初LINE文面',
+      `${month}月をテンプレに戻しました`
+    );
+
+    save();
+
+    try {
+      await postCloudSnapshot(
+        key,
+        db
+      );
+
+      writeSyncBase(db);
+      cloudDirty = false;
+
+      await loadMonthlyLinePreview(
+        month
+      );
+    } catch (e) {
+      const status =
+        $('monthlyLineStatus');
+
+      if (status) {
+        status.textContent =
+          'テンプレへの復元保存に失敗しました';
+      }
+    }
+  };
+
+window.testMonthlyLine =
+  async function () {
+    const key =
+      getCloudBackupKey();
+
+    if (!key) return;
+
+    const month =
+      Number(
+        $('monthlyLineMonth')
+          ?.value
+      );
+
+    const message =
+      String(
+        $('monthlyLinePreview')
+          ?.value || ''
+      ).trim();
+
+    const status =
+      $('monthlyLineStatus');
+
+    if (!message) {
+      return alert(
+        '配信文面を入力してください'
+      );
+    }
+
+    if (status) {
+      status.textContent =
+        'テスト送信中…';
     }
 
     try {
       const r =
         await fetch(
-          MONTHLY_LINE_API +
-            '?preview=1',
+          MONTHLY_LINE_API,
           {
+            method: 'POST',
             headers: {
+              'Content-Type':
+                'application/json',
               'X-Backup-Key':
                 key
-            }
+            },
+            body:
+              JSON.stringify({
+                action: 'test',
+                month,
+                message
+              })
           }
         );
 
@@ -828,204 +1202,28 @@
       if (!r.ok) {
         throw new Error(
           body.error ||
-            '取得できませんでした'
+            'テスト送信できませんでした'
         );
       }
 
-      if (preview) {
-        preview.value =
-          body.message || '';
-      }
-
-      const last =
-        body.lastStatus;
-
       if (status) {
         status.textContent =
-          last?.sentAt
-            ? `前回：${new Date(
-                last.sentAt
-              ).toLocaleString(
-                'ja-JP'
-              )} / ${
-                last.ok
-                  ? '送信受付済み'
-                  : '送信失敗'
-              }`
-            : 'まだ自動配信履歴はありません';
+          '自分のLINEへテスト送信しました';
       }
+
+      logAudit(
+        '月初LINE',
+        `${month}月をテスト送信`
+      );
+
+      save();
     } catch (e) {
       if (status) {
         status.textContent =
           e.message;
       }
     }
-  }
-
-  window.openMonthlyLineSettings =
-    async function () {
-      const enabled =
-        db.monthlyLineSettings
-          ?.enabled !== false;
-
-      modal(`
-        <h3>月初LINE</h3>
-
-        <div class="note" style="margin-bottom:10px">
-          毎月1日10時ごろに、
-          女性・15〜29歳・友だち追加365日未満へ配信します。
-        </div>
-
-        <label>
-          <input
-            id="monthlyLineEnabled"
-            type="checkbox"
-            style="width:auto"
-            ${
-              enabled
-                ? 'checked'
-                : ''
-            }
-          >
-          月初LINEを自動配信する
-        </label>
-
-        <label>次回の文面</label>
-
-        <textarea
-          id="monthlyLinePreview"
-          readonly
-          style="min-height:230px"
-        >読み込み中…</textarea>
-
-        <div
-          id="monthlyLineStatus"
-          class="small"
-          style="margin-top:8px"
-        >
-          確認中…
-        </div>
-
-        <button
-          class="soft"
-          style="width:100%;margin-top:10px"
-          onclick="testMonthlyLine()"
-        >
-          自分だけにテスト送信
-        </button>
-
-        <div class="actions">
-          <button
-            class="ghost"
-            onclick="closeModal()"
-          >
-            閉じる
-          </button>
-
-          <button
-            onclick="saveMonthlyLineSettings()"
-          >
-            保存
-          </button>
-        </div>
-      `);
-
-      await loadMonthlyLinePreview();
-    };
-
-  window.saveMonthlyLineSettings =
-    function () {
-      const enabled =
-        !!$('monthlyLineEnabled')
-          ?.checked;
-
-      db.monthlyLineSettings = {
-        ...db.monthlyLineSettings,
-        enabled
-      };
-
-      logAudit(
-        '月初LINE設定',
-        enabled
-          ? '自動配信 ON'
-          : '自動配信 OFF'
-      );
-
-      save();
-
-      const status =
-        $('monthlyLineStatus');
-
-      if (status) {
-        status.textContent =
-          '保存しました';
-      }
-    };
-
-  window.testMonthlyLine =
-    async function () {
-      const key =
-        getCloudBackupKey();
-
-      if (!key) return;
-
-      const status =
-        $('monthlyLineStatus');
-
-      if (status) {
-        status.textContent =
-          'テスト送信中…';
-      }
-
-      try {
-        const r =
-          await fetch(
-            MONTHLY_LINE_API,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type':
-                  'application/json',
-                'X-Backup-Key':
-                  key
-              },
-              body:
-                JSON.stringify({
-                  action: 'test'
-                })
-            }
-          );
-
-        const body =
-          await r
-            .json()
-            .catch(() => ({}));
-
-        if (!r.ok) {
-          throw new Error(
-            body.error ||
-              'テスト送信できませんでした'
-          );
-        }
-
-        if (status) {
-          status.textContent =
-            '自分のLINEへテスト送信しました';
-        }
-
-        logAudit(
-          '月初LINE',
-          'テスト送信'
-        );
-
-        save();
-      } catch (e) {
-        if (status) {
-          status.textContent =
-            e.message;
-        }
-      }
-    };
+  };
 
   function addUpgradeButtons() {
     if (

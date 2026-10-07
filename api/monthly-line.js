@@ -217,11 +217,13 @@ function jstNow() {
   };
 }
 
-function makeMessage(month) {
+function baseMessage(month) {
   const copy =
     MONTH_COPY[month];
 
-  return `${copy[0]}
+  return `こんにちは！
+
+${copy[0]}
 ${copy[1]}
 
 ご来店周期は1〜1.5ヶ月くらいが目安です◎
@@ -230,6 +232,38 @@ ${copy[1]}
 ご予約の変更などは、分かり次第お早めにご連絡ください🙇‍♂️
 
 髪どうしようか迷っている方も、このLINEにそのまま気軽に相談してください☺️`;
+}
+
+function validMonth(value, fallback) {
+  const month = Number(value);
+
+  return (
+    Number.isInteger(month) &&
+    month >= 1 &&
+    month <= 12
+  )
+    ? month
+    : fallback;
+}
+
+function resolveMessage(
+  state,
+  month
+) {
+  const custom =
+    state
+      ?.monthlyLineSettings
+      ?.messages
+      ?.[String(month)];
+
+  if (
+    typeof custom === 'string' &&
+    custom.trim()
+  ) {
+    return custom.trim();
+  }
+
+  return baseMessage(month);
 }
 
 function retryKey(year, month) {
@@ -378,115 +412,165 @@ export default async function handler(
   }
 
   const now =
-    jstNow();
+  jstNow();
 
-  const message =
-    makeMessage(now.month);
-
+if (
+  req.method === 'GET' &&
+  req.query?.preview ===
+    '1'
+) {
   if (
-    req.method === 'GET' &&
-    req.query?.preview ===
-      '1'
+    !adminAuthorized(req)
   ) {
-    if (
-      !adminAuthorized(req)
-    ) {
-      return res
-        .status(401)
-        .json({
-          ok: false,
-          error:
-            'Unauthorized'
-        });
-    }
+    return res
+      .status(401)
+      .json({
+        ok: false,
+        error:
+          'Unauthorized'
+      });
+  }
 
-    try {
-      const state =
-        await latestState();
+  try {
+    const state =
+      await latestState();
 
-      return res
-        .status(200)
-        .json({
-          ok: true,
-          message,
-          enabled:
-            state
-              .monthlyLineSettings
-              ?.enabled !== false,
-          target: {
-            gender: '女性',
-            age: '15〜29歳',
-            friendship:
-              '365日未満'
-          },
-          lastStatus:
-            state
-              .monthlyLineStatus ||
-            null
-        });
-    } catch (e) {
-      return res
-        .status(500)
-        .json({
-          ok: false,
-          error:
-            e.message
-        });
-    }
+    const month =
+      validMonth(
+        req.query?.month,
+        now.month
+      );
+
+    const custom =
+      state
+        ?.monthlyLineSettings
+        ?.messages
+        ?.[String(month)];
+
+    return res
+      .status(200)
+      .json({
+        ok: true,
+        month,
+        message:
+          resolveMessage(
+            state,
+            month
+          ),
+        custom:
+          typeof custom ===
+            'string' &&
+          !!custom.trim(),
+        enabled:
+          state
+            .monthlyLineSettings
+            ?.enabled !== false,
+        target: {
+          gender: '女性',
+          age: '15〜29歳',
+          friendship:
+            '365日未満'
+        },
+        lastStatus:
+          state
+            .monthlyLineStatus ||
+          null
+      });
+  } catch (e) {
+    return res
+      .status(500)
+      .json({
+        ok: false,
+        error:
+          e.message
+      });
+  }
+}
+
+if (
+  req.method === 'POST'
+) {
+  if (
+    !adminAuthorized(req)
+  ) {
+    return res
+      .status(401)
+      .json({
+        ok: false,
+        error:
+          'Unauthorized'
+      });
   }
 
   if (
-    req.method === 'POST'
+    req.body?.action !==
+    'test'
   ) {
-    if (
-      !adminAuthorized(req)
-    ) {
-      return res
-        .status(401)
-        .json({
-          ok: false,
-          error:
-            'Unauthorized'
-        });
-    }
+    return res
+      .status(400)
+      .json({
+        ok: false,
+        error:
+          'Invalid action'
+      });
+  }
+
+  try {
+    const state =
+      await latestState();
+
+    const month =
+      validMonth(
+        req.body?.month,
+        now.month
+      );
+
+    const entered =
+      typeof req.body?.message ===
+        'string'
+        ? req.body.message.trim()
+        : '';
 
     if (
-      req.body?.action !==
-      'test'
+      entered.length > 5000
     ) {
       return res
         .status(400)
         .json({
           ok: false,
           error:
-            'Invalid action'
+            'Message is too long'
         });
     }
 
-    try {
-      const state =
-        await latestState();
-
-      await pushToOwner(
+    const message =
+      entered ||
+      resolveMessage(
         state,
-        message
+        month
       );
 
-      return res
-        .status(200)
-        .json({
-          ok: true
-        });
-    } catch (e) {
-      return res
-        .status(500)
-        .json({
-          ok: false,
-          error:
-            e.message
-        });
-    }
+    await pushToOwner(
+      state,
+      message
+    );
+
+    return res
+      .status(200)
+      .json({
+        ok: true,
+        month
+      });
+  } catch (e) {
+    return res
+      .status(500)
+      .json({
+        ok: false,
+        error:
+          e.message
+      });
   }
+}
 
   if (
     req.method !== 'GET'
@@ -552,9 +636,15 @@ export default async function handler(
       });
   }
 
-  const r =
-    await fetch(
-      'https://api.line.me/v2/bot/message/narrowcast',
+  const message =
+  resolveMessage(
+    state,
+    now.month
+  );
+
+const r =
+  await fetch(
+    'https://api.line.me/v2/bot/message/narrowcast',
       {
         method: 'POST',
         headers: {
