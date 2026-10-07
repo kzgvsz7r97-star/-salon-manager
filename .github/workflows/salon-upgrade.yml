@@ -1,4 +1,4 @@
-name: 目標ベース AI優先3つ
+name: 数字ロジック統一
 
 on:
   workflow_dispatch:
@@ -14,533 +14,568 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Add goal based AI priorities
+      - name: Add metrics consistency layer
         shell: bash
         run: |
-          cat > goal-ai.js <<'JS'
+          cat > metrics-consistency.js <<'JS'
           (() => {
-            if (window.__goalAiV1) return;
-            window.__goalAiV1 = true;
-          
-            const GOAL_AI_API = 'https://salon-manager-kzgvsz7r97-star.vercel.app/api/goal-ai';
-            const DURATION_MIN = 120;
-          
+            if (window.__metricsConsistencyV1) return;
+            window.__metricsConsistencyV1 = true;
+
+            const MATURITY_DAYS = 45;
+
+            const stamp = b =>
+              `${b?.date || ''} ${b?.time || ''}`;
+
             function sameCustomer(a, b) {
               if (!a || !b) return false;
+
               if (a.customerId && b.customerId) {
                 return String(a.customerId) === String(b.customerId);
               }
-              return normalizeName(a.customer || '') === normalizeName(b.customer || '');
-            }
-          
-            function returnRecoveryRows() {
-              const rows = new Map();
-          
-              (db.bookings || []).forEach(b => {
-                if (b.isModel || b.returnRecoveryDone) return;
-                if (!['cancelled', 'noshow'].includes(bookingStatus(b))) return;
-          
-                const elapsed = daysBetween(b.date, todayISO);
-                if (elapsed < 0 || elapsed > 30) return;
-          
-                const priorVisit = (db.bookings || []).some(x =>
-                  !x.isModel &&
-                  sameCustomer(b, x) &&
-                  `${x.date} ${x.time || ''}` < `${b.date} ${b.time || ''}` &&
-                  isVisitedBooking(x)
-                );
-                if (!priorVisit) return;
-          
-                const future = (db.bookings || []).some(x =>
-                  !x.isModel &&
-                  sameCustomer(b, x) &&
-                  String(x.id) !== String(b.id) &&
-                  isActiveBooking(x) &&
-                  x.date >= todayISO
-                );
-                if (future) return;
-          
-                const key = b.customerId
-                  ? `id:${b.customerId}`
-                  : `name:${normalizeName(b.customer || '')}`;
-          
-                const old = rows.get(key);
-                if (!old || `${b.date} ${b.time || ''}` > `${old.date} ${old.time || ''}`) {
-                  rows.set(key, b);
-                }
-              });
-          
-              return [...rows.values()];
-            }
-          
-            function upcomingAvailability(days = 7) {
-              const m = monthKey(todayISO);
-              const plan = db.goalPlans?.[m] || {};
-              const rows = [];
-              let capacity = 0;
-          
-              for (let i = 0; i < days; i++) {
-                const d = dateOnly(todayISO);
-                d.setDate(d.getDate() + i);
-                const iso = localISO(d);
-          
-                if (plan.mondayOff !== false && d.getDay() === 1) continue;
-                if ((plan.closedDates || []).includes(iso)) continue;
-          
-                const ranges = availabilityForDate(
-                  iso,
-                  11 * 60,
-                  21 * 60,
-                  DURATION_MIN
-                );
-          
-                if (!ranges.length) continue;
-          
-                const parts = ranges.map(([s, e]) => {
-                  capacity += Math.floor((e - s) / DURATION_MIN) + 1;
-                  return s === e
-                    ? minToClock(s)
-                    : `${minToClock(s)}〜${minToClock(e)}`;
-                });
-          
-                rows.push({
-                  date: iso,
-                  label: dayLabelJa(iso),
-                  slots: parts
-                });
-              }
-          
-              return { rows, capacity };
-            }
-          
-            function goalContext() {
-              const month = monthKey(todayISO);
-              const stats = monthStats(month);
-              const plan = goalPlanStats(month, stats);
-              const goal = Number(getGoal(month) || 0);
-              const followups = typeof followupDueItems === 'function'
-                ? followupDueItems()
-                : [];
-              const reminders = typeof reminderCandidates === 'function'
-                ? reminderCandidates()
-                : [];
-              const recoveries = returnRecoveryRows();
-              const availability = upcomingAvailability(7);
-          
-              const newVisits = (db.bookings || []).filter(b =>
-                !b.isModel &&
-                monthKey(b.date) === month &&
-                b.newGuest &&
-                isVisitedBooking(b)
-              ).length;
-          
-              return {
-                month,
-                goal,
-                forecast: Number(stats.forecast || 0),
-                sales: Number(stats.sales || 0),
-                gap: Number(plan.gap || 0),
-                unit: Number(plan.unit || 0),
-                needed: plan.count,
-                remainingDays: Number(plan.days || 0),
-                perDay: plan.perDay,
-                followups,
-                reminders,
-                recoveries,
-                returnDue: reminders.length + recoveries.length,
-                availability,
-                newVisits
-              };
-            }
-          
-            function priorityRows(ctx) {
-              const rows = [];
-              const needed = ctx.needed == null ? 0 : Number(ctx.needed);
-          
-              if (ctx.gap <= 0) {
-                if (ctx.followups.length) {
-                  rows.push({
-                    type: 'protect',
-                    title: `予約維持 ${ctx.followups.length}件`,
-                    reason: '目標達成済み。見込み売上を落とさない',
-                    button: 'フォローを見る'
-                  });
-                }
-                if (ctx.returnDue) {
-                  rows.push({
-                    type: 'return',
-                    title: `再来フォロー ${ctx.returnDue}件`,
-                    reason: '今月達成後は次回来店を積む',
-                    button: '対象を見る'
-                  });
-                }
-                rows.push({
-                  type: 'acquisition',
-                  title: '来月の予約を先に作る',
-                  reason: '今月目標は達成。次月の見込みを増やす',
-                  button: 'AI文面'
-                });
-                return rows.slice(0, 3);
-              }
-          
-              if (ctx.followups.length) {
-                rows.push({
-                  type: 'protect',
-                  title: `予約維持 ${ctx.followups.length}件`,
-                  reason: `見込み${yen(ctx.forecast)}を落とさない`,
-                  button: 'フォローを見る'
-                });
-              }
-          
-              if (ctx.returnDue) {
-                rows.push({
-                  type: 'return',
-                  title: `再来フォロー ${ctx.returnDue}件`,
-                  reason: `あと${needed || '—'}人の一部を既存客で埋める`,
-                  button: '対象を見る'
-                });
-              }
-          
-              if (ctx.availability.rows.length) {
-                rows.push({
-                  type: 'story',
-                  title: `空き枠をストーリーへ`,
-                  reason: `あと${needed || '—'}人必要・7日以内に${ctx.availability.rows.length}日空き`,
-                  button: 'AI文面'
-                });
-              }
-          
-              rows.push({
-                type: 'acquisition',
-                title: '新規集客を強める',
-                reason: `目標まで${yen(ctx.gap)}・あと${needed || '—'}人`,
-                button: 'AI文面'
-              });
-          
-              return rows.slice(0, 3);
-            }
-          
-            function ensureStyle() {
-              if (document.getElementById('goalAiStyle')) return;
-              const style = document.createElement('style');
-              style.id = 'goalAiStyle';
-              style.textContent = `
-                .goal-ai-card{margin:8px 0 12px;padding:12px}
-                .goal-ai-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}
-                .goal-ai-kicker{font-size:10px;color:#777;margin-top:2px}
-                .goal-ai-row{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:7px;align-items:center;padding:9px 0;border-top:1px solid #eee}
-                .goal-ai-row:first-of-type{border-top:0}
-                .goal-ai-num{width:22px;height:22px;border-radius:999px;background:#111;color:#fff;display:grid;place-items:center;font-size:11px;font-weight:850}
-                .goal-ai-title{font-size:13px;font-weight:850;line-height:1.25}
-                .goal-ai-reason{font-size:10px;color:#777;line-height:1.35;margin-top:2px}
-                .goal-ai-row button{font-size:10px;padding:6px 8px;white-space:nowrap}
-                .goal-ai-summary{font-size:10px;color:#777;margin-top:6px;line-height:1.4}
-              `;
-              document.head.appendChild(style);
-            }
-          
-            function ensureCard() {
-              if (document.getElementById('goalAiCard')) return;
-              const dashboard = document.getElementById('homeOpsDashboard');
-              if (!dashboard) return;
-              dashboard.insertAdjacentHTML(
-                'afterend',
-                '<div id="goalAiCard" class="card goal-ai-card"></div>'
+
+              return (
+                normalizeName(a.customer || '') ===
+                normalizeName(b.customer || '')
               );
             }
-          
-            function renderGoalAi() {
-              ensureStyle();
-              ensureCard();
-              const host = document.getElementById('goalAiCard');
-              if (!host) return;
-          
-              const ctx = goalContext();
-              const rows = priorityRows(ctx);
-              const needLabel = ctx.needed == null ? '単価設定待ち' : `${ctx.needed}人`;
-          
+
+            function customerKey(b) {
+              if (b?.customerId) {
+                return `id:${String(b.customerId)}`;
+              }
+
+              return `name:${normalizeName(b?.customer || '')}`;
+            }
+
+            function visitedBefore(first) {
+              return (db.bookings || []).some(b =>
+                !b.isModel &&
+                sameCustomer(first, b) &&
+                stamp(b) < stamp(first) &&
+                isVisitedBooking(b)
+              );
+            }
+
+            function isTrueNewVisit(b) {
+              return !!(
+                b &&
+                !b.isModel &&
+                b.newGuest &&
+                isVisitedBooking(b) &&
+                !visitedBefore(b)
+              );
+            }
+
+            function explicitNextTaken(b) {
+              return !!(
+                b?.nextBookingTaken ||
+                b?.nextBookingId ||
+                b?.nextBookingDate
+              );
+            }
+
+            function linkedNext(first) {
+              if (!first) return null;
+
+              if (first.nextBookingId) {
+                const linked = (db.bookings || []).find(
+                  b =>
+                    String(b.id) ===
+                    String(first.nextBookingId)
+                );
+
+                if (linked) return linked;
+              }
+
+              if (first.nextBookingDate) {
+                const candidates = (db.bookings || [])
+                  .filter(
+                    b =>
+                      !b.isModel &&
+                      sameCustomer(first, b) &&
+                      b.date === first.nextBookingDate &&
+                      stamp(b) > stamp(first)
+                  )
+                  .sort((a, b) =>
+                    stamp(a).localeCompare(stamp(b))
+                  );
+
+                if (first.nextBookingTime) {
+                  const exact = candidates.find(
+                    b => b.time === first.nextBookingTime
+                  );
+
+                  if (exact) return exact;
+                }
+
+                return candidates[0] || null;
+              }
+
+              return null;
+            }
+
+            function laterVisits(first) {
+              return (db.bookings || [])
+                .filter(
+                  b =>
+                    !b.isModel &&
+                    sameCustomer(first, b) &&
+                    stamp(b) > stamp(first)
+                )
+                .sort((a, b) =>
+                  stamp(a).localeCompare(stamp(b))
+                );
+            }
+
+            function journey(first) {
+              const later = laterVisits(first);
+              const second =
+                later.find(isVisitedBooking) || null;
+              const linked = linkedNext(first);
+              const nextTaken = explicitNextTaken(first);
+
+              let nextOutcome = 'none';
+
+              if (nextTaken) {
+                if (second) {
+                  nextOutcome = 'returned';
+                } else if (
+                  linked &&
+                  ['cancelled', 'noshow'].includes(
+                    bookingStatus(linked)
+                  )
+                ) {
+                  nextOutcome = 'failed';
+                } else if (
+                  linked &&
+                  isActiveBooking(linked) &&
+                  linked.date >= todayISO
+                ) {
+                  nextOutcome = 'pending';
+                } else {
+                  nextOutcome = 'unknown';
+                }
+              }
+
+              return {
+                first,
+                second,
+                linked,
+                nextTaken,
+                nextOutcome,
+                mature:
+                  daysBetween(first.date, todayISO) >=
+                  MATURITY_DAYS
+              };
+            }
+
+            function newCohortForMonth(month) {
+              const rows = (db.bookings || [])
+                .filter(
+                  b =>
+                    !b.isModel &&
+                    b.newGuest &&
+                    monthKey(b.date) === month &&
+                    isVisitedBooking(b)
+                )
+                .sort((a, b) =>
+                  stamp(a).localeCompare(stamp(b))
+                );
+
+              const map = new Map();
+
+              rows.forEach(b => {
+                if (visitedBefore(b)) return;
+
+                const key = customerKey(b);
+
+                if (!map.has(key)) {
+                  map.set(key, b);
+                }
+              });
+
+              return [...map.values()];
+            }
+
+            // 全画面の「次回予約取得」は、明示保存された次回予約データだけで判定。
+            nextBookingTakenForBooking = function (b) {
+              return explicitNextTaken(b);
+            };
+
+            analysisStats = function (m) {
+              const all = (db.bookings || []).filter(
+                x =>
+                  monthKey(x.date) === m &&
+                  !x.isModel
+              );
+
+              const visits = all.filter(isVisitedBooking);
+
+              const newVisits = visits.filter(
+                isTrueNewVisit
+              );
+
+              const repeatVisits = visits.filter(
+                b => !isTrueNewVisit(b)
+              );
+
+              const nextTaken =
+                visits.filter(explicitNextTaken).length;
+
+              const nextRate =
+                visits.length
+                  ? Math.round(
+                      nextTaken /
+                        visits.length *
+                        100
+                    )
+                  : 0;
+
+              const newNextTaken =
+                newVisits.filter(explicitNextTaken).length;
+
+              const repeatNextTaken =
+                repeatVisits.filter(explicitNextTaken).length;
+
+              const newNextRate =
+                newVisits.length
+                  ? Math.round(
+                      newNextTaken /
+                        newVisits.length *
+                        100
+                    )
+                  : 0;
+
+              const repeatNextRate =
+                repeatVisits.length
+                  ? Math.round(
+                      repeatNextTaken /
+                        repeatVisits.length *
+                        100
+                    )
+                  : 0;
+
+              const paidRevenue = all
+                .filter(
+                  x =>
+                    x.paymentComplete &&
+                    isActiveBooking(x)
+                )
+                .reduce(
+                  (a, x) =>
+                    a + Number(x.price || 0),
+                  0
+                );
+
+              const avg =
+                visits.length
+                  ? Math.round(
+                      paidRevenue /
+                        visits.length
+                    )
+                  : 0;
+
+              const cancels =
+                all.filter(
+                  x =>
+                    bookingStatus(x) ===
+                    'cancelled'
+                ).length;
+
+              const noshows =
+                all.filter(
+                  x =>
+                    bookingStatus(x) ===
+                    'noshow'
+                ).length;
+
+              const freeVisits =
+                visits.filter(
+                  x =>
+                    x.bookingType ===
+                    'free'
+                ).length;
+
+              const designatedVisits =
+                visits.filter(
+                  x =>
+                    x.bookingType ===
+                    'designated'
+                ).length;
+
+              const cohort =
+                newCohortForMonth(m);
+
+              const journeys =
+                cohort.map(journey);
+
+              const matureJourneys =
+                journeys.filter(
+                  x => x.mature
+                );
+
+              const matureReturned =
+                matureJourneys.filter(
+                  x => !!x.second
+                ).length;
+
+              const secondRate =
+                matureJourneys.length
+                  ? Math.round(
+                      matureReturned /
+                        matureJourneys.length *
+                        100
+                    )
+                  : 0;
+
+              const outcomeKnown =
+                journeys.filter(
+                  x =>
+                    [
+                      'returned',
+                      'failed'
+                    ].includes(
+                      x.nextOutcome
+                    )
+                );
+
+              const outcomeReturned =
+                outcomeKnown.filter(
+                  x =>
+                    x.nextOutcome ===
+                    'returned'
+                ).length;
+
+              const outcomePending =
+                journeys.filter(
+                  x =>
+                    x.nextOutcome ===
+                    'pending'
+                ).length;
+
+              const outcomeUnknown =
+                journeys.filter(
+                  x =>
+                    x.nextOutcome ===
+                    'unknown'
+                ).length;
+
+              const keptRate =
+                outcomeKnown.length
+                  ? Math.round(
+                      outcomeReturned /
+                        outcomeKnown.length *
+                        100
+                    )
+                  : 0;
+
+              return {
+                visits,
+                newVisits,
+                repeatVisits,
+                nextTaken,
+                nextRate,
+                newNextTaken,
+                repeatNextTaken,
+                newNextRate,
+                repeatNextRate,
+                paidRevenue,
+                avg,
+                cancels,
+                noshows,
+                freeVisits,
+                designatedVisits,
+
+                // 旧画面との互換
+                uniqueNew:
+                  matureJourneys.map(
+                    x => x.first
+                  ),
+                secondReturned:
+                  matureReturned,
+                secondRate,
+
+                // 正確性表示用
+                cohort,
+                journeys,
+                matureCount:
+                  matureJourneys.length,
+                maturityWaiting:
+                  journeys.length -
+                  matureJourneys.length,
+                nextOutcomeKnown:
+                  outcomeKnown.length,
+                nextOutcomeReturned:
+                  outcomeReturned,
+                nextOutcomePending:
+                  outcomePending,
+                nextOutcomeUnknown:
+                  outcomeUnknown,
+                keptRate,
+
+                all
+              };
+            };
+
+            renderMonthlyAnalysis = function () {
+              const host = $('monthlyAnalysis');
+              const srcHost = $('analysisSources');
+
+              if (!host || !srcHost) return;
+
+              const m =
+                monthString(analysisMonth);
+
+              const s =
+                analysisStats(m);
+
+              const months =
+                recentAnalysisMonths(
+                  m,
+                  4
+                );
+
               host.innerHTML = `
-                <div class="goal-ai-head">
-                  <div>
-                    <b>目標から逆算｜今日の優先3つ</b>
-                    <div class="goal-ai-kicker">優先順位はAIではなく実データで決定</div>
+                <div class="analysis-grid">
+                  <div class="analysis-card">
+                    <div class="l">実来店</div>
+                    <div class="v">${s.visits.length}人</div>
                   </div>
-                  <div class="small">${ctx.gap > 0 ? `あと ${yen(ctx.gap)}` : '目標達成'}</div>
+
+                  <div class="analysis-card">
+                    <div class="l">新規 / 再来</div>
+                    <div class="v">${s.newVisits.length} / ${s.repeatVisits.length}</div>
+                  </div>
+
+                  <div class="analysis-card">
+                    <div class="l">新規 次回予約率</div>
+                    <div class="v">${s.newNextRate}%</div>
+                    <div class="small">${s.newNextTaken}/${s.newVisits.length}・明示予約のみ</div>
+                  </div>
+
+                  <div class="analysis-card">
+                    <div class="l">再来 次回予約率</div>
+                    <div class="v">${s.repeatNextRate}%</div>
+                    <div class="small">${s.repeatNextTaken}/${s.repeatVisits.length}・明示予約のみ</div>
+                  </div>
+
+                  <div class="analysis-card">
+                    <div class="l">2回目実来店率</div>
+                    <div class="v">${s.secondRate}%</div>
+                    <div class="small">初回45日以上 ${s.secondReturned}/${s.matureCount}・判定待ち ${s.maturityWaiting}</div>
+                  </div>
+
+                  <div class="analysis-card">
+                    <div class="l">次回予約→実来店</div>
+                    <div class="v">${s.keptRate}%</div>
+                    <div class="small">結果確定 ${s.nextOutcomeReturned}/${s.nextOutcomeKnown}・待ち ${s.nextOutcomePending}・未確定 ${s.nextOutcomeUnknown}</div>
+                  </div>
+
+                  <div class="analysis-card">
+                    <div class="l">平均単価</div>
+                    <div class="v">${yen(s.avg)}</div>
+                  </div>
+
+                  <div class="analysis-card">
+                    <div class="l">フリー / 指名</div>
+                    <div class="v">${s.freeVisits} / ${s.designatedVisits}</div>
+                  </div>
+
+                  <div class="analysis-card">
+                    <div class="l">キャンセル / 無断</div>
+                    <div class="v">${s.cancels} / ${s.noshows}</div>
+                  </div>
                 </div>
-                ${rows.map((row, i) => `
-                  <div class="goal-ai-row">
-                    <div class="goal-ai-num">${i + 1}</div>
-                    <div>
-                      <div class="goal-ai-title">${esc(row.title)}</div>
-                      <div class="goal-ai-reason">${esc(row.reason)}</div>
-                    </div>
-                    <button class="ghost" onclick="runGoalPriority('${row.type}')">${esc(row.button)}</button>
-                  </div>
-                `).join('')}
-                <div class="goal-ai-summary">
-                  今月見込み ${yen(ctx.forecast)} / 目標 ${yen(ctx.goal)} ・ 必要 ${needLabel} ・ 残り営業日 ${ctx.remainingDays}日
+
+                <h3 style="margin:16px 4px 8px">
+                  3か月前〜今月の推移
+                </h3>
+
+                <div style="overflow:auto">
+                  <table class="trend-table">
+                    <thead>
+                      <tr>
+                        <th>月</th>
+                        <th>新規</th>
+                        <th>2回目実来店</th>
+                        <th>新規次回</th>
+                        <th>再来次回</th>
+                        <th>次回→実来店</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      ${months.map(mm => {
+                        const a =
+                          analysisStats(mm);
+
+                        return `
+                          <tr>
+                            <td>${Number(mm.slice(5))}月</td>
+                            <td>${a.newVisits.length}</td>
+                            <td>${a.secondRate}%</td>
+                            <td>${a.newNextRate}%</td>
+                            <td>${a.repeatNextRate}%</td>
+                            <td>${a.keptRate}%</td>
+                          </tr>
+                        `;
+                      }).join('')}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="small" style="margin:7px 4px 0">
+                  2回目実来店率＝その月の本当の新規のうち、初回来店から45日以上経過した人だけで計算。次回予約率＝明示保存された次回予約のみ。次回予約→実来店率＝来店・キャンセル・無断キャンセルなど結果が確定した分だけで計算します。
                 </div>
               `;
-            }
-          
-            function availabilityPayload(ctx) {
-              return ctx.availability.rows.slice(0, 5).map(x => ({
-                date: x.date,
-                label: x.label,
-                slots: x.slots
-              }));
-            }
-          
-            function aiFallback(kind, ctx) {
-              if (kind === 'story') {
-                const slots = ctx.availability.rows
-                  .slice(0, 4)
-                  .map(x => `${x.label}  ${x.slots.join(' / ')}`)
-                  .join('\n');
-                return `ご予約空きあります◎\n\n${slots || '空き枠は予約ページをご確認ください'}\n\nレイヤーカット・顔まわり・透明感カラーご相談ください✂️\nご予約はプロフィールのリンクからお願いします。`;
-              }
-          
-              return `今月まだご案内できます◎\nレイヤーカット・顔まわり・透明感カラーで迷っている方は気軽にご相談ください✂️\nご予約はプロフィールのリンクからお願いします。`;
-            }
-          
-            async function requestAi(kind, ctx) {
-              const key = getCloudBackupKey();
-              if (!key) throw new Error('同期キーが未設定です');
-          
-              const response = await fetch(GOAL_AI_API, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-Backup-Key': key
-                },
-                body: JSON.stringify({
-                  kind,
-                  metrics: {
-                    goal: ctx.goal,
-                    forecast: ctx.forecast,
-                    gap: ctx.gap,
-                    unit: ctx.unit,
-                    needed: ctx.needed,
-                    remainingDays: ctx.remainingDays,
-                    perDay: ctx.perDay,
-                    newVisits: ctx.newVisits
-                  },
-                  availability: availabilityPayload(ctx)
-                })
-              });
-          
-              const body = await response.json().catch(() => ({}));
-              if (!response.ok) throw new Error(body.error || 'AI文面を作れませんでした');
-              return String(body.text || '').trim();
-            }
-          
-            window.runGoalPriority = async function (type) {
-              if (type === 'protect') {
-                if (typeof openHomeFollowups === 'function') openHomeFollowups();
-                return;
-              }
-          
-              if (type === 'return') {
-                if (typeof openHomeReturnManager === 'function') openHomeReturnManager();
-                else if (typeof openReturnManager === 'function') openReturnManager(monthKey(todayISO));
-                return;
-              }
-          
-              const ctx = goalContext();
-              const title = type === 'story' ? '空き枠ストーリー' : '新規集客文面';
-          
-              modal(`
-                <h3>${title}</h3>
-                <div class="note" style="margin-bottom:10px">
-                  目標まで ${yen(ctx.gap)} / 必要 ${ctx.needed == null ? '—' : ctx.needed + '人'} を基準に作成します。
-                </div>
-                <textarea id="goalAiOutput" style="min-height:180px">AI作成中…</textarea>
-                <div id="goalAiStatus" class="small" style="margin-top:7px">顧客名などの個人情報はAIへ送りません。</div>
-                <div class="actions">
-                  <button class="ghost" onclick="closeModal()">閉じる</button>
-                  <button class="ghost" onclick="regenerateGoalAi('${type}')">作り直す</button>
-                  <button class="blue" onclick="copyGoalAiText()">コピー</button>
-                </div>
-              `);
-          
-              await fillGoalAiText(type, ctx);
-            };
-          
-            async function fillGoalAiText(type, ctx) {
-              const output = document.getElementById('goalAiOutput');
-              const status = document.getElementById('goalAiStatus');
-              if (!output) return;
-          
-              output.value = 'AI作成中…';
-              try {
-                const text = await requestAi(type, ctx);
-                output.value = text || aiFallback(type, ctx);
-                if (status) status.textContent = '目標差と空き枠からAIで作成しました。';
-              } catch (e) {
-                output.value = aiFallback(type, ctx);
-                if (status) status.textContent = `${e.message}。いまは目標ベースのテンプレを表示しています。`;
-              }
-            }
-          
-            window.regenerateGoalAi = async function (type) {
-              await fillGoalAiText(type, goalContext());
-            };
-          
-            window.copyGoalAiText = async function () {
-              const el = document.getElementById('goalAiOutput');
-              if (!el) return;
-              try {
-                await navigator.clipboard.writeText(el.value);
-                alert('文面をコピーしました');
-              } catch (_) {
-                el.focus();
-                el.select();
-                document.execCommand('copy');
-                alert('文面をコピーしました');
-              }
-            };
-          
-            const oldRenderHome = renderHome;
-            renderHome = function () {
-              oldRenderHome();
-              renderGoalAi();
-            };
-          
-            renderGoalAi();
-          })();
-          JS
 
-          cat > api/goal-ai.js <<'JS'
-          const MODEL = process.env.OPENAI_MODEL || 'gpt-6-luna';
-          const ALLOWED_ORIGIN = 'https://kzgvsz7r97-star.github.io';
-          
-          function setCors(req, res) {
-            const origin = req.headers.origin || '';
-            if (origin === ALLOWED_ORIGIN) {
-              res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
-            }
-            res.setHeader('Vary', 'Origin');
-            res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Backup-Key');
-          }
-          
-          function json(res, status, body) {
-            res.status(status).setHeader('Content-Type', 'application/json; charset=utf-8');
-            res.end(JSON.stringify(body));
-          }
-          
-          function outputText(body) {
-            if (typeof body?.output_text === 'string' && body.output_text.trim()) {
-              return body.output_text.trim();
-            }
-          
-            return (body?.output || [])
-              .flatMap(item => item?.content || [])
-              .filter(part => part?.type === 'output_text' && part?.text)
-              .map(part => part.text)
-              .join('\n')
-              .trim();
-          }
-          
-          function safeNumber(value) {
-            const n = Number(value);
-            return Number.isFinite(n) ? n : 0;
-          }
-          
-          export default async function handler(req, res) {
-            setCors(req, res);
-          
-            if (req.method === 'OPTIONS') {
-              return res.status(204).end();
-            }
-          
-            if (req.method !== 'POST') {
-              res.setHeader('Allow', 'POST');
-              return json(res, 405, { error: 'Method not allowed' });
-            }
-          
-            const backupKey = process.env.BACKUP_KEY || '';
-            const suppliedKey = String(req.headers['x-backup-key'] || '');
-            if (!backupKey || !suppliedKey || suppliedKey !== backupKey) {
-              return json(res, 401, { error: '認証できませんでした' });
-            }
-          
-            const apiKey = process.env.OPENAI_API_KEY || '';
-            if (!apiKey) {
-              return json(res, 503, { error: 'OPENAI_API_KEY未設定' });
-            }
-          
-            const kind = req.body?.kind === 'story' ? 'story' : 'acquisition';
-            const metrics = req.body?.metrics || {};
-            const availability = Array.isArray(req.body?.availability)
-              ? req.body.availability.slice(0, 7)
-              : [];
-          
-            const facts = {
-              goal: safeNumber(metrics.goal),
-              forecast: safeNumber(metrics.forecast),
-              gap: safeNumber(metrics.gap),
-              unit: safeNumber(metrics.unit),
-              needed: metrics.needed == null ? null : safeNumber(metrics.needed),
-              remainingDays: safeNumber(metrics.remainingDays),
-              perDay: metrics.perDay == null ? null : safeNumber(metrics.perDay),
-              newVisits: safeNumber(metrics.newVisits),
-              availability
+              const sources = [
+                'SHAiRE',
+                'Nailie',
+                'minimo',
+                'Instagram',
+                'その他'
+              ];
+
+              srcHost.innerHTML =
+                sources.map(source => {
+                  const xs =
+                    s.visits.filter(
+                      x =>
+                        x.source === source
+                    );
+
+                  const rev =
+                    s.all
+                      .filter(
+                        x =>
+                          x.source === source &&
+                          x.paymentComplete &&
+                          isActiveBooking(x)
+                      )
+                      .reduce(
+                        (a, x) =>
+                          a +
+                          Number(
+                            x.price || 0
+                          ),
+                        0
+                      );
+
+                  return `
+                    <div class="analysis-source">
+                      <b>${source}</b>
+                      <div class="small" style="margin-top:4px">
+                        実来店 ${xs.length}人 ・ 確定売上 ${yen(rev)}
+                      </div>
+                    </div>
+                  `;
+                }).join('');
+
+              renderStaffAnalysis(m);
             };
-          
-            const task = kind === 'story'
-              ? `Instagramストーリー用の予約訴求文を1案だけ作る。空き枠は入力された日時をそのまま使い、存在しない枠を作らない。4〜7行程度。最初の1行は短いフック。最後は予約リンクかDMへのCTA。`
-              : `今日使う新規集客文を1案だけ作る。目標までの不足人数と残り営業日を踏まえ、レイヤーカット・顔まわり・透明感カラーの予約につながる短い訴求にする。Instagramストーリーまたは予約媒体にそのまま転用できる5〜8行程度。最後は予約・相談CTA。`;
-          
-            const prompt = `
-          あなたは原宿の美容師向け集客アシスタントです。
-          優先順位そのものはアプリ側で目標差から計算済みです。あなたは文章だけを作ってください。
-          
-          ターゲット：18〜25歳女性。
-          得意：似合わせレイヤー、顔まわり、小顔見えの設計、透明感カラー。
-          トーン：短い、自然、少し可愛い。煽りすぎない。説明しすぎない。赤裸々な売上額はお客様向け文章に書かない。
-          禁止：予約が埋まっているように見せる虚偽、入力にない空き枠の捏造、No.1など根拠のない表現。
-          
-          今日の目標データ：
-          ${JSON.stringify(facts)}
-          
-          依頼：
-          ${task}
-          
-          完成文だけを返してください。前置き・解説・見出しは不要です。
-            `.trim();
-          
-            try {
-              const response = await fetch('https://api.openai.com/v1/responses', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${apiKey}`
-                },
-                body: JSON.stringify({
-                  model: MODEL,
-                  input: prompt,
-                  max_output_tokens: 260
-                })
-              });
-          
-              const body = await response.json().catch(() => ({}));
-              if (!response.ok) {
-                console.error('OpenAI error', response.status, body?.error?.message || body);
-                return json(res, 502, { error: 'AI文面を作れませんでした' });
-              }
-          
-              const text = outputText(body);
-              if (!text) {
-                return json(res, 502, { error: 'AIの返答が空でした' });
-              }
-          
-              return json(res, 200, { ok: true, text, model: MODEL });
-            } catch (error) {
-              console.error('goal-ai failed', error);
-              return json(res, 500, { error: 'AI接続に失敗しました' });
-            }
-          }
+          })();
           JS
 
           python3 - <<'PY'
@@ -550,10 +585,10 @@ jobs:
           path = Path("index.html")
           text = path.read_text()
 
-          tag = '<script src="goal-ai.js?v=20261008"></script>'
+          tag = '<script src="metrics-consistency.js?v=20261008"></script>'
 
           text = re.sub(
-              r'\n?<script src="goal-ai\.js[^>]*></script>',
+              r'\n?<script src="metrics-consistency\.js[^>]*></script>',
               '',
               text
           )
@@ -566,11 +601,12 @@ jobs:
           path.write_text(text)
           PY
 
-          node --check goal-ai.js
-          node --check api/goal-ai.js
-          grep -q "目標から逆算｜今日の優先3つ" goal-ai.js
-          grep -q "OPENAI_API_KEY" api/goal-ai.js
-          grep -q "goal-ai.js?v=20261008" index.html
+          node --check metrics-consistency.js
+
+          grep -q "MATURITY_DAYS = 45" metrics-consistency.js
+          grep -q "明示予約のみ" metrics-consistency.js
+          grep -q "次回予約→実来店" metrics-consistency.js
+          grep -q "metrics-consistency.js?v=20261008" index.html
 
       - name: Commit
         shell: bash
@@ -578,12 +614,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add goal-ai.js api/goal-ai.js index.html
+          git add metrics-consistency.js index.html
 
           if git diff --cached --quiet; then
             echo "No changes"
             exit 0
           fi
 
-          git commit -m "Add goal based AI daily priorities"
+          git commit -m "Unify return and next booking metrics"
           git push
