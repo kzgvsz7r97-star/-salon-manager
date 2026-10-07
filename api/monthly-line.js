@@ -1,5 +1,10 @@
 import crypto from 'crypto';
 
+const ALLOWED_ORIGINS = new Set([
+  'https://kzgvsz7r97-star.github.io',
+  'https://salon-manager-kzgvsz7r97-star.vercel.app'
+]);
+
 const MONTH_COPY = {
   1: [
     '1月は乾燥で毛先のパサつきや静電気が気になりやすい時期です。',
@@ -51,16 +56,159 @@ const MONTH_COPY = {
   ]
 };
 
-function jstNow() {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Tokyo',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric'
-  }).formatToParts(new Date());
+function setCors(req, res) {
+  const origin =
+    req.headers.origin || '';
 
-  const get = type =>
-    Number(parts.find(x => x.type === type)?.value || 0);
+  if (
+    ALLOWED_ORIGINS.has(origin)
+  ) {
+    res.setHeader(
+      'Access-Control-Allow-Origin',
+      origin
+    );
+  }
+
+  res.setHeader(
+    'Vary',
+    'Origin'
+  );
+
+  res.setHeader(
+    'Access-Control-Allow-Methods',
+    'GET, POST, OPTIONS'
+  );
+
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, X-Backup-Key, Authorization'
+  );
+}
+
+function adminAuthorized(req) {
+  return (
+    !!process.env.BACKUP_KEY &&
+    req.headers['x-backup-key'] ===
+      process.env.BACKUP_KEY
+  );
+}
+
+function cronAuthorized(req) {
+  return (
+    !!process.env.CRON_SECRET &&
+    req.headers.authorization ===
+      `Bearer ${process.env.CRON_SECRET}`
+  );
+}
+
+function storageHeaders() {
+  const key =
+    process.env
+      .SUPABASE_SECRET_KEY;
+
+  return {
+    'Content-Type':
+      'application/json',
+    apikey: key,
+    Authorization:
+      `Bearer ${key}`
+  };
+}
+
+async function latestState() {
+  const base =
+    process.env.SUPABASE_URL;
+
+  const secret =
+    process.env
+      .SUPABASE_SECRET_KEY;
+
+  if (!base || !secret) {
+    throw new Error(
+      'Storage is not configured'
+    );
+  }
+
+  const r =
+    await fetch(
+      `${base}/rest/v1/salon-backups?select=data&order=created_at.desc&limit=1`,
+      {
+        headers:
+          storageHeaders()
+      }
+    );
+
+  const raw =
+    await r.text();
+
+  if (!r.ok) {
+    throw new Error(
+      raw ||
+        'Storage read failed'
+    );
+  }
+
+  const rows =
+    raw
+      ? JSON.parse(raw)
+      : [];
+
+  return (
+    rows?.[0]?.data || {}
+  );
+}
+
+async function writeState(data) {
+  const base =
+    process.env.SUPABASE_URL;
+
+  const r =
+    await fetch(
+      `${base}/rest/v1/salon-backups`,
+      {
+        method: 'POST',
+        headers: {
+          ...storageHeaders(),
+          Prefer:
+            'return=minimal'
+        },
+        body:
+          JSON.stringify({
+            data
+          })
+      }
+    );
+
+  if (!r.ok) {
+    throw new Error(
+      await r.text()
+    );
+  }
+}
+
+function jstNow() {
+  const parts =
+    new Intl.DateTimeFormat(
+      'en-US',
+      {
+        timeZone:
+          'Asia/Tokyo',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric'
+      }
+    ).formatToParts(
+      new Date()
+    );
+
+  const get =
+    type =>
+      Number(
+        parts.find(
+          x =>
+            x.type === type
+        )?.value || 0
+      );
 
   return {
     year: get('year'),
@@ -70,7 +218,8 @@ function jstNow() {
 }
 
 function makeMessage(month) {
-  const copy = MONTH_COPY[month];
+  const copy =
+    MONTH_COPY[month];
 
   return `${copy[0]}
 ${copy[1]}
@@ -84,120 +233,421 @@ ${copy[1]}
 }
 
 function retryKey(year, month) {
-  const hex = crypto
-    .createHash('sha256')
-    .update(`monthly-line-${year}-${month}`)
-    .digest('hex')
-    .slice(0, 32);
+  const hex =
+    crypto
+      .createHash('sha256')
+      .update(
+        `monthly-line-${year}-${month}`
+      )
+      .digest('hex')
+      .slice(0, 32);
 
-  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+  return `${hex.slice(
+    0,
+    8
+  )}-${hex.slice(
+    8,
+    12
+  )}-${hex.slice(
+    12,
+    16
+  )}-${hex.slice(
+    16,
+    20
+  )}-${hex.slice(20)}`;
 }
 
-export default async function handler(req, res) {
-  res.setHeader('Cache-Control', 'no-store');
+const demographic = {
+  type: 'operator',
+  and: [
+    {
+      type: 'gender',
+      oneOf: ['female']
+    },
+    {
+      type: 'age',
+      gte: 'age_15',
+      lt: 'age_30'
+    },
+    {
+      type:
+        'subscriptionPeriod',
+      lt: 'day_365'
+    }
+  ]
+};
 
-  if (req.method !== 'GET') {
-    return res.status(405).json({ ok:false });
-  }
+function ownerLineId(state) {
+  const profiles =
+    state.staffProfiles || [];
+
+  const owner =
+    profiles.find(
+      p =>
+        p.role === 'owner'
+    ) ||
+    profiles[0];
+
+  return String(
+    owner?.notifyLineUserId ||
+      ''
+  ).trim();
+}
+
+async function pushToOwner(
+  state,
+  message
+) {
+  const userId =
+    ownerLineId(state);
 
   if (
-    !process.env.CRON_SECRET ||
-    req.headers.authorization !==
-      `Bearer ${process.env.CRON_SECRET}`
+    !/^U[0-9a-f]{32}$/i.test(
+      userId
+    )
   ) {
-    return res.status(401).json({ ok:false });
+    throw new Error(
+      '自分へのLINE通知IDが未設定です'
+    );
+  }
+
+  const r =
+    await fetch(
+      'https://api.line.me/v2/bot/message/push',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type':
+            'application/json',
+          Authorization:
+            `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
+        },
+        body:
+          JSON.stringify({
+            to: userId,
+            messages: [
+              {
+                type: 'text',
+                text: message
+              }
+            ]
+          })
+      }
+    );
+
+  const raw =
+    await r.text();
+
+  if (!r.ok) {
+    throw new Error(
+      raw ||
+        'LINE送信に失敗しました'
+    );
+  }
+}
+
+export default async function handler(
+  req,
+  res
+) {
+  setCors(req, res);
+
+  res.setHeader(
+    'Cache-Control',
+    'no-store'
+  );
+
+  if (
+    req.method === 'OPTIONS'
+  ) {
+    return res
+      .status(204)
+      .end();
   }
 
   const token =
-    process.env.LINE_CHANNEL_ACCESS_TOKEN;
+    process.env
+      .LINE_CHANNEL_ACCESS_TOKEN;
 
   if (!token) {
     return res.status(500).json({
-      ok:false,
-      error:'LINE token missing'
+      ok: false,
+      error:
+        'LINE token is not configured'
     });
   }
 
-  const now = jstNow();
-  const message = makeMessage(now.month);
+  const now =
+    jstNow();
 
-  if (req.query.preview === '1') {
-    return res.status(200).json({
-      ok:true,
-      message
-    });
+  const message =
+    makeMessage(now.month);
+
+  if (
+    req.method === 'GET' &&
+    req.query?.preview ===
+      '1'
+  ) {
+    if (
+      !adminAuthorized(req)
+    ) {
+      return res
+        .status(401)
+        .json({
+          ok: false,
+          error:
+            'Unauthorized'
+        });
+    }
+
+    try {
+      const state =
+        await latestState();
+
+      return res
+        .status(200)
+        .json({
+          ok: true,
+          message,
+          enabled:
+            state
+              .monthlyLineSettings
+              ?.enabled !== false,
+          target: {
+            gender: '女性',
+            age: '15〜29歳',
+            friendship:
+              '365日未満'
+          },
+          lastStatus:
+            state
+              .monthlyLineStatus ||
+            null
+        });
+    } catch (e) {
+      return res
+        .status(500)
+        .json({
+          ok: false,
+          error:
+            e.message
+        });
+    }
+  }
+
+  if (
+    req.method === 'POST'
+  ) {
+    if (
+      !adminAuthorized(req)
+    ) {
+      return res
+        .status(401)
+        .json({
+          ok: false,
+          error:
+            'Unauthorized'
+        });
+    }
+
+    if (
+      req.body?.action !==
+      'test'
+    ) {
+      return res
+        .status(400)
+        .json({
+          ok: false,
+          error:
+            'Invalid action'
+        });
+    }
+
+    try {
+      const state =
+        await latestState();
+
+      await pushToOwner(
+        state,
+        message
+      );
+
+      return res
+        .status(200)
+        .json({
+          ok: true
+        });
+    } catch (e) {
+      return res
+        .status(500)
+        .json({
+          ok: false,
+          error:
+            e.message
+        });
+    }
+  }
+
+  if (
+    req.method !== 'GET'
+  ) {
+    return res
+      .status(405)
+      .json({
+        ok: false,
+        error:
+          'Method not allowed'
+      });
+  }
+
+  if (
+    !cronAuthorized(req)
+  ) {
+    return res
+      .status(401)
+      .json({
+        ok: false,
+        error:
+          'Unauthorized'
+      });
+  }
+
+  let state;
+
+  try {
+    state =
+      await latestState();
+  } catch (e) {
+    return res
+      .status(500)
+      .json({
+        ok: false,
+        error: e.message
+      });
   }
 
   if (now.day !== 1) {
-    return res.status(200).json({
-      ok:true,
-      skipped:true
-    });
+    return res
+      .status(200)
+      .json({
+        ok: true,
+        skipped: true,
+        reason:
+          'Not first day'
+      });
   }
 
-  const r = await fetch(
-    'https://api.line.me/v2/bot/message/narrowcast',
-    {
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        Authorization:`Bearer ${token}`,
-        'X-Line-Retry-Key':
-          retryKey(now.year, now.month)
-      },
-      body:JSON.stringify({
-        messages:[
-          {
-            type:'text',
-            text:message
-          }
-        ],
-        filter:{
-          demographic:{
-            type:'operator',
-            and:[
-              {
-                type:'gender',
-                oneOf:['female']
-              },
-              {
-                type:'age',
-                gte:'age_15',
-                lt:'age_30'
-              },
-              {
-                type:'subscriptionPeriod',
-                lt:'day_365'
-              }
-            ]
-          }
-        },
-        limit:{
-          upToRemainingQuota:true,
-          forbidPartialDelivery:true
-        }
-      })
-    }
-  );
+  if (
+    state
+      .monthlyLineSettings
+      ?.enabled === false
+  ) {
+    return res
+      .status(200)
+      .json({
+        ok: true,
+        skipped: true,
+        reason:
+          'Monthly LINE disabled'
+      });
+  }
 
-  const raw = await r.text();
+  const r =
+    await fetch(
+      'https://api.line.me/v2/bot/message/narrowcast',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type':
+            'application/json',
+          Authorization:
+            `Bearer ${token}`,
+          'X-Line-Retry-Key':
+            retryKey(
+              now.year,
+              now.month
+            )
+        },
+        body:
+          JSON.stringify({
+            messages: [
+              {
+                type: 'text',
+                text: message
+              }
+            ],
+            filter: {
+              demographic
+            },
+            limit: {
+              upToRemainingQuota:
+                true,
+              forbidPartialDelivery:
+                true
+            }
+          })
+      }
+    );
+
+  const raw =
+    await r.text();
+
+  const requestId =
+    r.headers.get(
+      'x-line-request-id'
+    ) || '';
+
+  const accepted =
+    r.ok ||
+    r.status === 409;
+
+  state.monthlyLineStatus = {
+    ok: accepted,
+    sentAt:
+      new Date().toISOString(),
+    year: now.year,
+    month: now.month,
+    statusCode: r.status,
+    requestId,
+    error:
+      accepted
+        ? ''
+        : raw
+  };
+
+  try {
+    await writeState(state);
+  } catch (e) {
+    console.error(
+      'Status save failed',
+      e
+    );
+  }
 
   if (r.status === 409) {
-    return res.status(200).json({
-      ok:true,
-      alreadySent:true
-    });
+    return res
+      .status(200)
+      .json({
+        ok: true,
+        alreadySent: true
+      });
   }
 
   if (!r.ok) {
-    return res.status(r.status).json({
-      ok:false,
-      error:raw
-    });
+    return res
+      .status(r.status)
+      .json({
+        ok: false,
+        error:
+          raw ||
+          'LINE narrowcast failed'
+      });
   }
 
-  return res.status(202).json({
-    ok:true,
-    accepted:true
-  });
+  return res
+    .status(202)
+    .json({
+      ok: true,
+      accepted: true
+    });
 }
