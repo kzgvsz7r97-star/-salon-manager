@@ -1,4 +1,4 @@
-name: Salon Manager 一括アップデート
+name: 月初LINE編集機能アップデート
 
 on:
   workflow_dispatch:
@@ -14,784 +14,215 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Add owner upgrade
+      - name: Add monthly LINE editor
         shell: bash
         run: |
-          cat > owner-upgrade.js <<'JS'
-          (() => {
-            const MONTHLY_LINE_API =
-              'https://salon-manager-kzgvsz7r97-star.vercel.app/api/monthly-line';
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
 
-            db.auditLog ||= [];
-            db.monthlyLineSettings ||= { enabled: true };
+          # =========================
+          # owner-upgrade.js
+          # =========================
+          path = Path("owner-upgrade.js")
+          text = path.read_text()
 
-            function customerByName(name) {
-              const n = normalizeName(name);
-              if (!n) return null;
+          new_owner = r'''  async function loadMonthlyLinePreview(month) {
+            const key = getCloudBackupKey();
+            const status = $('monthlyLineStatus');
+            const preview = $('monthlyLinePreview');
 
-              return (db.customers || []).find(
-                c => normalizeName(c.name) === n
-              ) || null;
+            month =
+              Number(month) ||
+              Number($('monthlyLineMonth')?.value) ||
+              1;
+
+            if (!key) {
+              if (status) {
+                status.textContent =
+                  'クラウド同期キーが必要です';
+              }
+              return;
             }
 
-            function customerByRef(id, name) {
-              if (id) {
-                const c = (db.customers || []).find(
-                  x => String(x.id) === String(id)
-                );
-
-                if (c) return c;
-              }
-
-              return customerByName(name);
+            if (status) {
+              status.textContent = '確認中…';
             }
 
-            function migrateCustomerLinks() {
-              let changed = false;
-
-              (db.customers || []).forEach(c => {
-                if (!c.id) {
-                  c.id = uid();
-                  changed = true;
-                }
-              });
-
-              [db.bookings, db.sales, db.retail]
-                .filter(Array.isArray)
-                .forEach(list => {
-                  list.forEach(row => {
-                    if (!row.customer) return;
-
-                    const current =
-                      row.customerId
-                        ? (db.customers || []).find(
-                            c =>
-                              String(c.id) ===
-                              String(row.customerId)
-                          )
-                        : null;
-
-                    if (current) return;
-
-                    const c = customerByName(row.customer);
-
-                    if (c) {
-                      row.customerId = c.id;
-                      changed = true;
-                    }
-                  });
-                });
-
-              if (changed) {
-                localStorage.setItem(
-                  KEY,
-                  JSON.stringify(db)
-                );
-              }
-
-              return changed;
-            }
-
-            function rowBelongsToCustomer(row, customer) {
-              if (!row || !customer) return false;
-
-              if (row.customerId) {
-                return (
-                  String(row.customerId) ===
-                  String(customer.id)
-                );
-              }
-
-              return (
-                normalizeName(row.customer) ===
-                normalizeName(customer.name)
-              );
-            }
-
-            function logAudit(action, detail = '') {
-              db.auditLog ||= [];
-
-              db.auditLog.unshift({
-                id: uid(),
-                at: new Date().toISOString(),
-                action: String(action || ''),
-                detail: String(detail || '')
-              });
-
-              db.auditLog =
-                db.auditLog.slice(0, 200);
-            }
-
-            migrateCustomerLinks();
-
-            const originalSave = save;
-
-            save = function () {
-              migrateCustomerLinks();
-              originalSave();
-            };
-
-            customerForBooking = function (b) {
-              return customerByRef(
-                b?.customerId,
-                b?.customer
-              );
-            };
-
-            customerBookingsByName = function (name) {
-              const customer = customerByName(name);
-              const n = normalizeName(name);
-
-              return (db.bookings || []).filter(b => {
-                if (customer && b.customerId) {
-                  return (
-                    String(b.customerId) ===
-                    String(customer.id)
-                  );
-                }
-
-                return (
-                  normalizeName(b.customer) === n
-                );
-              });
-            };
-
-            hasLaterBooking = function (name, afterDate) {
-              const customer = customerByName(name);
-              const n = normalizeName(name);
-
-              return activeBookings().some(b => {
-                const same =
-                  customer && b.customerId
-                    ? String(b.customerId) ===
-                      String(customer.id)
-                    : normalizeName(b.customer) === n;
-
-                return same && b.date > afterDate;
-              });
-            };
-
-            hasFutureBooking = function (name) {
-              const customer = customerByName(name);
-              const n = normalizeName(name);
-
-              return activeBookings().some(b => {
-                const same =
-                  customer && b.customerId
-                    ? String(b.customerId) ===
-                      String(customer.id)
-                    : normalizeName(b.customer) === n;
-
-                return same && b.date >= todayISO;
-              });
-            };
-
-            futureBookingAfter = function (
-              name,
-              afterDate
-            ) {
-              const customer = customerByName(name);
-              const n = normalizeName(name);
-
-              return (
-                activeBookings()
-                  .filter(b => {
-                    const same =
-                      customer && b.customerId
-                        ? String(b.customerId) ===
-                          String(customer.id)
-                        : normalizeName(b.customer) === n;
-
-                    return same && b.date > afterDate;
-                  })
-                  .sort((a, b) =>
-                    (a.date + a.time).localeCompare(
-                      b.date + b.time
-                    )
-                  )[0] || null
-              );
-            };
-
-            const originalSaveBooking = saveBooking;
-
-            saveBooking = function (id) {
-              const before =
-                JSON.stringify(db.bookings || []);
-
-              originalSaveBooking(id);
-
-              if (
-                JSON.stringify(db.bookings || []) !==
-                before
-              ) {
-                logAudit(
-                  id ? '予約更新' : '予約追加',
-                  id || ''
-                );
-                save();
-              }
-            };
-
-            const originalSaveCustomer = saveCustomer;
-
-            saveCustomer = function (id) {
-              const oldCustomer =
-                id
-                  ? (db.customers || []).find(
-                      c =>
-                        String(c.id) === String(id)
-                    )
-                  : null;
-
-              const oldName =
-                oldCustomer?.name || '';
-
-              const beforeCount =
-                (db.customers || []).length;
-
-              originalSaveCustomer(id);
-
-              const current =
-                id
-                  ? (db.customers || []).find(
-                      c =>
-                        String(c.id) === String(id)
-                    )
-                  : null;
-
-              if (
-                current &&
-                oldName &&
-                normalizeName(oldName) !==
-                  normalizeName(current.name)
-              ) {
-                [db.bookings, db.sales, db.retail]
-                  .filter(Array.isArray)
-                  .forEach(list => {
-                    list.forEach(row => {
-                      const same =
-                        String(row.customerId || '') ===
-                          String(id) ||
-                        (
-                          !row.customerId &&
-                          normalizeName(row.customer) ===
-                            normalizeName(oldName)
-                        );
-
-                      if (same) {
-                        row.customer =
-                          current.name;
-                        row.customerId =
-                          current.id;
-                      }
-                    });
-                  });
-              }
-
-              const changed =
-                (db.customers || []).length !==
-                  beforeCount ||
-                (
-                  current &&
-                  oldCustomer &&
-                  JSON.stringify(current) !==
-                    JSON.stringify(oldCustomer)
-                );
-
-              if (changed) {
-                logAudit(
-                  id ? '顧客更新' : '顧客追加',
-                  current?.name ||
-                    oldName ||
-                    ''
-                );
-                save();
-              }
-            };
-
-            const originalMergeCustomers =
-              mergeCustomers;
-
-            mergeCustomers = function (
-              keepId,
-              removeId
-            ) {
-              const keepBefore =
-                (db.customers || []).find(
-                  c =>
-                    String(c.id) ===
-                    String(keepId)
-                );
-
-              const removeBefore =
-                (db.customers || []).find(
-                  c =>
-                    String(c.id) ===
-                    String(removeId)
-                );
-
-              originalMergeCustomers(
-                keepId,
-                removeId
-              );
-
-              const keep =
-                (db.customers || []).find(
-                  c =>
-                    String(c.id) ===
-                    String(keepId)
-                );
-
-              const removedStillExists =
-                (db.customers || []).some(
-                  c =>
-                    String(c.id) ===
-                    String(removeId)
-                );
-
-              if (
-                !keep ||
-                removedStillExists ||
-                !removeBefore
-              ) {
-                return;
-              }
-
-              [db.bookings, db.sales, db.retail]
-                .filter(Array.isArray)
-                .forEach(list => {
-                  list.forEach(row => {
-                    const same =
-                      String(row.customerId || '') ===
-                        String(removeId) ||
-                      (
-                        !row.customerId &&
-                        normalizeName(row.customer) ===
-                          normalizeName(
-                            removeBefore.name
-                          )
-                      );
-
-                    if (same) {
-                      row.customerId = keep.id;
-                      row.customer = keep.name;
-                    }
-                  });
-                });
-
-              logAudit(
-                '顧客統合',
-                `${removeBefore.name} → ${keep.name}`
-              );
-
-              save();
-            };
-
-            const originalSaveSale = saveSale;
-
-            saveSale = function () {
-              const before =
-                (db.sales || []).length;
-
-              originalSaveSale();
-
-              if ((db.sales || []).length > before) {
-                const row =
-                  db.sales[db.sales.length - 1];
-
-                logAudit(
-                  '追加売上',
-                  `${row.customer || ''} ${yen(
-                    row.amount
-                  )}`
-                );
-
-                save();
-              }
-            };
-
-            const originalSaveRetail = saveRetail;
-
-            saveRetail = function () {
-              const before =
-                (db.retail || []).length;
-
-              originalSaveRetail();
-
-              if (
-                (db.retail || []).length > before
-              ) {
-                const row =
-                  db.retail[db.retail.length - 1];
-
-                const product =
-                  (db.products || []).find(
-                    p =>
-                      String(p.id) ===
-                      String(row.productId)
-                  );
-
-                row.cost =
-                  Number(product?.cost || 0) *
-                  Number(row.quantity || 1);
-
-                logAudit(
-                  '店販',
-                  `${row.product || ''} ${yen(
-                    row.amount
-                  )}`
-                );
-
-                save();
-              }
-            };
-
-            const originalSaveProduct =
-              saveProduct;
-
-            saveProduct = function (i) {
-              const before =
-                JSON.stringify(db.products || []);
-
-              originalSaveProduct(i);
-
-              if (
-                JSON.stringify(db.products || []) !==
-                before
-              ) {
-                const p =
-                  i >= 0
-                    ? db.products[i]
-                    : db.products[
-                        db.products.length - 1
-                      ];
-
-                logAudit(
-                  i >= 0
-                    ? '商品更新'
-                    : '商品追加',
-                  p?.name || ''
-                );
-
-                save();
-              }
-            };
-
-            const originalFinalizeDelete =
-              finalizePendingDelete;
-
-            finalizePendingDelete = function () {
-              const pending =
-                pendingUndoDelete
-                  ? {
-                      kind:
-                        pendingUndoDelete.kind,
-                      item:
-                        pendingUndoDelete.item
-                    }
-                  : null;
-
-              originalFinalizeDelete();
-
-              if (pending) {
-                const label =
-                  pending.item?.name ||
-                  pending.item?.customer ||
-                  pending.item?.product ||
-                  pending.item?.id ||
-                  '';
-
-                logAudit(
-                  '削除',
-                  `${pending.kind} / ${label}`
-                );
-
-                save();
-              }
-            };
-
-            renderRetailSummary = function () {
-              const rows = db.retail || [];
-
-              const qty =
-                rows.reduce(
-                  (a, r) =>
-                    a +
-                    Number(r.quantity || 1),
-                  0
-                );
-
-              const sales =
-                rows.reduce(
-                  (a, r) =>
-                    a +
-                    Number(r.amount || 0),
-                  0
-                );
-
-              const cost =
-                rows.reduce((a, r) => {
-                  if (
-                    r.cost !== undefined &&
-                    r.cost !== null
-                  ) {
-                    return (
-                      a +
-                      Number(r.cost || 0)
-                    );
+            try {
+              const r = await fetch(
+                MONTHLY_LINE_API +
+                  `?preview=1&month=${month}`,
+                {
+                  headers: {
+                    'X-Backup-Key': key
                   }
+                }
+              );
 
-                  const p =
-                    (db.products || []).find(
-                      x =>
-                        String(x.id) ===
-                        String(r.productId)
-                    );
+              const body =
+                await r.json().catch(() => ({}));
 
-                  return (
-                    a +
-                    Number(p?.cost || 0) *
-                      Number(
-                        r.quantity || 1
-                      )
-                  );
-                }, 0);
+              if (!r.ok) {
+                throw new Error(
+                  body.error ||
+                    '取得できませんでした'
+                );
+              }
 
-              const profit =
-                sales - cost;
+              if (preview) {
+                preview.value =
+                  body.message || '';
+              }
 
-              const active =
-                (db.products || []).filter(
-                  p => p.public
-                ).length;
+              if ($('monthlyLineEnabled')) {
+                $('monthlyLineEnabled').checked =
+                  body.enabled !== false;
+              }
 
-              $('retailSummary').innerHTML = `
-                <b>店販まとめ（全期間）</b>
-                <div class="small" style="margin-top:7px">
-                  掲載商品 ${active}件 ／
-                  販売 ${qty}点 ／
-                  売上 ${yen(sales)} ／
-                  利益 ${yen(profit)}
-                </div>
-              `;
+              const last = body.lastStatus;
+
+              const templateText =
+                body.custom
+                  ? '編集した文面を使用中'
+                  : '季節テンプレを使用中';
+
+              if (status) {
+                status.textContent =
+                  last?.sentAt
+                    ? `${templateText} ／ 前回：${new Date(
+                        last.sentAt
+                      ).toLocaleString('ja-JP')} ／ ${
+                        last.ok
+                          ? '送信受付済み'
+                          : '送信失敗'
+                      }`
+                    : `${templateText} ／ まだ自動配信履歴はありません`;
+              }
+            } catch (e) {
+              if (status) {
+                status.textContent =
+                  e.message;
+              }
+            }
+          }
+
+          window.changeMonthlyLineMonth =
+            function () {
+              loadMonthlyLinePreview(
+                Number(
+                  $('monthlyLineMonth')
+                    ?.value
+                )
+              );
             };
 
-            function csvCell(value) {
-              const s =
-                String(value ?? '');
+          window.openMonthlyLineSettings =
+            async function () {
+              const now = new Date();
 
-              return (
-                '"' +
-                s.replace(/"/g, '""') +
-                '"'
-              );
-            }
+              const nextMonth =
+                ((now.getMonth() + 1) % 12) +
+                1;
 
-            window.exportSalonCSV = function () {
-              const rows = [
-                [
-                  '種類',
-                  '日付',
-                  '顧客名',
-                  '顧客ID',
-                  '金額',
-                  '内容',
-                  '媒体',
-                  '担当',
-                  '補足'
-                ]
-              ];
+              const enabled =
+                db.monthlyLineSettings
+                  ?.enabled !== false;
 
-              (db.customers || []).forEach(c => {
-                rows.push([
-                  '顧客',
-                  c.lastVisit || '',
-                  c.name || '',
-                  c.id || '',
-                  '',
-                  [
-                    c.kana || '',
-                    c.instagram || '',
-                    c.note || ''
-                  ]
-                    .filter(Boolean)
-                    .join(' / '),
-                  '',
-                  '',
-                  c.lineUserId || ''
-                ]);
-              });
-
-              (db.bookings || []).forEach(b => {
-                rows.push([
-                  '予約',
-                  b.date || '',
-                  b.customer || '',
-                  b.customerId || '',
-                  Number(b.price || 0),
-                  `${b.time || ''} ${
-                    b.menu || ''
-                  }`,
-                  b.source || '',
-                  staffName(b.staffId),
-                  [
-                    statusLabel(b),
-                    b.newGuest
-                      ? '新規'
-                      : '再来',
-                    b.paymentComplete
-                      ? '決済済'
-                      : '',
-                    b.isModel
-                      ? 'モデル'
-                      : ''
-                  ]
-                    .filter(Boolean)
-                    .join(' / ')
-                ]);
-              });
-
-              (db.sales || []).forEach(s => {
-                rows.push([
-                  '追加売上',
-                  s.date || '',
-                  s.customer || '',
-                  s.customerId || '',
-                  Number(s.amount || 0),
-                  s.menu || '',
-                  '',
-                  '',
-                  ''
-                ]);
-              });
-
-              (db.retail || []).forEach(r => {
-                const p =
-                  (db.products || []).find(
-                    x =>
-                      String(x.id) ===
-                      String(r.productId)
-                  );
-
-                const cost =
-                  r.cost !== undefined
-                    ? Number(r.cost || 0)
-                    : Number(p?.cost || 0) *
-                      Number(
-                        r.quantity || 1
-                      );
-
-                rows.push([
-                  '店販',
-                  r.date || '',
-                  r.customer || '',
-                  r.customerId || '',
-                  Number(r.amount || 0),
-                  r.product || '',
-                  r.source || '',
-                  staffName(r.staffId),
-                  `数量 ${
-                    r.quantity || 1
-                  } / 利益 ${Number(
-                    r.amount || 0
-                  ) - cost}`
-                ]);
-              });
-
-              const csv =
-                '\ufeff' +
-                rows
-                  .map(row =>
-                    row.map(csvCell).join(',')
+              const monthOptions =
+                Array.from(
+                  { length: 12 },
+                  (_, i) => i + 1
+                )
+                  .map(
+                    m => `
+                      <option
+                        value="${m}"
+                        ${
+                          m === nextMonth
+                            ? 'selected'
+                            : ''
+                        }
+                      >
+                        ${m}月
+                      </option>
+                    `
                   )
-                  .join('\n');
-
-              const blob =
-                new Blob(
-                  [csv],
-                  {
-                    type:
-                      'text/csv;charset=utf-8'
-                  }
-                );
-
-              const url =
-                URL.createObjectURL(blob);
-
-              const a =
-                document.createElement('a');
-
-              a.href = url;
-              a.download =
-                `salon-manager-${todayISO}.csv`;
-
-              document.body.appendChild(a);
-              a.click();
-              a.remove();
-
-              setTimeout(
-                () =>
-                  URL.revokeObjectURL(url),
-                1500
-              );
-
-              logAudit(
-                'CSV出力',
-                todayISO
-              );
-
-              save();
-            };
-
-            window.openAuditLog = function () {
-              const rows =
-                (db.auditLog || [])
-                  .slice(0, 100);
+                  .join('');
 
               modal(`
-                <h3>操作履歴</h3>
+                <h3>月初LINE</h3>
 
-                <div class="small" style="margin-bottom:10px">
-                  最新100件を表示しています。
+                <div
+                  class="note"
+                  style="margin-bottom:10px"
+                >
+                  毎月1日10時ごろに、
+                  女性・15〜29歳・友だち追加365日未満へ配信します。
+                  <br>
+                  文面は月ごとに編集できます。
                 </div>
 
-                ${
-                  rows.length
-                    ? rows
-                        .map(x => {
-                          const d =
-                            new Date(x.at);
+                <label>
+                  <input
+                    id="monthlyLineEnabled"
+                    type="checkbox"
+                    style="width:auto"
+                    ${
+                      enabled
+                        ? 'checked'
+                        : ''
+                    }
+                  >
+                  月初LINEを自動配信する
+                </label>
 
-                          const date =
-                            Number.isNaN(
-                              d.getTime()
-                            )
-                              ? x.at
-                              : d.toLocaleString(
-                                  'ja-JP'
-                                );
+                <label>編集する月</label>
 
-                          return `
-                            <div class="item">
-                              <div class="t">
-                                ${esc(x.action)}
-                              </div>
-                              <div class="s">
-                                ${esc(date)}
-                                ${
-                                  x.detail
-                                    ? `<br>${esc(
-                                        x.detail
-                                      )}`
-                                    : ''
-                                }
-                              </div>
-                            </div>
-                          `;
-                        })
-                        .join('')
-                    : '<div class="empty">まだ履歴はありません</div>'
-                }
+                <select
+                  id="monthlyLineMonth"
+                  onchange="changeMonthlyLineMonth()"
+                >
+                  ${monthOptions}
+                </select>
+
+                <label>配信文面</label>
+
+                <textarea
+                  id="monthlyLinePreview"
+                  style="min-height:260px"
+                >読み込み中…</textarea>
+
+                <div
+                  class="small"
+                  style="margin-top:5px"
+                >
+                  この文章がそのまま配信されます。
+                </div>
+
+                <div
+                  id="monthlyLineStatus"
+                  class="small"
+                  style="margin-top:8px"
+                >
+                  確認中…
+                </div>
+
+                <button
+                  class="soft"
+                  style="width:100%;margin-top:10px"
+                  onclick="testMonthlyLine()"
+                >
+                  自分だけにテスト送信
+                </button>
+
+                <button
+                  class="ghost"
+                  style="width:100%;margin-top:8px"
+                  onclick="resetMonthlyLineTemplate()"
+                >
+                  季節テンプレに戻す
+                </button>
 
                 <div class="actions">
                   <button
@@ -800,43 +231,209 @@ jobs:
                   >
                     閉じる
                   </button>
+
+                  <button
+                    onclick="saveMonthlyLineSettings()"
+                  >
+                    文面を保存
+                  </button>
                 </div>
               `);
+
+              await loadMonthlyLinePreview(
+                nextMonth
+              );
             };
 
-            async function loadMonthlyLinePreview() {
+          window.saveMonthlyLineSettings =
+            async function () {
               const key =
                 getCloudBackupKey();
+
+              if (!key) return;
+
+              const month =
+                Number(
+                  $('monthlyLineMonth')
+                    ?.value
+                );
+
+              const message =
+                String(
+                  $('monthlyLinePreview')
+                    ?.value || ''
+                ).trim();
+
+              const enabled =
+                !!$('monthlyLineEnabled')
+                  ?.checked;
 
               const status =
                 $('monthlyLineStatus');
 
-              const preview =
-                $('monthlyLinePreview');
+              if (!message) {
+                return alert(
+                  '配信文面を入力してください'
+                );
+              }
 
-              if (!key) {
-                if (status) {
-                  status.textContent =
-                    'クラウド同期キーが必要です';
-                }
-                return;
+              if (message.length > 5000) {
+                return alert(
+                  '文面が長すぎます'
+                );
               }
 
               if (status) {
                 status.textContent =
-                  '確認中…';
+                  '保存中…';
+              }
+
+              db.monthlyLineSettings ||= {};
+              db.monthlyLineSettings.messages ||= {};
+
+              db.monthlyLineSettings.enabled =
+                enabled;
+
+              db.monthlyLineSettings.messages[
+                String(month)
+              ] = message;
+
+              logAudit(
+                '月初LINE文面',
+                `${month}月の文面を保存`
+              );
+
+              save();
+
+              try {
+                await postCloudSnapshot(
+                  key,
+                  db
+                );
+
+                writeSyncBase(db);
+                cloudDirty = false;
+
+                if (status) {
+                  status.textContent =
+                    `${month}月の文面を保存しました`;
+                }
+              } catch (e) {
+                if (status) {
+                  status.textContent =
+                    '端末には保存しましたが、クラウド保存に失敗しました';
+                }
+              }
+            };
+
+          window.resetMonthlyLineTemplate =
+            async function () {
+              const key =
+                getCloudBackupKey();
+
+              if (!key) return;
+
+              const month =
+                Number(
+                  $('monthlyLineMonth')
+                    ?.value
+                );
+
+              if (
+                !confirm(
+                  `${month}月の文面を季節テンプレに戻しますか？`
+                )
+              ) {
+                return;
+              }
+
+              db.monthlyLineSettings ||= {};
+              db.monthlyLineSettings.messages ||= {};
+
+              delete db.monthlyLineSettings
+                .messages[String(month)];
+
+              logAudit(
+                '月初LINE文面',
+                `${month}月をテンプレに戻しました`
+              );
+
+              save();
+
+              try {
+                await postCloudSnapshot(
+                  key,
+                  db
+                );
+
+                writeSyncBase(db);
+                cloudDirty = false;
+
+                await loadMonthlyLinePreview(
+                  month
+                );
+              } catch (e) {
+                const status =
+                  $('monthlyLineStatus');
+
+                if (status) {
+                  status.textContent =
+                    'テンプレへの復元保存に失敗しました';
+                }
+              }
+            };
+
+          window.testMonthlyLine =
+            async function () {
+              const key =
+                getCloudBackupKey();
+
+              if (!key) return;
+
+              const month =
+                Number(
+                  $('monthlyLineMonth')
+                    ?.value
+                );
+
+              const message =
+                String(
+                  $('monthlyLinePreview')
+                    ?.value || ''
+                ).trim();
+
+              const status =
+                $('monthlyLineStatus');
+
+              if (!message) {
+                return alert(
+                  '配信文面を入力してください'
+                );
+              }
+
+              if (status) {
+                status.textContent =
+                  'テスト送信中…';
               }
 
               try {
                 const r =
                   await fetch(
-                    MONTHLY_LINE_API +
-                      '?preview=1',
+                    MONTHLY_LINE_API,
                     {
+                      method: 'POST',
                       headers: {
+                        'Content-Type':
+                          'application/json',
                         'X-Backup-Key':
                           key
-                      }
+                      },
+                      body:
+                        JSON.stringify({
+                          action: 'test',
+                          month,
+                          message
+                        })
                     }
                   );
 
@@ -848,491 +445,62 @@ jobs:
                 if (!r.ok) {
                   throw new Error(
                     body.error ||
-                      '取得できませんでした'
+                      'テスト送信できませんでした'
                   );
                 }
 
-                if (preview) {
-                  preview.value =
-                    body.message || '';
-                }
-
-                const last =
-                  body.lastStatus;
-
                 if (status) {
                   status.textContent =
-                    last?.sentAt
-                      ? `前回：${new Date(
-                          last.sentAt
-                        ).toLocaleString(
-                          'ja-JP'
-                        )} / ${
-                          last.ok
-                            ? '送信受付済み'
-                            : '送信失敗'
-                        }`
-                      : 'まだ自動配信履歴はありません';
+                    '自分のLINEへテスト送信しました';
                 }
+
+                logAudit(
+                  '月初LINE',
+                  `${month}月をテスト送信`
+                );
+
+                save();
               } catch (e) {
                 if (status) {
                   status.textContent =
                     e.message;
                 }
               }
-            }
-
-            window.openMonthlyLineSettings =
-              async function () {
-                const enabled =
-                  db.monthlyLineSettings
-                    ?.enabled !== false;
-
-                modal(`
-                  <h3>月初LINE</h3>
-
-                  <div class="note" style="margin-bottom:10px">
-                    毎月1日10時ごろに、
-                    女性・15〜29歳・友だち追加365日未満へ配信します。
-                  </div>
-
-                  <label>
-                    <input
-                      id="monthlyLineEnabled"
-                      type="checkbox"
-                      style="width:auto"
-                      ${
-                        enabled
-                          ? 'checked'
-                          : ''
-                      }
-                    >
-                    月初LINEを自動配信する
-                  </label>
-
-                  <label>次回の文面</label>
-
-                  <textarea
-                    id="monthlyLinePreview"
-                    readonly
-                    style="min-height:230px"
-                  >読み込み中…</textarea>
-
-                  <div
-                    id="monthlyLineStatus"
-                    class="small"
-                    style="margin-top:8px"
-                  >
-                    確認中…
-                  </div>
-
-                  <button
-                    class="soft"
-                    style="width:100%;margin-top:10px"
-                    onclick="testMonthlyLine()"
-                  >
-                    自分だけにテスト送信
-                  </button>
-
-                  <div class="actions">
-                    <button
-                      class="ghost"
-                      onclick="closeModal()"
-                    >
-                      閉じる
-                    </button>
-
-                    <button
-                      onclick="saveMonthlyLineSettings()"
-                    >
-                      保存
-                    </button>
-                  </div>
-                `);
-
-                await loadMonthlyLinePreview();
-              };
-
-            window.saveMonthlyLineSettings =
-              function () {
-                const enabled =
-                  !!$('monthlyLineEnabled')
-                    ?.checked;
-
-                db.monthlyLineSettings = {
-                  ...db.monthlyLineSettings,
-                  enabled
-                };
-
-                logAudit(
-                  '月初LINE設定',
-                  enabled
-                    ? '自動配信 ON'
-                    : '自動配信 OFF'
-                );
-
-                save();
-
-                const status =
-                  $('monthlyLineStatus');
-
-                if (status) {
-                  status.textContent =
-                    '保存しました';
-                }
-              };
-
-            window.testMonthlyLine =
-              async function () {
-                const key =
-                  getCloudBackupKey();
-
-                if (!key) return;
-
-                const status =
-                  $('monthlyLineStatus');
-
-                if (status) {
-                  status.textContent =
-                    'テスト送信中…';
-                }
-
-                try {
-                  const r =
-                    await fetch(
-                      MONTHLY_LINE_API,
-                      {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type':
-                            'application/json',
-                          'X-Backup-Key':
-                            key
-                        },
-                        body:
-                          JSON.stringify({
-                            action: 'test'
-                          })
-                      }
-                    );
-
-                  const body =
-                    await r
-                      .json()
-                      .catch(() => ({}));
-
-                  if (!r.ok) {
-                    throw new Error(
-                      body.error ||
-                        'テスト送信できませんでした'
-                    );
-                  }
-
-                  if (status) {
-                    status.textContent =
-                      '自分のLINEへテスト送信しました';
-                  }
-
-                  logAudit(
-                    '月初LINE',
-                    'テスト送信'
-                  );
-
-                  save();
-                } catch (e) {
-                  if (status) {
-                    status.textContent =
-                      e.message;
-                  }
-                }
-              };
-
-            function addUpgradeButtons() {
-              if (
-                document.getElementById(
-                  'ownerUpgradeTools'
-                )
-              ) {
-                return;
-              }
-
-              const staffButton =
-                document.querySelector(
-                  'button[onclick="openStaffSettings()"]'
-                );
-
-              if (!staffButton) return;
-
-              staffButton.insertAdjacentHTML(
-                'afterend',
-                `
-                  <div id="ownerUpgradeTools">
-                    <button
-                      class="soft"
-                      style="width:100%;margin-top:8px"
-                      onclick="openMonthlyLineSettings()"
-                    >
-                      月初LINE設定
-                    </button>
-
-                    <div class="backup-actions">
-                      <button
-                        class="soft"
-                        onclick="exportSalonCSV()"
-                      >
-                        CSV出力
-                      </button>
-
-                      <button
-                        class="soft"
-                        onclick="openAuditLog()"
-                      >
-                        操作履歴
-                      </button>
-                    </div>
-                  </div>
-                `
-              );
-            }
-
-            addUpgradeButtons();
-
-            if (migrateCustomerLinks()) {
-              save();
-            }
-
-            renderRetailSummary();
-          })();
-          JS
-
-      - name: Upgrade monthly LINE API
-        shell: bash
-        run: |
-          cat > api/monthly-line.js <<'JS'
-          import crypto from 'crypto';
-
-          const ALLOWED_ORIGINS = new Set([
-            'https://kzgvsz7r97-star.github.io',
-            'https://salon-manager-kzgvsz7r97-star.vercel.app'
-          ]);
-
-          const MONTH_COPY = {
-            1: [
-              '1月は乾燥で毛先のパサつきや静電気が気になりやすい時期です。',
-              '冬服で首元が重く見えやすいので、顔まわりやレイヤーを少し整えるだけでもかなり雰囲気変わります◎'
-            ],
-            2: [
-              '2月はまだ乾燥しやすいですが、少しずつ春っぽく雰囲気を変えたくなる時期です。',
-              '長さを大きく変えなくても、顔まわりやレイヤー、透明感のあるカラーで印象を変えられます◎'
-            ],
-            3: [
-              '3月は卒業や新生活前で、髪を変えたくなる方が増える時期です🌸',
-              '初カラーや少し雰囲気を変えたい方は、顔まわりのレイヤーや透明感カラーもおすすめです◎'
-            ],
-            4: [
-              '4月は新生活で服装やメイクが変わって、髪も少し変えたくなる時期です。',
-              '長さは残しつつ顔まわりやレイヤーを入れるだけでも、かなり印象を変えられます◎'
-            ],
-            5: [
-              '5月は紫外線も強くなってきて、カラーの褪色や毛先の乾燥が気になり始める時期です。',
-              '梅雨前にまとまりやすく整えたり、透明感を残したカラーにしておくのもおすすめです◎'
-            ],
-            6: [
-              '6月は湿気で広がったり、顔まわりがうまく決まらない日が増えやすい時期です☔️',
-              'レイヤーも入れ方を調整すると、まとまりを残しながら動きを出せます◎'
-            ],
-            7: [
-              '7月は暑さや汗で、髪を結ぶことが増える時期です。',
-              '結んだ時も可愛く見える顔まわりや、軽く見えるレイヤーに整えるのもおすすめです◎'
-            ],
-            8: [
-              '8月は紫外線や海・プールなどで、カラーの褪色や毛先のダメージが出やすい時期です。',
-              '夏の終わりに一度整えて、レイヤーやカラーをきれいに戻しておくのもおすすめです◎'
-            ],
-            9: [
-              '9月は服が少しずつ秋っぽくなって、髪色や雰囲気も変えたくなる時期です🍂',
-              '明るさを落としても透明感を残したカラーや、秋服に合うレイヤーもおすすめです◎'
-            ],
-            10: [
-              '10月は乾燥が少しずつ出てきて、夏のダメージや毛先のパサつきが気になりやすい時期です。',
-              '重く見えやすい秋冬の服にも、顔まわりやレイヤーを整えるとバランスが取りやすくなります◎'
-            ],
-            11: [
-              '11月はニットやアウターが増えて、顔まわりや毛先が重く見えやすい時期です。',
-              '巻きすぎなくても動くレイヤーや、冬服に合う透明感カラーに変えるのもおすすめです◎'
-            ],
-            12: [
-              '12月はクリスマスや年末年始など、写真を撮ったり人に会う予定が増えやすい時期です🎄',
-              '顔まわりやカラーを少し整えるだけでも、かなり印象が変わります◎'
-            ]
-          };
-
-          function setCors(req, res) {
-            const origin =
-              req.headers.origin || '';
-
-            if (
-              ALLOWED_ORIGINS.has(origin)
-            ) {
-              res.setHeader(
-                'Access-Control-Allow-Origin',
-                origin
-              );
-            }
-
-            res.setHeader(
-              'Vary',
-              'Origin'
-            );
-
-            res.setHeader(
-              'Access-Control-Allow-Methods',
-              'GET, POST, OPTIONS'
-            );
-
-            res.setHeader(
-              'Access-Control-Allow-Headers',
-              'Content-Type, X-Backup-Key, Authorization'
-            );
-          }
-
-          function adminAuthorized(req) {
-            return (
-              !!process.env.BACKUP_KEY &&
-              req.headers['x-backup-key'] ===
-                process.env.BACKUP_KEY
-            );
-          }
-
-          function cronAuthorized(req) {
-            return (
-              !!process.env.CRON_SECRET &&
-              req.headers.authorization ===
-                `Bearer ${process.env.CRON_SECRET}`
-            );
-          }
-
-          function storageHeaders() {
-            const key =
-              process.env
-                .SUPABASE_SECRET_KEY;
-
-            return {
-              'Content-Type':
-                'application/json',
-              apikey: key,
-              Authorization:
-                `Bearer ${key}`
             };
-          }
 
-          async function latestState() {
-            const base =
-              process.env.SUPABASE_URL;
+          '''
 
-            const secret =
-              process.env
-                .SUPABASE_SECRET_KEY;
+          pattern = re.compile(
+              r"  async function loadMonthlyLinePreview\(\) \{.*?(?=^  function addUpgradeButtons\(\) \{)",
+              re.S | re.M
+          )
 
-            if (!base || !secret) {
-              throw new Error(
-                'Storage is not configured'
-              );
-            }
+          text, count = pattern.subn(
+              new_owner,
+              text,
+              count=1
+          )
 
-            const r =
-              await fetch(
-                `${base}/rest/v1/salon-backups?select=data&order=created_at.desc&limit=1`,
-                {
-                  headers:
-                    storageHeaders()
-                }
-              );
+          if count != 1:
+              raise SystemExit(
+                  "owner-upgrade.js の月初LINE部分が見つかりません"
+              )
 
-            const raw =
-              await r.text();
+          path.write_text(text)
 
-            if (!r.ok) {
-              throw new Error(
-                raw ||
-                  'Storage read failed'
-              );
-            }
+          # =========================
+          # api/monthly-line.js
+          # =========================
+          path = Path("api/monthly-line.js")
+          text = path.read_text()
 
-            const rows =
-              raw
-                ? JSON.parse(raw)
-                : [];
-
-            return (
-              rows?.[0]?.data || {}
-            );
-          }
-
-          async function writeState(data) {
-            const base =
-              process.env.SUPABASE_URL;
-
-            const r =
-              await fetch(
-                `${base}/rest/v1/salon-backups`,
-                {
-                  method: 'POST',
-                  headers: {
-                    ...storageHeaders(),
-                    Prefer:
-                      'return=minimal'
-                  },
-                  body:
-                    JSON.stringify({
-                      data
-                    })
-                }
-              );
-
-            if (!r.ok) {
-              throw new Error(
-                await r.text()
-              );
-            }
-          }
-
-          function jstNow() {
-            const parts =
-              new Intl.DateTimeFormat(
-                'en-US',
-                {
-                  timeZone:
-                    'Asia/Tokyo',
-                  year: 'numeric',
-                  month: 'numeric',
-                  day: 'numeric'
-                }
-              ).formatToParts(
-                new Date()
-              );
-
-            const get =
-              type =>
-                Number(
-                  parts.find(
-                    x =>
-                      x.type === type
-                  )?.value || 0
-                );
-
-            return {
-              year: get('year'),
-              month: get('month'),
-              day: get('day')
-            };
-          }
-
-          function makeMessage(month) {
+          new_message = r'''function baseMessage(month) {
             const copy =
               MONTH_COPY[month];
 
-            return `${copy[0]}
+            return `こんにちは！
+
+          ${copy[0]}
           ${copy[1]}
 
           ご来店周期は1〜1.5ヶ月くらいが目安です◎
@@ -1343,276 +511,86 @@ jobs:
           髪どうしようか迷っている方も、このLINEにそのまま気軽に相談してください☺️`;
           }
 
-          function retryKey(year, month) {
-            const hex =
-              crypto
-                .createHash('sha256')
-                .update(
-                  `monthly-line-${year}-${month}`
-                )
-                .digest('hex')
-                .slice(0, 32);
+          function validMonth(value, fallback) {
+            const month = Number(value);
 
-            return `${hex.slice(
-              0,
-              8
-            )}-${hex.slice(
-              8,
-              12
-            )}-${hex.slice(
-              12,
-              16
-            )}-${hex.slice(
-              16,
-              20
-            )}-${hex.slice(20)}`;
+            return (
+              Number.isInteger(month) &&
+              month >= 1 &&
+              month <= 12
+            )
+              ? month
+              : fallback;
           }
 
-          const demographic = {
-            type: 'operator',
-            and: [
-              {
-                type: 'gender',
-                oneOf: ['female']
-              },
-              {
-                type: 'age',
-                gte: 'age_15',
-                lt: 'age_30'
-              },
-              {
-                type:
-                  'subscriptionPeriod',
-                lt: 'day_365'
-              }
-            ]
-          };
-
-          function ownerLineId(state) {
-            const profiles =
-              state.staffProfiles || [];
-
-            const owner =
-              profiles.find(
-                p =>
-                  p.role === 'owner'
-              ) ||
-              profiles[0];
-
-            return String(
-              owner?.notifyLineUserId ||
-                ''
-            ).trim();
-          }
-
-          async function pushToOwner(
+          function resolveMessage(
             state,
-            message
+            month
           ) {
-            const userId =
-              ownerLineId(state);
+            const custom =
+              state
+                ?.monthlyLineSettings
+                ?.messages
+                ?.[String(month)];
 
             if (
-              !/^U[0-9a-f]{32}$/i.test(
-                userId
-              )
+              typeof custom === 'string' &&
+              custom.trim()
             ) {
-              throw new Error(
-                '自分へのLINE通知IDが未設定です'
-              );
+              return custom.trim();
             }
 
-            const r =
-              await fetch(
-                'https://api.line.me/v2/bot/message/push',
-                {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type':
-                      'application/json',
-                    Authorization:
-                      `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
-                  },
-                  body:
-                    JSON.stringify({
-                      to: userId,
-                      messages: [
-                        {
-                          type: 'text',
-                          text: message
-                        }
-                      ]
-                    })
-                }
-              );
-
-            const raw =
-              await r.text();
-
-            if (!r.ok) {
-              throw new Error(
-                raw ||
-                  'LINE送信に失敗しました'
-              );
-            }
+            return baseMessage(month);
           }
 
-          export default async function handler(
-            req,
-            res
+          '''
+
+          pattern = re.compile(
+              r"function makeMessage\(month\) \{.*?(?=^function retryKey\(year, month\) \{)",
+              re.S | re.M
+          )
+
+          text, count = pattern.subn(
+              new_message,
+              text,
+              count=1
+          )
+
+          if count != 1:
+              raise SystemExit(
+                  "makeMessage が見つかりません"
+              )
+
+          start = text.find(
+              "  const now =\n    jstNow();"
+          )
+
+          end_marker = (
+              "  if (\n"
+              "    req.method !== 'GET'\n"
+              "  ) {"
+          )
+
+          end = text.find(
+              end_marker,
+              start
+          )
+
+          if start == -1 or end == -1:
+              raise SystemExit(
+                  "monthly-line handler が見つかりません"
+              )
+
+          new_handler = r'''  const now =
+            jstNow();
+
+          if (
+            req.method === 'GET' &&
+            req.query?.preview ===
+              '1'
           ) {
-            setCors(req, res);
-
-            res.setHeader(
-              'Cache-Control',
-              'no-store'
-            );
-
             if (
-              req.method === 'OPTIONS'
-            ) {
-              return res
-                .status(204)
-                .end();
-            }
-
-            const token =
-              process.env
-                .LINE_CHANNEL_ACCESS_TOKEN;
-
-            if (!token) {
-              return res.status(500).json({
-                ok: false,
-                error:
-                  'LINE token is not configured'
-              });
-            }
-
-            const now =
-              jstNow();
-
-            const message =
-              makeMessage(now.month);
-
-            if (
-              req.method === 'GET' &&
-              req.query?.preview ===
-                '1'
-            ) {
-              if (
-                !adminAuthorized(req)
-              ) {
-                return res
-                  .status(401)
-                  .json({
-                    ok: false,
-                    error:
-                      'Unauthorized'
-                  });
-              }
-
-              try {
-                const state =
-                  await latestState();
-
-                return res
-                  .status(200)
-                  .json({
-                    ok: true,
-                    message,
-                    enabled:
-                      state
-                        .monthlyLineSettings
-                        ?.enabled !== false,
-                    target: {
-                      gender: '女性',
-                      age: '15〜29歳',
-                      friendship:
-                        '365日未満'
-                    },
-                    lastStatus:
-                      state
-                        .monthlyLineStatus ||
-                      null
-                  });
-              } catch (e) {
-                return res
-                  .status(500)
-                  .json({
-                    ok: false,
-                    error:
-                      e.message
-                  });
-              }
-            }
-
-            if (
-              req.method === 'POST'
-            ) {
-              if (
-                !adminAuthorized(req)
-              ) {
-                return res
-                  .status(401)
-                  .json({
-                    ok: false,
-                    error:
-                      'Unauthorized'
-                  });
-              }
-
-              if (
-                req.body?.action !==
-                'test'
-              ) {
-                return res
-                  .status(400)
-                  .json({
-                    ok: false,
-                    error:
-                      'Invalid action'
-                  });
-              }
-
-              try {
-                const state =
-                  await latestState();
-
-                await pushToOwner(
-                  state,
-                  message
-                );
-
-                return res
-                  .status(200)
-                  .json({
-                    ok: true
-                  });
-              } catch (e) {
-                return res
-                  .status(500)
-                  .json({
-                    ok: false,
-                    error:
-                      e.message
-                  });
-              }
-            }
-
-            if (
-              req.method !== 'GET'
-            ) {
-              return res
-                .status(405)
-                .json({
-                  ok: false,
-                  error:
-                    'Method not allowed'
-                });
-            }
-
-            if (
-              !cronAuthorized(req)
+              !adminAuthorized(req)
             ) {
               return res
                 .status(401)
@@ -1623,193 +601,204 @@ jobs:
                 });
             }
 
-            let state;
-
             try {
-              state =
+              const state =
                 await latestState();
+
+              const month =
+                validMonth(
+                  req.query?.month,
+                  now.month
+                );
+
+              const custom =
+                state
+                  ?.monthlyLineSettings
+                  ?.messages
+                  ?.[String(month)];
+
+              return res
+                .status(200)
+                .json({
+                  ok: true,
+                  month,
+                  message:
+                    resolveMessage(
+                      state,
+                      month
+                    ),
+                  custom:
+                    typeof custom ===
+                      'string' &&
+                    !!custom.trim(),
+                  enabled:
+                    state
+                      .monthlyLineSettings
+                      ?.enabled !== false,
+                  target: {
+                    gender: '女性',
+                    age: '15〜29歳',
+                    friendship:
+                      '365日未満'
+                  },
+                  lastStatus:
+                    state
+                      .monthlyLineStatus ||
+                    null
+                });
             } catch (e) {
               return res
                 .status(500)
                 .json({
                   ok: false,
-                  error: e.message
+                  error:
+                    e.message
                 });
             }
+          }
 
-            if (now.day !== 1) {
+          if (
+            req.method === 'POST'
+          ) {
+            if (
+              !adminAuthorized(req)
+            ) {
               return res
-                .status(200)
+                .status(401)
                 .json({
-                  ok: true,
-                  skipped: true,
-                  reason:
-                    'Not first day'
+                  ok: false,
+                  error:
+                    'Unauthorized'
                 });
             }
 
             if (
-              state
-                .monthlyLineSettings
-                ?.enabled === false
+              req.body?.action !==
+              'test'
             ) {
               return res
-                .status(200)
-                .json({
-                  ok: true,
-                  skipped: true,
-                  reason:
-                    'Monthly LINE disabled'
-                });
-            }
-
-            const r =
-              await fetch(
-                'https://api.line.me/v2/bot/message/narrowcast',
-                {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type':
-                      'application/json',
-                    Authorization:
-                      `Bearer ${token}`,
-                    'X-Line-Retry-Key':
-                      retryKey(
-                        now.year,
-                        now.month
-                      )
-                  },
-                  body:
-                    JSON.stringify({
-                      messages: [
-                        {
-                          type: 'text',
-                          text: message
-                        }
-                      ],
-                      filter: {
-                        demographic
-                      },
-                      limit: {
-                        upToRemainingQuota:
-                          true,
-                        forbidPartialDelivery:
-                          true
-                      }
-                    })
-                }
-              );
-
-            const raw =
-              await r.text();
-
-            const requestId =
-              r.headers.get(
-                'x-line-request-id'
-              ) || '';
-
-            const accepted =
-              r.ok ||
-              r.status === 409;
-
-            state.monthlyLineStatus = {
-              ok: accepted,
-              sentAt:
-                new Date().toISOString(),
-              year: now.year,
-              month: now.month,
-              statusCode: r.status,
-              requestId,
-              error:
-                accepted
-                  ? ''
-                  : raw
-            };
-
-            try {
-              await writeState(state);
-            } catch (e) {
-              console.error(
-                'Status save failed',
-                e
-              );
-            }
-
-            if (r.status === 409) {
-              return res
-                .status(200)
-                .json({
-                  ok: true,
-                  alreadySent: true
-                });
-            }
-
-            if (!r.ok) {
-              return res
-                .status(r.status)
+                .status(400)
                 .json({
                   ok: false,
                   error:
-                    raw ||
-                    'LINE narrowcast failed'
+                    'Invalid action'
                 });
             }
 
-            return res
-              .status(202)
-              .json({
-                ok: true,
-                accepted: true
-              });
+            try {
+              const state =
+                await latestState();
+
+              const month =
+                validMonth(
+                  req.body?.month,
+                  now.month
+                );
+
+              const entered =
+                typeof req.body?.message ===
+                  'string'
+                  ? req.body.message.trim()
+                  : '';
+
+              if (
+                entered.length > 5000
+              ) {
+                return res
+                  .status(400)
+                  .json({
+                    ok: false,
+                    error:
+                      'Message is too long'
+                  });
+              }
+
+              const message =
+                entered ||
+                resolveMessage(
+                  state,
+                  month
+                );
+
+              await pushToOwner(
+                state,
+                message
+              );
+
+              return res
+                .status(200)
+                .json({
+                  ok: true,
+                  month
+                });
+            } catch (e) {
+              return res
+                .status(500)
+                .json({
+                  ok: false,
+                  error:
+                    e.message
+                });
+            }
           }
-          JS
 
-      - name: Load owner upgrade in index
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
+          '''
 
-          path = Path("index.html")
-          text = path.read_text()
+          text =
+              text[:start] +
+              new_handler +
+              text[end:]
 
-          tag = '<script src="owner-upgrade.js?v=20261007"></script>'
+          needle = """  const r =
+            await fetch(
+              'https://api.line.me/v2/bot/message/narrowcast',
+          """
 
-          if tag not in text:
-              if "</body>" not in text:
-                  raise SystemExit("index.html の </body> が見つかりません")
+          replacement = """  const message =
+            resolveMessage(
+              state,
+              now.month
+            );
 
-              text = text.replace(
-                  "</body>",
-                  f"{tag}\n</body>",
-                  1
+          const r =
+            await fetch(
+              'https://api.line.me/v2/bot/message/narrowcast',
+          """
+
+          if needle not in text:
+              raise SystemExit(
+                  "narrowcast 部分が見つかりません"
               )
 
-              path.write_text(text)
+          text = text.replace(
+              needle,
+              replacement,
+              1
+          )
 
-          print("index.html OK")
+          path.write_text(text)
+
+          print("月初LINE編集機能 OK")
           PY
 
-      - name: Check files
+      - name: Check JavaScript
         shell: bash
         run: |
           node --check owner-upgrade.js
           node --check api/monthly-line.js
 
-          grep -q 'owner-upgrade.js?v=20261007' index.html
-          grep -q '月初LINE設定' owner-upgrade.js
-          grep -q 'customerId' owner-upgrade.js
-          grep -q 'CSV出力' owner-upgrade.js
-          grep -q '操作履歴' owner-upgrade.js
+          grep -q "こんにちは！" api/monthly-line.js
+          grep -q "季節テンプレに戻す" owner-upgrade.js
+          grep -q "monthlyLineMonth" owner-upgrade.js
+          grep -q "resolveMessage" api/monthly-line.js
 
-      - name: Commit upgrade
+      - name: Commit
         shell: bash
         run: |
           git config user.name "Salon Manager Upgrade"
           git config user.email "actions@users.noreply.github.com"
 
           git add \
-            index.html \
             owner-upgrade.js \
             api/monthly-line.js
 
@@ -1818,5 +807,5 @@ jobs:
             exit 0
           fi
 
-          git commit -m "Upgrade salon manager customer, LINE and retail tools"
+          git commit -m "Add editable monthly LINE messages"
           git push
