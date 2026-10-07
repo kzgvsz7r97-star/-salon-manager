@@ -1,4 +1,4 @@
-name: 見込み売上 モデル除外修正
+name: 予約一覧 今月表示に統一
 
 on:
   workflow_dispatch:
@@ -14,42 +14,82 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Exclude model bookings from sales forecast
+      - name: Default reservation list to current month
         shell: bash
         run: |
+          cat > booking-current-month.js <<'JS'
+          (() => {
+            if (window.__bookingCurrentMonthV1) return;
+            window.__bookingCurrentMonthV1 = true;
+
+            function monthRange() {
+              const now = new Date();
+              const start = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
+              const end = localISO(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+              return { start, end };
+            }
+
+            function setCurrentMonthIfBlank() {
+              const from = document.getElementById('bookingFilterFrom');
+              const to = document.getElementById('bookingFilterTo');
+              if (!from || !to) return;
+              if (!from.value && !to.value) {
+                const range = monthRange();
+                from.value = range.start;
+                to.value = range.end;
+              }
+            }
+
+            const originalRenderBookings = renderBookings;
+            renderBookings = function () {
+              setCurrentMonthIfBlank();
+              return originalRenderBookings();
+            };
+
+            resetBookingFilters = function () {
+              if ($('bookingFilterName')) $('bookingFilterName').value = '';
+
+              const range = monthRange();
+              if ($('bookingFilterFrom')) $('bookingFilterFrom').value = range.start;
+              if ($('bookingFilterTo')) $('bookingFilterTo').value = range.end;
+
+              [
+                'bookingFilterSource',
+                'bookingFilterType',
+                'bookingFilterBookingType',
+                'bookingFilterStaff',
+                'bookingFilterStatus',
+                'bookingFilterPayment',
+                'bookingFilterNext'
+              ].forEach(id => {
+                if ($(id)) $(id).value = '';
+              });
+
+              renderBookings();
+            };
+
+            setCurrentMonthIfBlank();
+            renderBookings();
+          })();
+          JS
+
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path("index.html")
           text = path.read_text()
 
-          old_sales = "const bookingSales=b.filter(x=>x.paymentComplete).reduce((a,x)=>a+Number(x.price||0),0);"
-          new_sales = "const bookingSales=normal.filter(x=>x.paymentComplete).reduce((a,x)=>a+Number(x.price||0),0);"
-
-          old_forecast = "const bookingForecast=b.reduce((a,x)=>a+Number(x.price||0),0);"
-          new_forecast = "const bookingForecast=normal.reduce((a,x)=>a+Number(x.price||0),0);"
-
-          if old_sales in text:
-              text = text.replace(old_sales, new_sales, 1)
-          elif new_sales not in text:
-              raise SystemExit("bookingSales target not found")
-
-          if old_forecast in text:
-              text = text.replace(old_forecast, new_forecast, 1)
-          elif new_forecast not in text:
-              raise SystemExit("bookingForecast target not found")
-
-          text = text.replace(
-              "// 売上は決済完了した予約のみ。未決済は見込みに残す",
-              "// 売上・見込みは通常客のみ。モデルは人数だけ別集計",
-              1
-          )
+          tag = '<script src="booking-current-month.js?v=20261008b"></script>'
+          text = re.sub(r'\n?<script src="booking-current-month\.js[^>]*></script>', '', text)
+          text = text.replace('</body>', tag + '\n</body>')
 
           path.write_text(text)
           PY
 
-          grep -q "const bookingSales=normal.filter" index.html
-          grep -q "const bookingForecast=normal.reduce" index.html
+          node --check booking-current-month.js
+          grep -q "booking-current-month.js?v=20261008b" index.html
+          grep -q "setCurrentMonthIfBlank" booking-current-month.js
 
       - name: Commit
         shell: bash
@@ -57,12 +97,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add index.html
+          git add booking-current-month.js index.html
 
           if git diff --cached --quiet; then
             echo "No changes"
             exit 0
           fi
 
-          git commit -m "Exclude model bookings from sales forecast"
+          git commit -m "Default reservation list to current month"
           git push
