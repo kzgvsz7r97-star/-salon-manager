@@ -1098,9 +1098,9 @@ function monthStats(m){
   const b=bookingsForMonth(m);
   const normal=b.filter(x=>!x.isModel),models=b.filter(x=>x.isModel);
 
-  // 売上は決済完了した予約のみ。未決済は見込みに残す
-  const bookingSales=b.filter(x=>x.paymentComplete).reduce((a,x)=>a+Number(x.price||0),0);
-  const bookingForecast=b.reduce((a,x)=>a+Number(x.price||0),0);
+  // 売上・見込みは通常客のみ。モデルは人数だけ別集計
+  const bookingSales=normal.filter(x=>x.paymentComplete).reduce((a,x)=>a+Number(x.price||0),0);
+  const bookingForecast=normal.reduce((a,x)=>a+Number(x.price||0),0);
   const extraSales=salesForMonth(m).reduce((a,x)=>a+Number(x.amount||0),0);
   const retail=retailForMonth(m).reduce((a,x)=>a+Number(x.amount||0),0);
 
