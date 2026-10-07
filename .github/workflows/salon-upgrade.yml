@@ -1,4 +1,4 @@
-name: 月初LINE編集機能アップデート
+name: 再来管理アップデート
 
 on:
   workflow_dispatch:
@@ -9,796 +9,222 @@ permissions:
 jobs:
   upgrade:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Add monthly LINE editor
+      - name: Add return manager
         shell: bash
         run: |
+          cat > return-manager.js <<'JS'
+          (() => {
+            if (window.__returnManagerLoaded) return;
+            window.__returnManagerLoaded = true;
+
+            let rmMonth = monthKey(todayISO);
+            let rmFilter = 'all';
+
+            const stamp = b => `${b?.date || ''} ${b?.time || ''}`;
+            const keyOf = b => b?.customerId ? `id:${b.customerId}` : `name:${normalizeName(b?.customer || '')}`;
+            const same = (a,b) => a?.customerId && b?.customerId
+              ? String(a.customerId) === String(b.customerId)
+              : normalizeName(a?.customer || '') === normalizeName(b?.customer || '');
+
+            function customerOf(b){
+              if(!b) return null;
+              if(b.customerId){
+                const c=(db.customers||[]).find(x=>String(x.id)===String(b.customerId));
+                if(c) return c;
+              }
+              const n=normalizeName(b.customer||'');
+              return (db.customers||[]).find(x=>normalizeName(x.name||'')===n)||null;
+            }
+
+            function cohort(month){
+              const map=new Map();
+              (db.bookings||[])
+                .filter(b=>!b.isModel&&b.newGuest&&monthKey(b.date)===month&&isVisitedBooking(b))
+                .sort((a,b)=>stamp(a).localeCompare(stamp(b)))
+                .forEach(b=>{const k=keyOf(b);if(!map.has(k))map.set(k,b)});
+              return [...map.values()];
+            }
+
+            function journey(first){
+              const later=(db.bookings||[])
+                .filter(b=>!b.isModel&&same(first,b)&&stamp(b)>stamp(first))
+                .sort((a,b)=>stamp(a).localeCompare(stamp(b)));
+              const second=later.find(isVisitedBooking)||null;
+              const future=later.find(b=>isActiveBooking(b)&&b.date>=todayISO)||null;
+              const cancelled=[...later].reverse().find(b=>['cancelled','noshow'].includes(bookingStatus(b)))||null;
+              const nextTaken=!!first.nextBookingTaken||later.length>0;
+              let stage='missing';
+              if(second) stage='returned';
+              else if(future) stage='future';
+              else if(cancelled) stage=bookingStatus(cancelled)==='noshow'?'noshow':'cancelled';
+              else if(nextTaken) stage='taken';
+              return {first,customer:customerOf(first),later,second,future,cancelled,nextTaken,stage,source:first.source||'その他'};
+            }
+
+            function stats(month){
+              const rows=cohort(month).map(journey);
+              const next=rows.filter(x=>x.nextTaken).length;
+              const returned=rows.filter(x=>x.second).length;
+              const future=rows.filter(x=>!x.second&&x.future).length;
+              const cancelled=rows.filter(x=>!x.second&&['cancelled','noshow'].includes(x.stage)).length;
+              const missing=rows.filter(x=>x.stage==='missing').length;
+              return {
+                rows,total:rows.length,next,returned,future,cancelled,missing,
+                nextRate:rows.length?Math.round(next/rows.length*100):0,
+                returnRate:rows.length?Math.round(returned/rows.length*100):0,
+                keptRate:next?Math.round(returned/next*100):0
+              };
+            }
+
+            function recoveryCandidates(){
+              const map=new Map();
+              (db.bookings||[]).forEach(b=>{
+                if(b.isModel||b.returnRecoveryDone||!['cancelled','noshow'].includes(bookingStatus(b)))return;
+                const d=daysBetween(b.date,todayISO);
+                if(d < -30 || d > 30) return;
+                const future=(db.bookings||[]).some(x=>
+                  !x.isModel&&same(b,x)&&String(x.id)!==String(b.id)&&isActiveBooking(x)&&x.date>=todayISO
+                );
+                if(future)return;
+                const k=keyOf(b),old=map.get(k);
+                if(!old||stamp(b)>stamp(old))map.set(k,b);
+              });
+              return [...map.values()].sort((a,b)=>stamp(b).localeCompare(stamp(a)));
+            }
+
+            function actions(){
+              return {
+                followups:typeof followupDueItems==='function'?followupDueItems():[],
+                recoveries:recoveryCandidates(),
+                reminders:typeof reminderCandidates==='function'?reminderCandidates():[]
+              };
+            }
+
+            function label(stage){
+              return ({returned:'2回目実来店',future:'次回予約あり',cancelled:'次回キャンセル',noshow:'次回無断',taken:'次回取得済み',missing:'次回予約なし'})[stage]||stage;
+            }
+            function badge(stage){
+              return ({returned:'status-visited',future:'status-booked',cancelled:'status-cancelled',noshow:'status-noshow',taken:'status-booked',missing:'status-cancelled'})[stage]||'status-booked';
+            }
+
+            function ensureHome(){
+              if(document.getElementById('returnManagerHomeWrap'))return;
+              const r=document.getElementById('returnReminders');
+              if(!r)return;
+              r.insertAdjacentHTML('afterend',`<div id="returnManagerHomeWrap"><h2>再来管理</h2><div id="returnManagerHome" class="card"></div></div>`);
+            }
+
+            function renderHomeBox(){
+              ensureHome();
+              const host=document.getElementById('returnManagerHome');
+              if(!host)return;
+              const month=typeof homeMonth!=='undefined'?monthString(homeMonth):monthKey(todayISO);
+              const s=stats(month),a=actions(),total=a.followups.length+a.recoveries.length+a.reminders.length;
+              host.innerHTML=`
+                <div class="row auto">
+                  <div style="flex:1"><b>今対応が必要</b><div style="font-size:26px;font-weight:900;margin-top:3px">${total}件</div></div>
+                  <button onclick="openReturnManager('${month}')">再来管理を開く</button>
+                </div>
+                <div class="small" style="margin-top:8px">新規→次回 ${s.nextRate}% ・ 2回目実来店 ${s.returnRate}% ・ 予約後→実来店 ${s.keptRate}%</div>
+                <div class="small" style="margin-top:4px">アフター/事前 ${a.followups.length} ・ キャンセル後 ${a.recoveries.length} ・ 45日 ${a.reminders.length}</div>`;
+            }
+
+            function sourceTable(rows){
+              const sources=[...new Set(['SHAiRE','Nailie','minimo','Instagram','その他',...rows.map(x=>x.source||'その他')])]
+                .map(source=>{
+                  const xs=rows.filter(x=>(x.source||'その他')===source);if(!xs.length)return null;
+                  const next=xs.filter(x=>x.nextTaken).length,returned=xs.filter(x=>x.second).length;
+                  return {source,total:xs.length,next,returned,rate:Math.round(returned/xs.length*100)};
+                }).filter(Boolean);
+              if(!sources.length)return empty('媒体データがありません');
+              return `<div style="overflow:auto"><table class="trend-table"><thead><tr><th>媒体</th><th>新規</th><th>次回</th><th>2回目</th><th>2回目率</th></tr></thead><tbody>${sources.map(x=>`<tr><td>${esc(x.source)}</td><td>${x.total}</td><td>${x.next}</td><td>${x.returned}</td><td>${x.rate}%</td></tr>`).join('')}</tbody></table></div>`;
+            }
+
+            function actionHTML(){
+              const a=actions(),out=[];
+              a.followups.forEach(x=>out.push(`<div class="item"><div class="t">${esc(x.booking.customer||'未登録')} <span class="status-badge status-booked">${esc(x.label)}</span></div><div class="s">${esc(x.booking.date)} ${esc(x.booking.time||'')}</div><div class="actions"><button onclick="openFollowupMessage('${x.id}','${x.type}')">文面を作る</button><button class="ghost" onclick="editBooking('${x.booking.id}')">予約を見る</button></div></div>`));
+              a.recoveries.forEach(b=>out.push(`<div class="item"><div class="t">${esc(b.customer||'未登録')} <span class="status-badge ${bookingStatus(b)==='noshow'?'status-noshow':'status-cancelled'}">${bookingStatus(b)==='noshow'?'無断後':'キャンセル後'}</span></div><div class="s">${esc(b.date)} ${esc(b.time||'')} ・ 未来予約なし</div><div class="actions"><button class="ghost" onclick="editBooking('${b.id}')">予約を見る</button><button onclick="markReturnRecoveryDone('${b.id}')">対応済みにする</button></div></div>`));
+              a.reminders.forEach(c=>out.push(`<div class="item"><div class="t">${esc(c.name||'未登録')} <span class="status-badge status-booked">45日</span></div><div class="s">最終来店 ${esc(c.lastComputed||'')} ・ ${Number(c.days||0)}日経過</div><div class="actions"><button class="ghost" onclick="openCustomerChart('${c.id}')">顧客を見る</button><button onclick="snoozeReminder('${c.id}');openReturnManager()">連絡済み</button></div></div>`));
+              return out.length?out.join(''):empty('今対応する再来フォローはありません');
+            }
+
+            function filtered(rows){
+              if(rmFilter==='all')return rows;
+              if(rmFilter==='risk')return rows.filter(x=>['cancelled','noshow','missing'].includes(x.stage));
+              return rows.filter(x=>x.stage===rmFilter);
+            }
+
+            function renderSheet(){
+              const host=document.getElementById('returnManagerSheet');if(!host)return;
+              const s=stats(rmMonth),rows=filtered(s.rows),[y,m]=rmMonth.split('-').map(Number);
+              host.innerHTML=`
+                <div class="monthbar"><button onclick="changeReturnManagerMonth(-1)">‹</button><div class="monthtitle">${y}年${m}月</div><button onclick="changeReturnManagerMonth(1)">›</button></div>
+                <div class="summary-grid" style="margin-top:10px">
+                  <div class="summary-card"><div class="l">新規実来店</div><div class="v">${s.total}人</div></div>
+                  <div class="summary-card"><div class="l">次回予約取得</div><div class="v">${s.nextRate}%</div><div class="small">${s.next}/${s.total}</div></div>
+                  <div class="summary-card"><div class="l">2回目実来店</div><div class="v">${s.returnRate}%</div><div class="small">${s.returned}/${s.total}</div></div>
+                  <div class="summary-card"><div class="l">予約後→実来店</div><div class="v">${s.keptRate}%</div><div class="small">${s.returned}/${s.next}</div></div>
+                </div>
+                <div class="small" style="margin:8px 2px">未来予約 ${s.future} ・ キャンセル/無断 ${s.cancelled} ・ 次回なし ${s.missing}</div>
+                <h3 style="margin:18px 0 8px">今連絡する人</h3>${actionHTML()}
+                <h3 style="margin:18px 0 8px">新規→2回目の状況</h3>
+                <select onchange="setReturnManagerFilter(this.value)"><option value="all" ${rmFilter==='all'?'selected':''}>全員</option><option value="returned" ${rmFilter==='returned'?'selected':''}>2回目実来店</option><option value="future" ${rmFilter==='future'?'selected':''}>未来予約あり</option><option value="risk" ${rmFilter==='risk'?'selected':''}>要フォロー</option></select>
+                <div class="small" style="margin:7px 2px">${rows.length}人表示</div>
+                ${rows.length?rows.map(x=>{
+                  const detail=x.second?`2回目 ${x.second.date}`:x.future?`次回 ${x.future.date} ${x.future.time||''}`:x.cancelled?`${bookingStatus(x.cancelled)==='noshow'?'無断':'キャンセル'} ${x.cancelled.date}`:'次回の実予約データなし';
+                  const c=x.customer?.id?`<button class="ghost" onclick="openCustomerChart('${x.customer.id}')">顧客を見る</button>`:'';
+                  return `<div class="item"><div class="t">${esc(x.first.customer||'未登録')} <span class="status-badge ${badge(x.stage)}">${label(x.stage)}</span></div><div class="s">初回 ${esc(x.first.date)} ・ ${esc(x.source)}<br>${esc(detail)}</div><div class="actions">${c}<button class="ghost" onclick="editBooking('${x.first.id}')">初回予約</button></div></div>`;
+                }).join(''):empty('この条件の新規客はいません')}
+                <h3 style="margin:18px 0 8px">媒体別の再来</h3>${sourceTable(s.rows)}
+                <button class="ghost" style="width:100%;margin-top:14px" onclick="closeModal()">閉じる</button>`;
+            }
+
+            window.openReturnManager=function(month=''){
+              if(month)rmMonth=month;
+              modal(`<div class="chart-head"><div><h3 style="margin:0">再来管理</h3><div class="small" style="margin-top:4px">次回予約を取った後、本当に2回目来店したかまで追います</div></div><button class="ghost" onclick="closeModal()">閉じる</button></div><div id="returnManagerSheet"></div>`);
+              renderSheet();
+            };
+            window.changeReturnManagerMonth=function(n){const [y,m]=rmMonth.split('-').map(Number);rmMonth=monthString(addMonths(new Date(y,m-1,1),n));renderSheet()};
+            window.setReturnManagerFilter=function(v){rmFilter=v||'all';renderSheet()};
+            window.markReturnRecoveryDone=function(id){const b=(db.bookings||[]).find(x=>String(x.id)===String(id));if(!b)return;b.returnRecoveryDone=true;b.returnRecoveryDoneAt=new Date().toISOString();save();window.openReturnManager(rmMonth)};
+
+            const oldRenderHome=renderHome;
+            renderHome=function(){oldRenderHome();renderHomeBox()};
+            ensureHome();
+            renderHomeBox();
+          })();
+          JS
+
           python3 - <<'PY'
           from pathlib import Path
-          import re
-
-          # =========================
-          # owner-upgrade.js
-          # =========================
-          path = Path("owner-upgrade.js")
-          text = path.read_text()
-
-          new_owner = r'''  async function loadMonthlyLinePreview(month) {
-            const key = getCloudBackupKey();
-            const status = $('monthlyLineStatus');
-            const preview = $('monthlyLinePreview');
-
-            month =
-              Number(month) ||
-              Number($('monthlyLineMonth')?.value) ||
-              1;
-
-            if (!key) {
-              if (status) {
-                status.textContent =
-                  'クラウド同期キーが必要です';
-              }
-              return;
-            }
-
-            if (status) {
-              status.textContent = '確認中…';
-            }
-
-            try {
-              const r = await fetch(
-                MONTHLY_LINE_API +
-                  `?preview=1&month=${month}`,
-                {
-                  headers: {
-                    'X-Backup-Key': key
-                  }
-                }
-              );
-
-              const body =
-                await r.json().catch(() => ({}));
-
-              if (!r.ok) {
-                throw new Error(
-                  body.error ||
-                    '取得できませんでした'
-                );
-              }
-
-              if (preview) {
-                preview.value =
-                  body.message || '';
-              }
-
-              if ($('monthlyLineEnabled')) {
-                $('monthlyLineEnabled').checked =
-                  body.enabled !== false;
-              }
-
-              const last = body.lastStatus;
-
-              const templateText =
-                body.custom
-                  ? '編集した文面を使用中'
-                  : '季節テンプレを使用中';
-
-              if (status) {
-                status.textContent =
-                  last?.sentAt
-                    ? `${templateText} ／ 前回：${new Date(
-                        last.sentAt
-                      ).toLocaleString('ja-JP')} ／ ${
-                        last.ok
-                          ? '送信受付済み'
-                          : '送信失敗'
-                      }`
-                    : `${templateText} ／ まだ自動配信履歴はありません`;
-              }
-            } catch (e) {
-              if (status) {
-                status.textContent =
-                  e.message;
-              }
-            }
-          }
-
-          window.changeMonthlyLineMonth =
-            function () {
-              loadMonthlyLinePreview(
-                Number(
-                  $('monthlyLineMonth')
-                    ?.value
-                )
-              );
-            };
-
-          window.openMonthlyLineSettings =
-            async function () {
-              const now = new Date();
-
-              const nextMonth =
-                ((now.getMonth() + 1) % 12) +
-                1;
-
-              const enabled =
-                db.monthlyLineSettings
-                  ?.enabled !== false;
-
-              const monthOptions =
-                Array.from(
-                  { length: 12 },
-                  (_, i) => i + 1
-                )
-                  .map(
-                    m => `
-                      <option
-                        value="${m}"
-                        ${
-                          m === nextMonth
-                            ? 'selected'
-                            : ''
-                        }
-                      >
-                        ${m}月
-                      </option>
-                    `
-                  )
-                  .join('');
-
-              modal(`
-                <h3>月初LINE</h3>
-
-                <div
-                  class="note"
-                  style="margin-bottom:10px"
-                >
-                  毎月1日10時ごろに、
-                  女性・15〜29歳・友だち追加365日未満へ配信します。
-                  <br>
-                  文面は月ごとに編集できます。
-                </div>
-
-                <label>
-                  <input
-                    id="monthlyLineEnabled"
-                    type="checkbox"
-                    style="width:auto"
-                    ${
-                      enabled
-                        ? 'checked'
-                        : ''
-                    }
-                  >
-                  月初LINEを自動配信する
-                </label>
-
-                <label>編集する月</label>
-
-                <select
-                  id="monthlyLineMonth"
-                  onchange="changeMonthlyLineMonth()"
-                >
-                  ${monthOptions}
-                </select>
-
-                <label>配信文面</label>
-
-                <textarea
-                  id="monthlyLinePreview"
-                  style="min-height:260px"
-                >読み込み中…</textarea>
-
-                <div
-                  class="small"
-                  style="margin-top:5px"
-                >
-                  この文章がそのまま配信されます。
-                </div>
-
-                <div
-                  id="monthlyLineStatus"
-                  class="small"
-                  style="margin-top:8px"
-                >
-                  確認中…
-                </div>
-
-                <button
-                  class="soft"
-                  style="width:100%;margin-top:10px"
-                  onclick="testMonthlyLine()"
-                >
-                  自分だけにテスト送信
-                </button>
-
-                <button
-                  class="ghost"
-                  style="width:100%;margin-top:8px"
-                  onclick="resetMonthlyLineTemplate()"
-                >
-                  季節テンプレに戻す
-                </button>
-
-                <div class="actions">
-                  <button
-                    class="ghost"
-                    onclick="closeModal()"
-                  >
-                    閉じる
-                  </button>
-
-                  <button
-                    onclick="saveMonthlyLineSettings()"
-                  >
-                    文面を保存
-                  </button>
-                </div>
-              `);
-
-              await loadMonthlyLinePreview(
-                nextMonth
-              );
-            };
-
-          window.saveMonthlyLineSettings =
-            async function () {
-              const key =
-                getCloudBackupKey();
-
-              if (!key) return;
-
-              const month =
-                Number(
-                  $('monthlyLineMonth')
-                    ?.value
-                );
-
-              const message =
-                String(
-                  $('monthlyLinePreview')
-                    ?.value || ''
-                ).trim();
-
-              const enabled =
-                !!$('monthlyLineEnabled')
-                  ?.checked;
-
-              const status =
-                $('monthlyLineStatus');
-
-              if (!message) {
-                return alert(
-                  '配信文面を入力してください'
-                );
-              }
-
-              if (message.length > 5000) {
-                return alert(
-                  '文面が長すぎます'
-                );
-              }
-
-              if (status) {
-                status.textContent =
-                  '保存中…';
-              }
-
-              db.monthlyLineSettings ||= {};
-              db.monthlyLineSettings.messages ||= {};
-
-              db.monthlyLineSettings.enabled =
-                enabled;
-
-              db.monthlyLineSettings.messages[
-                String(month)
-              ] = message;
-
-              logAudit(
-                '月初LINE文面',
-                `${month}月の文面を保存`
-              );
-
-              save();
-
-              try {
-                await postCloudSnapshot(
-                  key,
-                  db
-                );
-
-                writeSyncBase(db);
-                cloudDirty = false;
-
-                if (status) {
-                  status.textContent =
-                    `${month}月の文面を保存しました`;
-                }
-              } catch (e) {
-                if (status) {
-                  status.textContent =
-                    '端末には保存しましたが、クラウド保存に失敗しました';
-                }
-              }
-            };
-
-          window.resetMonthlyLineTemplate =
-            async function () {
-              const key =
-                getCloudBackupKey();
-
-              if (!key) return;
-
-              const month =
-                Number(
-                  $('monthlyLineMonth')
-                    ?.value
-                );
-
-              if (
-                !confirm(
-                  `${month}月の文面を季節テンプレに戻しますか？`
-                )
-              ) {
-                return;
-              }
-
-              db.monthlyLineSettings ||= {};
-              db.monthlyLineSettings.messages ||= {};
-
-              delete db.monthlyLineSettings
-                .messages[String(month)];
-
-              logAudit(
-                '月初LINE文面',
-                `${month}月をテンプレに戻しました`
-              );
-
-              save();
-
-              try {
-                await postCloudSnapshot(
-                  key,
-                  db
-                );
-
-                writeSyncBase(db);
-                cloudDirty = false;
-
-                await loadMonthlyLinePreview(
-                  month
-                );
-              } catch (e) {
-                const status =
-                  $('monthlyLineStatus');
-
-                if (status) {
-                  status.textContent =
-                    'テンプレへの復元保存に失敗しました';
-                }
-              }
-            };
-
-          window.testMonthlyLine =
-            async function () {
-              const key =
-                getCloudBackupKey();
-
-              if (!key) return;
-
-              const month =
-                Number(
-                  $('monthlyLineMonth')
-                    ?.value
-                );
-
-              const message =
-                String(
-                  $('monthlyLinePreview')
-                    ?.value || ''
-                ).trim();
-
-              const status =
-                $('monthlyLineStatus');
-
-              if (!message) {
-                return alert(
-                  '配信文面を入力してください'
-                );
-              }
-
-              if (status) {
-                status.textContent =
-                  'テスト送信中…';
-              }
-
-              try {
-                const r =
-                  await fetch(
-                    MONTHLY_LINE_API,
-                    {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type':
-                          'application/json',
-                        'X-Backup-Key':
-                          key
-                      },
-                      body:
-                        JSON.stringify({
-                          action: 'test',
-                          month,
-                          message
-                        })
-                    }
-                  );
-
-                const body =
-                  await r
-                    .json()
-                    .catch(() => ({}));
-
-                if (!r.ok) {
-                  throw new Error(
-                    body.error ||
-                      'テスト送信できませんでした'
-                  );
-                }
-
-                if (status) {
-                  status.textContent =
-                    '自分のLINEへテスト送信しました';
-                }
-
-                logAudit(
-                  '月初LINE',
-                  `${month}月をテスト送信`
-                );
-
-                save();
-              } catch (e) {
-                if (status) {
-                  status.textContent =
-                    e.message;
-                }
-              }
-            };
-
-          '''
-
-          pattern = re.compile(
-              r"  async function loadMonthlyLinePreview\(\) \{.*?(?=^  function addUpgradeButtons\(\) \{)",
-              re.S | re.M
-          )
-
-          text, count = pattern.subn(
-              new_owner,
-              text,
-              count=1
-          )
-
-          if count != 1:
-              raise SystemExit(
-                  "owner-upgrade.js の月初LINE部分が見つかりません"
-              )
-
-          path.write_text(text)
-
-          # =========================
-          # api/monthly-line.js
-          # =========================
-          path = Path("api/monthly-line.js")
-          text = path.read_text()
-
-          new_message = r'''function baseMessage(month) {
-            const copy =
-              MONTH_COPY[month];
-
-            return `こんにちは！
-
-          ${copy[0]}
-          ${copy[1]}
-
-          ご来店周期は1〜1.5ヶ月くらいが目安です◎
-
-          ※次回予約をいただいている方にも一斉配信しています。
-          ご予約の変更などは、分かり次第お早めにご連絡ください🙇‍♂️
-
-          髪どうしようか迷っている方も、このLINEにそのまま気軽に相談してください☺️`;
-          }
-
-          function validMonth(value, fallback) {
-            const month = Number(value);
-
-            return (
-              Number.isInteger(month) &&
-              month >= 1 &&
-              month <= 12
-            )
-              ? month
-              : fallback;
-          }
-
-          function resolveMessage(
-            state,
-            month
-          ) {
-            const custom =
-              state
-                ?.monthlyLineSettings
-                ?.messages
-                ?.[String(month)];
-
-            if (
-              typeof custom === 'string' &&
-              custom.trim()
-            ) {
-              return custom.trim();
-            }
-
-            return baseMessage(month);
-          }
-
-          '''
-
-          pattern = re.compile(
-              r"function makeMessage\(month\) \{.*?(?=^function retryKey\(year, month\) \{)",
-              re.S | re.M
-          )
-
-          text, count = pattern.subn(
-              new_message,
-              text,
-              count=1
-          )
-
-          if count != 1:
-              raise SystemExit(
-                  "makeMessage が見つかりません"
-              )
-
-          start = text.find(
-              "  const now =\n    jstNow();"
-          )
-
-          end_marker = (
-              "  if (\n"
-              "    req.method !== 'GET'\n"
-              "  ) {"
-          )
-
-          end = text.find(
-              end_marker,
-              start
-          )
-
-          if start == -1 or end == -1:
-              raise SystemExit(
-                  "monthly-line handler が見つかりません"
-              )
-
-          new_handler = r'''  const now =
-            jstNow();
-
-          if (
-            req.method === 'GET' &&
-            req.query?.preview ===
-              '1'
-          ) {
-            if (
-              !adminAuthorized(req)
-            ) {
-              return res
-                .status(401)
-                .json({
-                  ok: false,
-                  error:
-                    'Unauthorized'
-                });
-            }
-
-            try {
-              const state =
-                await latestState();
-
-              const month =
-                validMonth(
-                  req.query?.month,
-                  now.month
-                );
-
-              const custom =
-                state
-                  ?.monthlyLineSettings
-                  ?.messages
-                  ?.[String(month)];
-
-              return res
-                .status(200)
-                .json({
-                  ok: true,
-                  month,
-                  message:
-                    resolveMessage(
-                      state,
-                      month
-                    ),
-                  custom:
-                    typeof custom ===
-                      'string' &&
-                    !!custom.trim(),
-                  enabled:
-                    state
-                      .monthlyLineSettings
-                      ?.enabled !== false,
-                  target: {
-                    gender: '女性',
-                    age: '15〜29歳',
-                    friendship:
-                      '365日未満'
-                  },
-                  lastStatus:
-                    state
-                      .monthlyLineStatus ||
-                    null
-                });
-            } catch (e) {
-              return res
-                .status(500)
-                .json({
-                  ok: false,
-                  error:
-                    e.message
-                });
-            }
-          }
-
-          if (
-            req.method === 'POST'
-          ) {
-            if (
-              !adminAuthorized(req)
-            ) {
-              return res
-                .status(401)
-                .json({
-                  ok: false,
-                  error:
-                    'Unauthorized'
-                });
-            }
-
-            if (
-              req.body?.action !==
-              'test'
-            ) {
-              return res
-                .status(400)
-                .json({
-                  ok: false,
-                  error:
-                    'Invalid action'
-                });
-            }
-
-            try {
-              const state =
-                await latestState();
-
-              const month =
-                validMonth(
-                  req.body?.month,
-                  now.month
-                );
-
-              const entered =
-                typeof req.body?.message ===
-                  'string'
-                  ? req.body.message.trim()
-                  : '';
-
-              if (
-                entered.length > 5000
-              ) {
-                return res
-                  .status(400)
-                  .json({
-                    ok: false,
-                    error:
-                      'Message is too long'
-                  });
-              }
-
-              const message =
-                entered ||
-                resolveMessage(
-                  state,
-                  month
-                );
-
-              await pushToOwner(
-                state,
-                message
-              );
-
-              return res
-                .status(200)
-                .json({
-                  ok: true,
-                  month
-                });
-            } catch (e) {
-              return res
-                .status(500)
-                .json({
-                  ok: false,
-                  error:
-                    e.message
-                });
-            }
-          }
-
-          '''
-
-          text = text[:start] + new_handler + text[end:]
-          needle = "  const r =\n    await fetch(\n      'https://api.line.me/v2/bot/message/narrowcast',\n"
-
-          replacement = """  const message =
-            resolveMessage(
-              state,
-              now.month
-            );
-
-          const r =
-            await fetch(
-              'https://api.line.me/v2/bot/message/narrowcast',
-          """
-
-          if needle not in text:
-              raise SystemExit(
-                  "narrowcast 部分が見つかりません"
-              )
-
-          text = text.replace(
-              needle,
-              replacement,
-              1
-          )
-
-          path.write_text(text)
-
-          print("月初LINE編集機能 OK")
+          p=Path('index.html')
+          text=p.read_text()
+          tag='<script src="return-manager.js?v=20261007r"></script>'
+          if 'return-manager.js' not in text:
+              text=text.replace('</body>', tag+'\n</body>')
+          else:
+              import re
+              text=re.sub(r'<script src="return-manager\.js[^>]*></script>', tag, text)
+          p.write_text(text)
           PY
 
-      - name: Check JavaScript
-        shell: bash
-        run: |
-          node --check owner-upgrade.js
-          node --check api/monthly-line.js
-
-          grep -q "こんにちは！" api/monthly-line.js
-          grep -q "季節テンプレに戻す" owner-upgrade.js
-          grep -q "monthlyLineMonth" owner-upgrade.js
-          grep -q "resolveMessage" api/monthly-line.js
+          node --check return-manager.js
+          grep -q 'openReturnManager' return-manager.js
+          grep -q 'return-manager.js?v=20261007r' index.html
 
       - name: Commit
         shell: bash
         run: |
-          git config user.name "Salon Manager Upgrade"
-          git config user.email "actions@users.noreply.github.com"
-
-          git add \
-            owner-upgrade.js \
-            api/monthly-line.js
-
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add return-manager.js index.html
           if git diff --cached --quiet; then
-            echo "変更なし"
+            echo "No changes"
             exit 0
           fi
-
-          git commit -m "Add editable monthly LINE messages"
+          git commit -m "Add return visit manager"
           git push
