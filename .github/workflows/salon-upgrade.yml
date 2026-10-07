@@ -744,7 +744,7 @@ jobs:
 
           '''
 
-         text = text[:start] + new_handler + text[end:]
+       　  text = text[:start] + new_handler + text[end:]
 
           needle = """  const r =
             await fetch(
