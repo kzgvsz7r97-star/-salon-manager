@@ -1,4 +1,4 @@
-name: 店販 今日の対応をホーム表示
+name: 媒体別KPI 強化
 
 on:
   workflow_dispatch:
@@ -14,177 +14,393 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Add retail tasks to home
+      - name: Add source KPI dashboard
         shell: bash
         run: |
-          cat > retail-today.js <<'JS'
+          cat > source-kpi.js <<'JS'
           (() => {
-            if (window.__retailTodayV1) return;
-            window.__retailTodayV1 = true;
+            if (window.__sourceKpiV1) return;
+            window.__sourceKpiV1 = true;
 
-            function orderDeadlineISO(order) {
-              const d = dateOnly(order?.visit_date);
-              if (!d) return '';
-              d.setDate(d.getDate() - 7);
-              return localISO(d);
+            const SOURCES = [
+              'SHAiRE',
+              'Nailie',
+              'minimo',
+              'Instagram',
+              'その他'
+            ];
+
+            function sourceOf(b) {
+              return SOURCES.includes(b?.source)
+                ? b.source
+                : 'その他';
             }
 
-            function retailTodayStats() {
-              const orders = Array.isArray(remoteOrders) ? remoteOrders : [];
+            function pct(a, b) {
+              return b ? Math.round(a / b * 100) : 0;
+            }
 
-              const newCount = orders.filter(
-                o => o.status === 'new'
-              ).length;
+            function sourceStatsForMonth(month, source) {
+              const s = analysisStats(month);
 
-              const dueCount = orders.filter(o => {
-                if (o.status !== 'new') return false;
-                const deadline = orderDeadlineISO(o);
-                return !!deadline && deadline <= todayISO;
-              }).length;
+              const newVisits =
+                s.newVisits.filter(
+                  b => sourceOf(b) === source
+                );
 
-              const pickupToday = orders.filter(
-                o =>
-                  ['ordered', 'ready'].includes(o.status) &&
-                  o.visit_date === todayISO
-              ).length;
+              const revenue =
+                newVisits.reduce(
+                  (sum, b) => sum + Number(b.price || 0),
+                  0
+                );
+
+              const nextTaken =
+                newVisits.filter(
+                  nextBookingTakenForBooking
+                ).length;
+
+              const journeys =
+                s.journeys.filter(
+                  j => sourceOf(j.first) === source
+                );
+
+              const mature =
+                journeys.filter(j => j.mature);
+
+              const returned =
+                mature.filter(j => !!j.second).length;
 
               return {
-                newCount,
-                dueCount,
-                pickupToday,
-                totalAttention:
-                  newCount + dueCount + pickupToday
+                newCount: newVisits.length,
+                revenue,
+                avg:
+                  newVisits.length
+                    ? Math.round(revenue / newVisits.length)
+                    : 0,
+                nextTaken,
+                nextRate:
+                  pct(nextTaken, newVisits.length),
+                matureCount: mature.length,
+                returned,
+                secondRate:
+                  pct(returned, mature.length),
+                waiting:
+                  journeys.length - mature.length
               };
             }
 
-            function ensureStyle() {
-              if (document.getElementById('retailTodayStyle')) return;
+            function recentMonths(endMonth) {
+              const end =
+                new Date(
+                  Number(endMonth.slice(0, 4)),
+                  Number(endMonth.slice(5, 7)) - 1,
+                  1
+                );
 
-              const style = document.createElement('style');
-              style.id = 'retailTodayStyle';
+              return [-2, -1, 0].map(offset => {
+                const d =
+                  new Date(
+                    end.getFullYear(),
+                    end.getMonth() + offset,
+                    1
+                  );
+
+                return monthString(d);
+              });
+            }
+
+            function aggregateSource(months, source) {
+              const rows =
+                months.map(
+                  m => sourceStatsForMonth(m, source)
+                );
+
+              const newCount =
+                rows.reduce(
+                  (a, x) => a + x.newCount,
+                  0
+                );
+
+              const revenue =
+                rows.reduce(
+                  (a, x) => a + x.revenue,
+                  0
+                );
+
+              const nextTaken =
+                rows.reduce(
+                  (a, x) => a + x.nextTaken,
+                  0
+                );
+
+              const matureCount =
+                rows.reduce(
+                  (a, x) => a + x.matureCount,
+                  0
+                );
+
+              const returned =
+                rows.reduce(
+                  (a, x) => a + x.returned,
+                  0
+                );
+
+              const nextRate =
+                pct(nextTaken, newCount);
+
+              const secondRate =
+                pct(returned, matureCount);
+
+              const avg =
+                newCount
+                  ? Math.round(revenue / newCount)
+                  : 0;
+
+              const secondSignal =
+                matureCount
+                  ? secondRate / 100
+                  : nextRate / 100;
+
+              const quality =
+                0.45 +
+                0.25 * (nextRate / 100) +
+                0.30 * secondSignal;
+
+              const confidence =
+                0.65 +
+                0.35 *
+                  Math.min(1, newCount / 5);
+
+              return {
+                source,
+                newCount,
+                revenue,
+                avg,
+                nextRate,
+                matureCount,
+                returned,
+                secondRate,
+                score:
+                  revenue *
+                  quality *
+                  confidence
+              };
+            }
+
+            function priorityForMonth(month) {
+              const months =
+                recentMonths(month);
+
+              const rows =
+                SOURCES
+                  .map(
+                    source =>
+                      aggregateSource(
+                        months,
+                        source
+                      )
+                  )
+                  .filter(x => x.newCount > 0)
+                  .sort(
+                    (a, b) =>
+                      b.score - a.score
+                  );
+
+              return {
+                months,
+                best: rows[0] || null
+              };
+            }
+
+            function ensureSourceKpiStyle() {
+              if (
+                document.getElementById(
+                  'sourceKpiStyle'
+                )
+              ) {
+                return;
+              }
+
+              const style =
+                document.createElement('style');
+
+              style.id = 'sourceKpiStyle';
 
               style.textContent = `
-                .retail-today-row{
-                  margin-top:8px;
-                  padding:9px 10px;
-                  border:1px solid #e7e3dc;
-                  border-radius:11px;
+                .source-focus{
                   background:#fff;
+                  border-radius:14px;
+                  padding:12px;
+                  margin:0 0 9px;
+                }
+
+                .source-focus .title{
+                  font-size:11px;
+                  color:#777;
+                }
+
+                .source-focus .main{
+                  font-size:18px;
+                  font-weight:850;
+                  margin-top:3px;
+                }
+
+                .source-kpi-grid{
+                  display:grid;
+                  grid-template-columns:1fr 1fr;
+                  gap:8px;
+                }
+
+                .source-kpi-card{
+                  background:#fff;
+                  border-radius:13px;
+                  padding:11px 12px;
+                }
+
+                .source-kpi-card.priority{
+                  outline:2px solid #111;
+                }
+
+                .source-kpi-card .head{
                   display:flex;
                   align-items:center;
                   justify-content:space-between;
                   gap:8px;
-                  cursor:pointer;
+                  font-weight:850;
                 }
 
-                .retail-today-main{
-                  min-width:0;
-                  font-size:11px;
-                  line-height:1.45;
+                .source-kpi-card .badge{
+                  font-size:9px;
+                  border-radius:99px;
+                  padding:3px 6px;
+                  background:#111;
+                  color:#fff;
+                  white-space:nowrap;
                 }
 
-                .retail-today-main b{
-                  font-size:12px;
-                }
-
-                .retail-today-arrow{
-                  flex:none;
+                .source-kpi-card .num{
                   font-size:14px;
+                  font-weight:800;
+                  margin-top:7px;
+                }
+
+                .source-kpi-card .sub{
+                  font-size:10px;
                   color:#777;
+                  line-height:1.55;
+                  margin-top:4px;
+                }
+
+                @media(max-width:420px){
+                  .source-kpi-grid{
+                    grid-template-columns:1fr;
+                  }
                 }
               `;
 
               document.head.appendChild(style);
             }
 
-            function ensureHost() {
-              const dashboard =
-                document.getElementById('homeOpsDashboard');
-
-              if (!dashboard) return null;
-
-              let host =
-                document.getElementById('retailTodayRow');
-
-              if (!host) {
-                host = document.createElement('div');
-                host.id = 'retailTodayRow';
-                host.className = 'retail-today-row';
-                host.onclick = openRetailToday;
-                dashboard.appendChild(host);
-              }
-
-              return host;
-            }
-
-            function renderRetailToday() {
-              ensureStyle();
-
-              const host = ensureHost();
+            function renderSourceKpi() {
+              const host = $('analysisSources');
               if (!host) return;
 
-              const s = retailTodayStats();
+              ensureSourceKpiStyle();
 
-              if (!s.totalAttention) {
-                host.style.display = 'none';
-                return;
-              }
+              const month =
+                monthString(analysisMonth);
 
-              host.style.display = 'flex';
+              const priority =
+                priorityForMonth(month);
+
+              const best = priority.best;
+
+              const cards =
+                SOURCES.map(source => {
+                  const x =
+                    sourceStatsForMonth(
+                      month,
+                      source
+                    );
+
+                  const isPriority =
+                    best?.source === source;
+
+                  return `
+                    <div class="source-kpi-card ${isPriority ? 'priority' : ''}">
+                      <div class="head">
+                        <span>${esc(source)}</span>
+                        ${isPriority ? '<span class="badge">今週優先</span>' : ''}
+                      </div>
+
+                      <div class="num">
+                        新規 ${x.newCount}人 ・ ${yen(x.revenue)}
+                      </div>
+
+                      <div class="sub">
+                        平均単価 ${yen(x.avg)}
+                        <br>
+                        次回予約 ${x.nextTaken}/${x.newCount}（${x.nextRate}%）
+                        <br>
+                        2回目実来店 ${x.returned}/${x.matureCount}（${x.secondRate}%）
+                        ${x.waiting ? `・判定待ち ${x.waiting}` : ''}
+                      </div>
+                    </div>
+                  `;
+                }).join('');
 
               host.innerHTML = `
-                <div class="retail-today-main">
-                  <b>店販対応</b>　
-                  未対応 ${s.newCount}
-                  ｜ 発注期限 ${s.dueCount}
-                  ｜ 今日受取 ${s.pickupToday}
+                ${
+                  best
+                    ? `
+                      <div class="source-focus">
+                        <div class="title">
+                          直近3か月から見る今週の優先媒体
+                        </div>
+                        <div class="main">
+                          ${esc(best.source)}
+                        </div>
+                        <div class="small" style="margin-top:4px">
+                          新規 ${best.newCount}人 ・ 平均 ${yen(best.avg)}
+                          ・ 次回 ${best.nextRate}%
+                          ・ 2回目 ${best.secondRate}%
+                        </div>
+                      </div>
+                    `
+                    : `
+                      <div class="source-focus">
+                        <div class="title">
+                          今週の優先媒体
+                        </div>
+                        <div class="main">
+                          判定材料不足
+                        </div>
+                      </div>
+                    `
+                }
+
+                <div class="source-kpi-grid">
+                  ${cards}
                 </div>
-                <div class="retail-today-arrow">›</div>
+
+                <div class="small" style="margin:8px 4px 0">
+                  新規＝本当の初回来店のみ。売上・平均単価＝実来店時の予約価格。2回目実来店率＝初回来店から45日以上経過した人だけで計算。今週優先は直近3か月の新規売上・次回予約率・2回目実来店率・母数をまとめて判定します。
+                </div>
               `;
             }
 
-            window.openRetailToday = function () {
-              const btn =
-                document.querySelector(
-                  '.nav button[data-tab="retail"]'
-                );
+            const oldRenderMonthlyAnalysis =
+              renderMonthlyAnalysis;
 
-              if (!btn) return;
+            renderMonthlyAnalysis =
+              function () {
+                const result =
+                  oldRenderMonthlyAnalysis();
+                renderSourceKpi();
+                return result;
+              };
 
-              go('retail', btn);
-
-              const filter =
-                document.getElementById('orderFilterStatus');
-
-              if (filter) {
-                filter.value = 'active';
-              }
-
-              renderOrders();
-
-              setTimeout(() => {
-                document.getElementById('orderSummary')
-                  ?.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start'
-                  });
-              }, 50);
-            };
-
-            const oldRenderHome = renderHome;
-            renderHome = function () {
-              oldRenderHome();
-              renderRetailToday();
-            };
-
-            const oldRenderOrders = renderOrders;
-            renderOrders = function () {
-              const result = oldRenderOrders();
-              renderRetailToday();
-              return result;
-            };
-
-            renderRetailToday();
+            renderSourceKpi();
           })();
           JS
 
@@ -195,27 +411,32 @@ jobs:
           path = Path("index.html")
           text = path.read_text()
 
-          tag = '<script src="retail-today.js?v=20261008"></script>'
+          tag = '<script src="source-kpi.js?v=20261008"></script>'
 
           text = re.sub(
-              r'\n?<script src="retail-today\.js[^>]*></script>',
+              r'\n?<script src="source-kpi\.js[^>]*></script>',
               '',
               text
           )
 
+          anchor = '<script src="metrics-consistency.js?v=20261008"></script>'
+
+          if anchor not in text:
+              raise SystemExit("metrics-consistency anchor not found")
+
           text = text.replace(
-              '</body>',
-              tag + '\n</body>'
+              anchor,
+              anchor + '\n' + tag,
+              1
           )
 
           path.write_text(text)
           PY
 
-          node --check retail-today.js
-          grep -q "店販対応" retail-today.js
-          grep -q "発注期限" retail-today.js
-          grep -q "今日受取" retail-today.js
-          grep -q "retail-today.js?v=20261008" index.html
+          node --check source-kpi.js
+          grep -q "直近3か月から見る今週の優先媒体" source-kpi.js
+          grep -q "2回目実来店" source-kpi.js
+          grep -q "source-kpi.js?v=20261008" index.html
 
       - name: Commit
         shell: bash
@@ -223,12 +444,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add retail-today.js index.html
+          git add source-kpi.js index.html
 
           if git diff --cached --quiet; then
             echo "No changes"
             exit 0
           fi
 
-          git commit -m "Show retail tasks on home dashboard"
+          git commit -m "Add source acquisition KPI dashboard"
           git push
