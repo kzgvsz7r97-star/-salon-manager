@@ -1,4 +1,4 @@
-name: 予約一覧 今月表示に統一
+name: 店販 今日の対応をホーム表示
 
 on:
   workflow_dispatch:
@@ -7,69 +7,184 @@ permissions:
   contents: write
 
 jobs:
-  fix:
+  upgrade:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Default reservation list to current month
+      - name: Add retail tasks to home
         shell: bash
         run: |
-          cat > booking-current-month.js <<'JS'
+          cat > retail-today.js <<'JS'
           (() => {
-            if (window.__bookingCurrentMonthV1) return;
-            window.__bookingCurrentMonthV1 = true;
+            if (window.__retailTodayV1) return;
+            window.__retailTodayV1 = true;
 
-            function monthRange() {
-              const now = new Date();
-              const start = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
-              const end = localISO(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-              return { start, end };
+            function orderDeadlineISO(order) {
+              const d = dateOnly(order?.visit_date);
+              if (!d) return '';
+              d.setDate(d.getDate() - 7);
+              return localISO(d);
             }
 
-            function setCurrentMonthIfBlank() {
-              const from = document.getElementById('bookingFilterFrom');
-              const to = document.getElementById('bookingFilterTo');
-              if (!from || !to) return;
-              if (!from.value && !to.value) {
-                const range = monthRange();
-                from.value = range.start;
-                to.value = range.end;
+            function retailTodayStats() {
+              const orders = Array.isArray(remoteOrders) ? remoteOrders : [];
+
+              const newCount = orders.filter(
+                o => o.status === 'new'
+              ).length;
+
+              const dueCount = orders.filter(o => {
+                if (o.status !== 'new') return false;
+                const deadline = orderDeadlineISO(o);
+                return !!deadline && deadline <= todayISO;
+              }).length;
+
+              const pickupToday = orders.filter(
+                o =>
+                  ['ordered', 'ready'].includes(o.status) &&
+                  o.visit_date === todayISO
+              ).length;
+
+              return {
+                newCount,
+                dueCount,
+                pickupToday,
+                totalAttention:
+                  newCount + dueCount + pickupToday
+              };
+            }
+
+            function ensureStyle() {
+              if (document.getElementById('retailTodayStyle')) return;
+
+              const style = document.createElement('style');
+              style.id = 'retailTodayStyle';
+
+              style.textContent = `
+                .retail-today-row{
+                  margin-top:8px;
+                  padding:9px 10px;
+                  border:1px solid #e7e3dc;
+                  border-radius:11px;
+                  background:#fff;
+                  display:flex;
+                  align-items:center;
+                  justify-content:space-between;
+                  gap:8px;
+                  cursor:pointer;
+                }
+
+                .retail-today-main{
+                  min-width:0;
+                  font-size:11px;
+                  line-height:1.45;
+                }
+
+                .retail-today-main b{
+                  font-size:12px;
+                }
+
+                .retail-today-arrow{
+                  flex:none;
+                  font-size:14px;
+                  color:#777;
+                }
+              `;
+
+              document.head.appendChild(style);
+            }
+
+            function ensureHost() {
+              const dashboard =
+                document.getElementById('homeOpsDashboard');
+
+              if (!dashboard) return null;
+
+              let host =
+                document.getElementById('retailTodayRow');
+
+              if (!host) {
+                host = document.createElement('div');
+                host.id = 'retailTodayRow';
+                host.className = 'retail-today-row';
+                host.onclick = openRetailToday;
+                dashboard.appendChild(host);
               }
+
+              return host;
             }
 
-            const originalRenderBookings = renderBookings;
-            renderBookings = function () {
-              setCurrentMonthIfBlank();
-              return originalRenderBookings();
+            function renderRetailToday() {
+              ensureStyle();
+
+              const host = ensureHost();
+              if (!host) return;
+
+              const s = retailTodayStats();
+
+              if (!s.totalAttention) {
+                host.style.display = 'none';
+                return;
+              }
+
+              host.style.display = 'flex';
+
+              host.innerHTML = `
+                <div class="retail-today-main">
+                  <b>店販対応</b>　
+                  未対応 ${s.newCount}
+                  ｜ 発注期限 ${s.dueCount}
+                  ｜ 今日受取 ${s.pickupToday}
+                </div>
+                <div class="retail-today-arrow">›</div>
+              `;
+            }
+
+            window.openRetailToday = function () {
+              const btn =
+                document.querySelector(
+                  '.nav button[data-tab="retail"]'
+                );
+
+              if (!btn) return;
+
+              go('retail', btn);
+
+              const filter =
+                document.getElementById('orderFilterStatus');
+
+              if (filter) {
+                filter.value = 'active';
+              }
+
+              renderOrders();
+
+              setTimeout(() => {
+                document.getElementById('orderSummary')
+                  ?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                  });
+              }, 50);
             };
 
-            resetBookingFilters = function () {
-              if ($('bookingFilterName')) $('bookingFilterName').value = '';
-
-              const range = monthRange();
-              if ($('bookingFilterFrom')) $('bookingFilterFrom').value = range.start;
-              if ($('bookingFilterTo')) $('bookingFilterTo').value = range.end;
-
-              [
-                'bookingFilterSource',
-                'bookingFilterType',
-                'bookingFilterBookingType',
-                'bookingFilterStaff',
-                'bookingFilterStatus',
-                'bookingFilterPayment',
-                'bookingFilterNext'
-              ].forEach(id => {
-                if ($(id)) $(id).value = '';
-              });
-
-              renderBookings();
+            const oldRenderHome = renderHome;
+            renderHome = function () {
+              oldRenderHome();
+              renderRetailToday();
             };
 
-            setCurrentMonthIfBlank();
-            renderBookings();
+            const oldRenderOrders = renderOrders;
+            renderOrders = function () {
+              const result = oldRenderOrders();
+              renderRetailToday();
+              return result;
+            };
+
+            renderRetailToday();
           })();
           JS
 
@@ -80,16 +195,27 @@ jobs:
           path = Path("index.html")
           text = path.read_text()
 
-          tag = '<script src="booking-current-month.js?v=20261008b"></script>'
-          text = re.sub(r'\n?<script src="booking-current-month\.js[^>]*></script>', '', text)
-          text = text.replace('</body>', tag + '\n</body>')
+          tag = '<script src="retail-today.js?v=20261008"></script>'
+
+          text = re.sub(
+              r'\n?<script src="retail-today\.js[^>]*></script>',
+              '',
+              text
+          )
+
+          text = text.replace(
+              '</body>',
+              tag + '\n</body>'
+          )
 
           path.write_text(text)
           PY
 
-          node --check booking-current-month.js
-          grep -q "booking-current-month.js?v=20261008b" index.html
-          grep -q "setCurrentMonthIfBlank" booking-current-month.js
+          node --check retail-today.js
+          grep -q "店販対応" retail-today.js
+          grep -q "発注期限" retail-today.js
+          grep -q "今日受取" retail-today.js
+          grep -q "retail-today.js?v=20261008" index.html
 
       - name: Commit
         shell: bash
@@ -97,12 +223,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add booking-current-month.js index.html
+          git add retail-today.js index.html
 
           if git diff --cached --quiet; then
             echo "No changes"
             exit 0
           fi
 
-          git commit -m "Default reservation list to current month"
+          git commit -m "Show retail tasks on home dashboard"
           git push
