@@ -145,7 +145,7 @@ function uniqueReturnDueCount(reminders, recoveries) {
       followups,
       reminders,
       recoveries,
-      returnDue: reminders.length + recoveries.length,
+      returnDue: uniqueReturnDueCount(reminders, recoveries),
       availability,
       newVisits
     };
