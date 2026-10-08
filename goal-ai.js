@@ -52,7 +52,25 @@
 
     return [...rows.values()];
   }
+function uniqueReturnDueCount(reminders, recoveries) {
+  const keys = new Set();
 
+  (reminders || []).forEach(c => {
+    const key = c?.id
+      ? `id:${String(c.id)}`
+      : `name:${normalizeName(c?.name || '')}`;
+    if (key !== 'name:') keys.add(key);
+  });
+
+  (recoveries || []).forEach(b => {
+    const key = b?.customerId
+      ? `id:${String(b.customerId)}`
+      : `name:${normalizeName(b?.customer || '')}`;
+    if (key !== 'name:') keys.add(key);
+  });
+
+  return keys.size;
+}
   function upcomingAvailability(days = 7) {
     const m = monthKey(todayISO);
     const plan = db.goalPlans?.[m] || {};
