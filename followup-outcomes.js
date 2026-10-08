@@ -96,7 +96,7 @@
       total:rows.length,
       noBooking:noBooking.length,
       booked,
-      bookedRate:noBooking.length?Math.round(booked/noBooing.length*2100):0,
+      bookedRate:noBooking.length?Math.round(booked/noBooking.length*100):0,
       visited,
       visitedRate:rows.length?Math.round(visited/rows.length*100):0
     };
