@@ -1,0 +1,384 @@
+(() => {
+  if (window.__sourceKpiV1) return;
+  window.__sourceKpiV1 = true;
+
+  const SOURCES = [
+    'SHAiRE',
+    'Nailie',
+    'minimo',
+    'Instagram',
+    'その他'
+  ];
+
+  function sourceOf(b) {
+    return SOURCES.includes(b?.source)
+      ? b.source
+      : 'その他';
+  }
+
+  function pct(a, b) {
+    return b ? Math.round(a / b * 100) : 0;
+  }
+
+  function sourceStatsForMonth(month, source) {
+    const s = analysisStats(month);
+
+    const newVisits =
+      s.newVisits.filter(
+        b => sourceOf(b) === source
+      );
+
+    const revenue =
+      newVisits.reduce(
+        (sum, b) => sum + Number(b.price || 0),
+        0
+      );
+
+    const nextTaken =
+      newVisits.filter(
+        nextBookingTakenForBooking
+      ).length;
+
+    const journeys =
+      s.journeys.filter(
+        j => sourceOf(j.first) === source
+      );
+
+    const mature =
+      journeys.filter(j => j.mature);
+
+    const returned =
+      mature.filter(j => !!j.second).length;
+
+    return {
+      newCount: newVisits.length,
+      revenue,
+      avg:
+        newVisits.length
+          ? Math.round(revenue / newVisits.length)
+          : 0,
+      nextTaken,
+      nextRate:
+        pct(nextTaken, newVisits.length),
+      matureCount: mature.length,
+      returned,
+      secondRate:
+        pct(returned, mature.length),
+      waiting:
+        journeys.length - mature.length
+    };
+  }
+
+  function recentMonths(endMonth) {
+    const end =
+      new Date(
+        Number(endMonth.slice(0, 4)),
+        Number(endMonth.slice(5, 7)) - 1,
+        1
+      );
+
+    return [-2, -1, 0].map(offset => {
+      const d =
+        new Date(
+          end.getFullYear(),
+          end.getMonth() + offset,
+          1
+        );
+
+      return monthString(d);
+    });
+  }
+
+  function aggregateSource(months, source) {
+    const rows =
+      months.map(
+        m => sourceStatsForMonth(m, source)
+      );
+
+    const newCount =
+      rows.reduce(
+        (a, x) => a + x.newCount,
+        0
+      );
+
+    const revenue =
+      rows.reduce(
+        (a, x) => a + x.revenue,
+        0
+      );
+
+    const nextTaken =
+      rows.reduce(
+        (a, x) => a + x.nextTaken,
+        0
+      );
+
+    const matureCount =
+      rows.reduce(
+        (a, x) => a + x.matureCount,
+        0
+      );
+
+    const returned =
+      rows.reduce(
+        (a, x) => a + x.returned,
+        0
+      );
+
+    const nextRate =
+      pct(nextTaken, newCount);
+
+    const secondRate =
+      pct(returned, matureCount);
+
+    const avg =
+      newCount
+        ? Math.round(revenue / newCount)
+        : 0;
+
+    const secondSignal =
+      matureCount
+        ? secondRate / 100
+        : nextRate / 100;
+
+    const quality =
+      0.45 +
+      0.25 * (nextRate / 100) +
+      0.30 * secondSignal;
+
+    const confidence =
+      0.65 +
+      0.35 *
+        Math.min(1, newCount / 5);
+
+    return {
+      source,
+      newCount,
+      revenue,
+      avg,
+      nextRate,
+      matureCount,
+      returned,
+      secondRate,
+      score:
+        revenue *
+        quality *
+        confidence
+    };
+  }
+
+  function priorityForMonth(month) {
+    const months =
+      recentMonths(month);
+
+    const rows =
+      SOURCES
+        .map(
+          source =>
+            aggregateSource(
+              months,
+              source
+            )
+        )
+        .filter(x => x.newCount > 0)
+        .sort(
+          (a, b) =>
+            b.score - a.score
+        );
+
+    return {
+      months,
+      best: rows[0] || null
+    };
+  }
+
+  function ensureSourceKpiStyle() {
+    if (
+      document.getElementById(
+        'sourceKpiStyle'
+      )
+    ) {
+      return;
+    }
+
+    const style =
+      document.createElement('style');
+
+    style.id = 'sourceKpiStyle';
+
+    style.textContent = `
+      .source-focus{
+        background:#fff;
+        border-radius:14px;
+        padding:12px;
+        margin:0 0 9px;
+      }
+
+      .source-focus .title{
+        font-size:11px;
+        color:#777;
+      }
+
+      .source-focus .main{
+        font-size:18px;
+        font-weight:850;
+        margin-top:3px;
+      }
+
+      .source-kpi-grid{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+      }
+
+      .source-kpi-card{
+        background:#fff;
+        border-radius:13px;
+        padding:11px 12px;
+      }
+
+      .source-kpi-card.priority{
+        outline:2px solid #111;
+      }
+
+      .source-kpi-card .head{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:8px;
+        font-weight:850;
+      }
+
+      .source-kpi-card .badge{
+        font-size:9px;
+        border-radius:99px;
+        padding:3px 6px;
+        background:#111;
+        color:#fff;
+        white-space:nowrap;
+      }
+
+      .source-kpi-card .num{
+        font-size:14px;
+        font-weight:800;
+        margin-top:7px;
+      }
+
+      .source-kpi-card .sub{
+        font-size:10px;
+        color:#777;
+        line-height:1.55;
+        margin-top:4px;
+      }
+
+      @media(max-width:420px){
+        .source-kpi-grid{
+          grid-template-columns:1fr;
+        }
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  function renderSourceKpi() {
+    const host = $('analysisSources');
+    if (!host) return;
+
+    ensureSourceKpiStyle();
+
+    const month =
+      monthString(analysisMonth);
+
+    const priority =
+      priorityForMonth(month);
+
+    const best = priority.best;
+
+    const cards =
+      SOURCES.map(source => {
+        const x =
+          sourceStatsForMonth(
+            month,
+            source
+          );
+
+        const isPriority =
+          best?.source === source;
+
+        return `
+          <div class="source-kpi-card ${isPriority ? 'priority' : ''}">
+            <div class="head">
+              <span>${esc(source)}</span>
+              ${isPriority ? '<span class="badge">今週優先</span>' : ''}
+            </div>
+
+            <div class="num">
+              新規 ${x.newCount}人 ・ ${yen(x.revenue)}
+            </div>
+
+            <div class="sub">
+              平均単価 ${yen(x.avg)}
+              <br>
+              次回予約 ${x.nextTaken}/${x.newCount}（${x.nextRate}%）
+              <br>
+              2回目実来店 ${x.returned}/${x.matureCount}（${x.secondRate}%）
+              ${x.waiting ? `・判定待ち ${x.waiting}` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+    host.innerHTML = `
+      ${
+        best
+          ? `
+            <div class="source-focus">
+              <div class="title">
+                直近3か月から見る今週の優先媒体
+              </div>
+              <div class="main">
+                ${esc(best.source)}
+              </div>
+              <div class="small" style="margin-top:4px">
+                新規 ${best.newCount}人 ・ 平均 ${yen(best.avg)}
+                ・ 次回 ${best.nextRate}%
+                ・ 2回目 ${best.secondRate}%
+              </div>
+            </div>
+          `
+          : `
+            <div class="source-focus">
+              <div class="title">
+                今週の優先媒体
+              </div>
+              <div class="main">
+                判定材料不足
+              </div>
+            </div>
+          `
+      }
+
+      <div class="source-kpi-grid">
+        ${cards}
+      </div>
+
+      <div class="small" style="margin:8px 4px 0">
+        新規＝本当の初回来店のみ。売上・平均単価＝実来店時の予約価格。2回目実来店率＝初回来店から45日以上経過した人だけで計算。今週優先は直近3か月の新規売上・次回予約率・2回目実来店率・母数をまとめて判定します。
+      </div>
+    `;
+  }
+
+  const oldRenderMonthlyAnalysis =
+    renderMonthlyAnalysis;
+
+  renderMonthlyAnalysis =
+    function () {
+      const result =
+        oldRenderMonthlyAnalysis();
+      renderSourceKpi();
+      return result;
+    };
+
+  renderSourceKpi();
+})();
