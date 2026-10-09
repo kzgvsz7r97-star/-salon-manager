@@ -547,7 +547,7 @@ let analysisMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
 let reservationView='list';
 let reservationWeekStart='';
 let productImageDraft='';
-let importDraft=[],importImageFile=null,importImageDataURL='';
+let importDraft=[],importImageFile=null,importImageDataURL='',importFiles=[];
 
 const CLOUD_BACKUP_API='https://salon-manager-kzgvsz7r97-star.vercel.app/api/backup';
 const CLOUD_BACKUP_KEY_STORAGE='salonManagerCloudBackupKey';
@@ -4095,151 +4095,774 @@ function saveRetail(){
 
 /* SHAiRE screenshot import */
 function openImport(){
-  importDraft=[];importImageFile=null;importImageDataURL='';
-  modal(`<h3>SHAiREスクショ取込</h3>
-  <div class="import-box">
-    <label class="drop">📷 SHAiREの週表示スクショを選択
-      <input id="importFile" type="file" accept="image/*" onchange="handleImportFile(event)">
-    </label>
-    <img id="importPreview" class="preview">
-    <div id="importStatus" class="status">
-      <strong>横軸＝日付 / 縦軸＝時間</strong>として予約枠を1件ずつ分けて読み取ります。
-    </div>
-  </div>
-<label>週の開始日（月曜日・読み取り日付を確認）</label><input id="importWeekStart" type="date" onchange="shiftImportWeek(this.value)">
-  <div id="importResults"></div>
-  <div id="importActions" class="hidden">
-    <button class="soft" style="width:100%;margin-top:10px" onclick="addImportRow()">＋ 予約を追加</button>
-    <button class="blue" style="width:100%;margin-top:8px" onclick="mergeImport()">確認して統合</button>
-  </div>
-  <div class="note" style="margin-top:12px">
-    ※ SHAiREの「週」表示スクショ用です。画像はブラウザ側で解析し、日付列と時間軸を分けて判定します。
-  </div>`);
-}
-function handleImportFile(e){
-  const f=e.target.files&&e.target.files[0];if(!f)return;
-  importImageFile=f;
-  const reader=new FileReader();
-  reader.onload=ev=>{
-    importImageDataURL=ev.target.result;
-    $('importPreview').src=importImageDataURL;
-    $('importPreview').style.display='block';
-    analyzeShaireScreenshot();
-  };
-  reader.readAsDataURL(f);
-}
-function parseWeekStart(text){
-  const s=String(text||'').normalize('NFKC').replace(/\s+/g,' ');
-  let m=s.match(/(20\d{2})年\s*(\d{1,2})月\s*(\d{1,2})日?\s*[-ー–—~〜]\s*(?:(20\d{2})年\s*)?(\d{1,2})月\s*(\d{1,2})日?/);
-  if(m)return new Date(+m[1],+m[2]-1,+m[3]);
-  m=s.match(/(20\d{2})[\/.\-](\d{1,2})[\/.\-](\d{1,2})/);
-  if(m)return new Date(+m[1],+m[2]-1,+m[3]);
-  return null;
-}
-function guessWeekStartFromToday(){
-  const d=new Date();
-  const day=d.getDay();
-  const diff=day===0?-6:1-day;
-  d.setHours(12,0,0,0);
-  d.setDate(d.getDate()+diff);
-  return d;
-}
-function shaireGeometry(img){
-  const W=img.naturalWidth,H=img.naturalHeight;
-  const gridL=Math.round(W*.102);
-  const gridR=Math.round(W*.995);
-  const gridT=Math.round(H*.203);
-  const gridB=Math.round(H*.851);
-  return {
-    W,H,gridL,gridR,gridT,gridB,
-    colW:(gridR-gridL)/7,
-    hourPx:(gridB-gridT)/17
-  };
-}
-function flattenOcr(blocks){
-  const words=[],lines=[];
-  (blocks||[]).forEach(block=>{
-    (block.paragraphs||[]).forEach(p=>{
-      (p.lines||[]).forEach(line=>{
-        if(line&&line.text&&line.bbox)lines.push({text:line.text,bbox:line.bbox,confidence:line.confidence||0});
-        (line.words||[]).forEach(word=>{
-          if(word&&word.text&&word.bbox)words.push({text:word.text,bbox:word.bbox,confidence:word.confidence||0});
-        });
-      });
-    });
-  });
-  return {words,lines};
-}
-function calibrateShaireGeometry(geom,lines){
-  const ticks=(lines||[]).map(line=>{
-    const text=String(line.text||'').normalize('NFKC').replace(/\s/g,'');
-    const match=text.match(/^(\d{1,2})[:：]00$/),p=pointOf(line);
-    return match&&+match[1]>=7&&+match[1]<=23&&p.x1<geom.W*.105
-      ?{hour:+match[1],y:p.cy}:null;
-  }).filter(Boolean);
-  const median=a=>a.sort((a,b)=>a-b)[Math.floor(a.length/2)];
-  const slopes=[];
-  ticks.forEach((a,i)=>ticks.slice(i+1).forEach(b=>{
-    if(Math.abs(b.hour-a.hour)>=4){const slope=(b.y-a.y)/(b.hour-a.hour);if(slope>geom.hourPx*.65&&slope<geom.hourPx*1.35)slopes.push(slope);}
-  }));
-  if(ticks.length<4||!slopes.length)return geom;
-  const hourPx=median(slopes),gridT=median(ticks.map(t=>t.y-(t.hour-7)*hourPx)),gridB=gridT+17*hourPx;
-  if(gridT<0||gridB>geom.H)return geom;
-  return {...geom,gridT:Math.round(gridT),gridB:Math.round(gridB),hourPx};
-}
-async function analyzeShaireScreenshot(){
-  const st=$('importStatus');
-  st.innerHTML='画像を解析中… <strong>日付列と時間軸を分けています</strong>';
-  let worker=null;
-  try{
-    const img=await loadImage(importImageDataURL);
-    let geom=shaireGeometry(img);
-    let ocr={data:{text:'',blocks:[]}},words=[],lines=[];
+  importDraft=[];
+  importFiles=[];
+  importImageFile=null;
+  importImageDataURL='';
 
-    if(window.Tesseract){
-      worker=await Tesseract.createWorker('jpn+eng',1,{
-        cachePath:'salon-shaire-ocr-v2',
-        logger:m=>{
-          if(m.status==='recognizing text'){
-            st.textContent=`文字を読み取り中… ${Math.round((m.progress||0)*100)}%`;
-          }
-        }
-      });
-      try{
+  modal(`
+    <h3>SHAiRE過去予約まとめて取込</h3>
+
+    <div class="import-box">
+
+      <label class="drop">
+        📷 週表示スクショをまとめて選択
+
+        <input
+          id="importFile"
+          type="file"
+          accept="image/*"
+          multiple
+          onchange="handleImportFiles(event)"
+        >
+      </label>
+
+      <div
+        id="importFileSummary"
+        class="small"
+        style="margin-top:8px"
+      >
+        4月〜現在まで複数枚まとめて選択できます。
+      </div>
+
+      <img
+        id="importPreview"
+        class="preview"
+      >
+
+      <div
+        id="importStatus"
+        class="status"
+      >
+        色付きの予約枠だけ読み取ります。白い予定は除外します。
+      </div>
+
+    </div>
+
+    <div id="importResults"></div>
+
+    <div
+      id="importActions"
+      class="hidden"
+    >
+      <button
+        class="soft"
+        style="width:100%;margin-top:10px"
+        onclick="addImportRow()"
+      >
+        ＋ 予約を追加
+      </button>
+
+      <button
+        class="blue"
+        style="width:100%;margin-top:8px"
+        onclick="mergeImport()"
+      >
+        確認して一括統合
+      </button>
+    </div>
+
+    <div
+      class="note"
+      style="margin-top:12px"
+    >
+      同じ日付・時間・顧客名は重複登録しません。
+      過去から順番に見て、新規 / 再来も再判定します。
+    </div>
+  `);
+}
+
+function fileToDataURL(file){
+  return new Promise(
+    (resolve,reject)=>{
+      const reader=
+        new FileReader();
+
+      reader.onload=
+        ()=>resolve(
+          String(
+            reader.result||''
+          )
+        );
+
+      reader.onerror=
+        reject;
+
+      reader.readAsDataURL(
+        file
+      );
+    }
+  );
+}
+
+async function handleImportFiles(event){
+
+  const files=
+    [
+      ...(
+        event.target.files||
+        []
+      )
+    ];
+
+  if(!files.length)return;
+
+  importFiles=
+    files;
+
+  const summary=
+    $('importFileSummary');
+
+  if(summary){
+    summary.textContent=
+      `${files.length}枚選択しました`;
+  }
+
+  await analyzeShaireScreenshots();
+}
+
+async function refineImportNamesLocal(
+  worker,
+  img,
+  runs,
+  geom,
+  st,
+  drafts,
+  fileIndex,
+  totalFiles
+){
+  if(!worker)return;
+
+  try{
+    await worker.setParameters({
+      tessedit_pageseg_mode:'7',
+      preserve_interword_spaces:'1'
+    });
+  }catch{}
+
+  for(
+    let i=0;
+    i<drafts.length;
+    i++
+  ){
+    const x=
+      drafts[i];
+
+    const run=
+      runs[i];
+
+    if(!run)continue;
+
+    st.textContent=
+      `${fileIndex+1}/${totalFiles}枚目：予約名を確認中 ${i+1}/${drafts.length}`;
+
+    const canvas=
+      bookingNameImage(
+        img,
+        run
+      );
+
+    if(!canvas)continue;
+
+    x.nameImage=
+      canvas.toDataURL(
+        'image/png'
+      );
+
+    try{
+      const readings=[];
+
+      for(
+        const mode
+        of ['7','13']
+      ){
         await worker.setParameters({
-          tessedit_pageseg_mode:(Tesseract.PSM&&Tesseract.PSM.SPARSE_TEXT)||'11',
-          preserve_interword_spaces:'1'
+          tessedit_pageseg_mode:
+            mode
         });
-      }catch(_){}
-      ocr=await worker.recognize(importImageFile,{}, {text:true,blocks:true});
-      const flat=flattenOcr(ocr.data.blocks);
-      words=flat.words;lines=flat.lines;
+
+        const result=
+          await worker.recognize(
+            canvas,
+            {},
+            {
+              text:true
+            }
+          );
+
+        const name=
+          cleanCustomerName(
+            result.data.text
+              .split('\n')
+              .filter(
+                t=>
+                  !isNoiseWord(t)
+              )
+              .join(' ')
+          );
+
+        if(name){
+          readings.push({
+            text:name,
+            confidence:
+              Math.round(
+                result.data.confidence||
+                0
+              )
+          });
+        }
+      }
+
+      const original=
+        normalizeName(
+          x.customer
+        );
+
+      const best=
+        readings.find(
+          r=>
+            r.confidence>=20&&
+            normalizeName(
+              r.text
+            )===original
+        )
+        ||
+        readings
+          .sort(
+            (a,b)=>
+              b.confidence-
+              a.confidence
+          )[0];
+
+      x.nameConfidence=
+        best?.confidence||
+        0;
+
+      if(
+        best&&
+        best.confidence>=20
+      ){
+        x.customer=
+          best.text;
+      }
+
+      x.nameAlternatives=[
+        ...new Set(
+          readings
+            .map(
+              r=>r.text
+            )
+            .filter(
+              name=>
+                normalizeName(name)!==
+                normalizeName(
+                  x.customer
+                )
+            )
+        )
+      ];
+
+      const exactCustomer=
+        (db.customers||[])
+          .some(
+            c=>
+              normalizeName(
+                c.name
+              )===
+              normalizeName(
+                x.customer
+              )
+          );
+
+      x.nameConfirmed=
+        !!(
+          best&&
+          (
+            best.confidence>=65
+            ||
+            (
+              exactCustomer&&
+              best.confidence>=35
+            )
+          )
+        );
+
+      x.needsNameReview=
+        !x.nameConfirmed;
+
+    }catch(e){
+      console.warn(
+        'Individual name OCR failed',
+        e
+      );
+
+      x.nameConfirmed=false;
+      x.needsNameReview=true;
+    }
+  }
+}
+
+async function analyzeOneShaireScreenshot(
+  file,
+  dataURL,
+  worker,
+  fileIndex,
+  totalFiles
+){
+  const st=
+    $('importStatus');
+
+  const img=
+    await loadImage(
+      dataURL
+    );
+
+  let geom=
+    shaireGeometry(
+      img
+    );
+
+  let ocr={
+    data:{
+      text:'',
+      blocks:[]
+    }
+  };
+
+  let words=[];
+  let lines=[];
+
+  if(worker){
+
+    st.textContent=
+      `${fileIndex+1}/${totalFiles}枚目を解析中…`;
+
+    try{
+      await worker.setParameters({
+        tessedit_pageseg_mode:
+          (
+            Tesseract.PSM&&
+            Tesseract.PSM.SPARSE_TEXT
+          )||
+          '11',
+
+        preserve_interword_spaces:
+          '1'
+      });
+    }catch{}
+
+    ocr=
+      await worker.recognize(
+        file,
+        {},
+        {
+          text:true,
+          blocks:true
+        }
+      );
+
+    const flat=
+      flattenOcr(
+        ocr.data.blocks
+      );
+
+    words=
+      flat.words;
+
+    lines=
+      flat.lines;
+  }
+
+  geom=
+    calibrateShaireGeometry(
+      geom,
+      lines
+    );
+
+  const detectedWeek=
+    parseWeekStart(
+      ocr.data.text
+    );
+
+  if(!detectedWeek){
+    throw new Error(
+      `${file.name}：日付を読み取れませんでした`
+    );
+  }
+
+  const broadRuns=
+    detectBookingRuns(
+      img,
+      geom
+    );
+
+  const splitRuns=
+    splitRunsIntoBookings(
+      broadRuns,
+      words,
+      geom
+    );
+
+  const drafts=
+    splitRuns.map(
+      (run,i)=>
+        bookingRunToDraft(
+          run,
+          words,
+          detectedWeek,
+          geom,
+          i
+        )
+    );
+
+  await refineImportNamesLocal(
+    worker,
+    img,
+    splitRuns,
+    geom,
+    st,
+    drafts,
+    fileIndex,
+    totalFiles
+  );
+
+  drafts.forEach(x=>{
+    x.rawCustomer||=
+      x.customer;
+
+    if(
+      typeof x.nameConfirmed!==
+      'boolean'
+    ){
+      x.nameConfirmed=false;
     }
 
-    geom=calibrateShaireGeometry(geom,lines);
-    const detectedWeek=parseWeekStart(ocr.data.text);
-    const weekStart=detectedWeek||guessWeekStartFromToday();
-    $('importWeekStart').value=localISO(weekStart);
-    const broadRuns=detectBookingRuns(img,geom);
-    const splitRuns=splitRunsIntoBookings(broadRuns,words,geom);
+    x.needsNameReview=
+      !x.nameConfirmed;
 
-    importDraft=splitRuns.map((b,i)=>bookingRunToDraft(b,words,weekStart,geom,i));
+    x.importFile=
+      file.name;
+  });
 
+  return drafts;
+}
 
-    if(worker)await refineImportNames(worker,img,splitRuns,geom,st);
-    importDraft.forEach(x=>{x.rawCustomer=x.customer;x.needsNameReview=true;x.nameConfirmed=false;});
+function dedupeImportDraft(rows){
+
+  const map=
+    new Map();
+
+  rows.forEach(x=>{
+
+    const name=
+      normalizeName(
+        x.customer
+      );
+
+    const key=
+      name
+        ?[
+            x.date,
+            x.time,
+            name
+          ].join('|')
+        :`blank:${x.id}`;
+
+    const old=
+      map.get(key);
+
+    if(!old){
+      map.set(
+        key,
+        x
+      );
+
+      return;
+    }
+
+    if(
+      x.paymentComplete&&
+      !old.paymentComplete
+    ){
+      old.paymentComplete=true;
+    }
+
+    if(
+      x.end>
+      old.end
+    ){
+      old.end=
+        x.end;
+    }
+
+    if(
+      Number(
+        x.nameConfidence||
+        0
+      )>
+      Number(
+        old.nameConfidence||
+        0
+      )
+    ){
+      old.customer=
+        x.customer;
+
+      old.nameConfidence=
+        x.nameConfidence;
+
+      old.nameImage=
+        x.nameImage;
+
+      old.nameConfirmed=
+        x.nameConfirmed;
+
+      old.needsNameReview=
+        x.needsNameReview;
+    }
+  });
+
+  return [
+    ...map.values()
+  ];
+}
+
+function recalculateImportNewGuests(){
+
+  const rows=
+    [...importDraft]
+      .sort(
+        (a,b)=>
+          (
+            a.date+
+            a.time
+          )
+          .localeCompare(
+            b.date+
+            b.time
+          )
+      );
+
+  const seen=
+    new Set();
+
+  rows.forEach(x=>{
+
+    const name=
+      normalizeName(
+        x.customer
+      );
+
+    if(!name){
+      x.newGuest=true;
+      return;
+    }
+
+    const priorExisting=
+      (db.bookings||[])
+        .some(b=>
+          !b.isModel&&
+          normalizeName(
+            b.customer
+          )===name&&
+          (
+            b.date+
+            (b.time||'')
+          )<
+          (
+            x.date+
+            x.time
+          )&&
+          isActiveBooking(b)
+        );
+
+    const customer=
+      (db.customers||[])
+        .find(
+          c=>
+            normalizeName(
+              c.name
+            )===name
+        );
+
+    const priorCustomer=
+      !!(
+        customer?.lastVisit&&
+        customer.lastVisit<
+        x.date
+      );
+
+    x.newGuest=
+      !(
+        priorExisting||
+        priorCustomer||
+        seen.has(name)
+      );
+
+    seen.add(name);
+  });
+}
+
+async function analyzeShaireScreenshots(){
+
+  const st=
+    $('importStatus');
+
+  importDraft=[];
+
+  if(!importFiles.length){
+    return;
+  }
+
+  let worker=null;
+
+  const errors=[];
+
+  try{
+
+    if(window.Tesseract){
+
+      worker=
+        await Tesseract.createWorker(
+          'jpn+eng',
+          1,
+          {
+            cachePath:
+              'salon-shaire-ocr-v2',
+
+            logger:m=>{
+              if(
+                m.status===
+                'recognizing text'
+              ){
+                st.textContent=
+                  `文字を読み取り中… ${Math.round((m.progress||0)*100)}%`;
+              }
+            }
+          }
+        );
+    }
+
+    for(
+      let i=0;
+      i<importFiles.length;
+      i++
+    ){
+      const file=
+        importFiles[i];
+
+      try{
+
+        st.textContent=
+          `${i+1}/${importFiles.length}枚目を解析中…`;
+
+        const dataURL=
+          await fileToDataURL(
+            file
+          );
+
+        if(i===0){
+
+          importImageFile=
+            file;
+
+          importImageDataURL=
+            dataURL;
+
+          const preview=
+            $('importPreview');
+
+          if(preview){
+            preview.src=
+              dataURL;
+
+            preview.style.display=
+              'block';
+          }
+        }
+
+        const drafts=
+          await analyzeOneShaireScreenshot(
+            file,
+            dataURL,
+            worker,
+            i,
+            importFiles.length
+          );
+
+        importDraft.push(
+          ...drafts
+        );
+
+      }catch(error){
+
+        console.warn(
+          'SHAiRE batch import',
+          file.name,
+          error
+        );
+
+        errors.push(
+          error.message||
+          file.name
+        );
+      }
+    }
+
+    importDraft=
+      dedupeImportDraft(
+        importDraft
+      );
+
+    recalculateImportNewGuests();
+
     markImportConflicts();
-    st.innerHTML=`解析完了：<strong>${importDraft.length}件</strong>。<br>予約名・時間を確認してください。${detectedWeek?'':'<br><b>画像の日付を読めなかったため、週の開始日を確認してください。</b>'}`;
+
+    importDraft.sort(
+      (a,b)=>
+        (
+          a.date+
+          a.time
+        )
+        .localeCompare(
+          b.date+
+          b.time
+        )
+    );
+
+    st.innerHTML=
+      `解析完了：<strong>${importDraft.length}件</strong>の予約を検出`
+      +
+      (
+        errors.length
+          ?`<br><span style="color:#b45309">読み取れなかった画像 ${errors.length}枚</span>`
+          :''
+      );
+
     renderImportResults();
-    $('importActions').classList.remove('hidden');
-  }catch(err){
-    console.error(err);
-    st.innerHTML='自動解析でエラーが出ました。下の「予約を追加」から手動で入れて、そのまま統合できます。';
-    importDraft=[];
-    renderImportResults();
-    $('importActions').classList.remove('hidden');
+
+    $('importActions')
+      .classList
+      .remove(
+        'hidden'
+      );
+
+  }catch(error){
+
+    console.error(
+      error
+    );
+
+    st.textContent=
+      '一括解析でエラーが出ました。画像を少ない枚数に分けて試してください。';
+
   }finally{
-    if(worker){try{await worker.terminate()}catch(_){}}
+
+    if(worker){
+      try{
+        await worker.terminate();
+      }catch{}
+    }
   }
 }
 function loadImage(src){
