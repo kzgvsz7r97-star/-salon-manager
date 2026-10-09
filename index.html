@@ -1758,43 +1758,104 @@ function ownerProductsInOrder(){
 }
 
 async function publishOwnerProductOrder(){
-  const key=localStorage.getItem(CLOUD_BACKUP_KEY_STORAGE);
+  const key=
+    localStorage.getItem(
+      CLOUD_BACKUP_KEY_STORAGE
+    );
+
   if(!key)return false;
 
-  const line=db.orderSettings?.lineUrl||'';
-  const products=ownerProductsInOrder()
-    .filter(p=>p.public)
-    .map(({id,name,category,concern,price,description,recommended,usage,imageData})=>({
-      id,
-      name,
-      category:canonicalProductCategory(category,name),
-      concern:canonicalProductConcern(concern,name,category,description,recommended),
-      price,
-      fulfillment:'salon',
-      externalUrl:'',
-    description,
-recommended,
-usage,
-imageData:imageData||''
-    }));
+  const line=
+    db.orderSettings?.lineUrl||'';
 
-  const r=await fetch(CATALOG_API,{
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'X-Backup-Key':key
-    },
-    body:JSON.stringify({
-      products,
-      settings:{
-        lineUrl:line,
-        bHappyUrl:''
+  const products=
+    ownerProductsInOrder()
+      .filter(p=>p.public)
+      .map(({
+        id,
+        name,
+        category,
+        concern,
+        price,
+        description,
+        recommended,
+        usage,
+        imageData
+      })=>({
+        id,
+        name,
+
+        category:
+          canonicalProductCategory(
+            category,
+            name
+          ),
+
+        concern:
+          canonicalProductConcern(
+            concern,
+            name,
+            category,
+            description,
+            recommended
+          ),
+
+        price,
+
+        fulfillment:'salon',
+
+        externalUrl:'',
+
+        description:
+          description||'',
+
+        recommended:
+          recommended||'',
+
+        usage:
+          usage||'',
+
+        imageData:
+          imageData||''
+      }));
+
+  const r=
+    await fetch(
+      CATALOG_API,
+      {
+        method:'POST',
+
+        headers:{
+          'Content-Type':
+            'application/json',
+
+          'X-Backup-Key':
+            key
+        },
+
+        body:JSON.stringify({
+          products,
+
+          settings:{
+            lineUrl:line,
+            bHappyUrl:''
+          }
+        })
       }
-    })
-  });
+    );
 
-  const body=await r.json().catch(()=>({}));
-  if(!r.ok)throw new Error(body.error||'公開に失敗しました');
+  const body=
+    await r
+      .json()
+      .catch(()=>({}));
+
+  if(!r.ok){
+    throw new Error(
+      body.error||
+      '公開に失敗しました'
+    );
+  }
+
   return true;
 }
 
