@@ -590,27 +590,321 @@ function makeCopy(text,title,{category,productName}){
   };
 }
 
-function productImageUrl(html,pageUrl){
-  const candidates=[
-    meta(html,'og:image:secure_url'),
-    meta(html,'og:image'),
-    meta(html,'twitter:image'),
-    meta(html,'twitter:image:src')
-  ];
+function cleanProductUrl(value){
+  const url=
+    safeUrl(value);
 
-  const linkHit=String(html||'').match(
-    /<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["'][^>]*>/i
-  );
+  if(!url)return null;
 
-  if(linkHit?.[1]){
-    candidates.push(
-      decodeHtml(linkHit[1])
+  [
+    ...url.searchParams.keys()
+  ].forEach(key=>{
+    if(
+      /^utm_/i.test(key)||
+      /^(gclid|fbclid|msclkid|srsl.*)$/i.test(key)
+    ){
+      url.searchParams.delete(key);
+    }
+  });
+
+  url.hash='';
+
+  return url;
+}
+
+function shopifyProductHandle(url){
+  const match=
+    String(url?.pathname||'')
+      .match(
+        /\/products\/([^/?#]+)/i
+      );
+
+  return match?.[1]||'';
+}
+
+async function fetchWithTimeout(
+  url,
+  options={},
+  timeoutMs=9000
+){
+  const controller=
+    new AbortController();
+
+  const timeout=
+    setTimeout(
+      ()=>controller.abort(),
+      timeoutMs
+    );
+
+  try{
+    return await fetch(
+      url,
+      {
+        redirect:'follow',
+        ...options,
+        signal:controller.signal
+      }
+    );
+  }finally{
+    clearTimeout(timeout);
+  }
+}
+
+function browserHeaders(pageUrl=''){
+  return {
+    'User-Agent':
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+
+    Accept:
+      'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+
+    'Accept-Language':
+      'ja-JP,ja;q=0.9,en-US;q=0.7,en;q=0.5',
+
+    'Cache-Control':
+      'no-cache',
+
+    ...(pageUrl
+      ?{Referer:pageUrl}
+      :{})
+  };
+}
+
+async function fetchProductHtml(url){
+  const response=
+    await fetchWithTimeout(
+      url.href,
+      {
+        headers:
+          browserHeaders()
+      },
+      9000
+    );
+
+  if(!response.ok){
+    throw new Error(
+      `商品ページ取得失敗 ${response.status}`
     );
   }
 
-  const jsonImage=String(html||'').match(
-    /"image"\s*:\s*(?:"([^"]+)"|\[\s*"([^"]+)")/i
-  );
+  const type=
+    String(
+      response.headers
+        .get('content-type')||
+      ''
+    ).toLowerCase();
+
+  if(
+    !type.includes('text/html')&&
+    !type.includes('application/xhtml')
+  ){
+    throw new Error(
+      '商品ページではありません'
+    );
+  }
+
+  const html=
+    (
+      await response.text()
+    )
+    .slice(
+      0,
+      1800000
+    );
+
+  if(!html){
+    throw new Error(
+      '商品ページが空です'
+    );
+  }
+
+  return {
+    html,
+    finalUrl:
+      cleanProductUrl(
+        response.url
+      )||url
+  };
+}
+
+async function fetchShopifyProduct(pageUrl){
+  const handle=
+    shopifyProductHandle(
+      pageUrl
+    );
+
+  if(!handle)return null;
+
+  const base=
+    pageUrl.origin+
+    '/products/'+
+    encodeURIComponent(handle);
+
+  const urls=[
+    base+'.js',
+    base+'.json'
+  ];
+
+  for(const candidate of urls){
+
+    try{
+      const response=
+        await fetchWithTimeout(
+          candidate,
+          {
+            headers:{
+              ...browserHeaders(
+                pageUrl.href
+              ),
+              Accept:
+                'application/json,text/javascript,*/*;q=0.8'
+            }
+          },
+          8000
+        );
+
+      if(!response.ok){
+        continue;
+      }
+
+      const type=
+        String(
+          response.headers
+            .get('content-type')||
+          ''
+        )
+        .toLowerCase();
+
+      if(
+        !type.includes('json')&&
+        !type.includes('javascript')&&
+        !type.includes('text/plain')
+      ){
+        continue;
+      }
+
+      const raw=
+        await response.json();
+
+      const p=
+        raw?.product||
+        raw;
+
+      if(
+        !p||
+        typeof p!=='object'
+      ){
+        continue;
+      }
+
+      const title=
+        String(
+          p.title||
+          ''
+        ).trim();
+
+      const description=
+        plainText(
+          p.body_html||
+          p.description||
+          ''
+        );
+
+      let imageUrl='';
+
+      if(
+        typeof p.featured_image===
+        'string'
+      ){
+        imageUrl=
+          p.featured_image;
+      }else if(
+        p.featured_image?.src
+      ){
+        imageUrl=
+          p.featured_image.src;
+      }
+
+      if(
+        !imageUrl&&
+        Array.isArray(p.images)&&
+        p.images.length
+      ){
+        const first=
+          p.images[0];
+
+        imageUrl=
+          typeof first==='string'
+            ?first
+            :first?.src||'';
+      }
+
+      if(
+        imageUrl&&
+        imageUrl.startsWith('//')
+      ){
+        imageUrl=
+          'https:'+
+          imageUrl;
+      }
+
+      return {
+        title,
+        description,
+        imageUrl
+      };
+
+    }catch{}
+  }
+
+  return null;
+}
+
+function productImageUrl(
+  html,
+  pageUrl
+){
+  const candidates=[
+    meta(
+      html,
+      'og:image:secure_url'
+    ),
+
+    meta(
+      html,
+      'og:image'
+    ),
+
+    meta(
+      html,
+      'twitter:image'
+    ),
+
+    meta(
+      html,
+      'twitter:image:src'
+    )
+  ];
+
+  const linkHit=
+    String(html||'')
+      .match(
+        /<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["'][^>]*>/i
+      );
+
+  if(linkHit?.[1]){
+    candidates.push(
+      decodeHtml(
+        linkHit[1]
+      )
+    );
+  }
+
+  const jsonImage=
+    String(html||'')
+      .match(
+        /"image"\s*:\s*(?:"([^"]+)"|\[\s*"([^"]+)")/i
+      );
 
   if(jsonImage){
     candidates.push(
@@ -619,18 +913,37 @@ function productImageUrl(html,pageUrl){
         jsonImage[2]||
         ''
       )
-      .replace(/\\\//g,'/')
-      .replace(/\\u0026/gi,'&')
+      .replace(
+        /\\\//g,
+        '/'
+      )
+      .replace(
+        /\\u0026/gi,
+        '&'
+      )
     );
   }
 
   for(const candidate of candidates){
+
     if(!candidate)continue;
 
     try{
+      let value=
+        String(candidate)
+          .trim();
+
+      if(
+        value.startsWith('//')
+      ){
+        value=
+          'https:'+
+          value;
+      }
+
       const absolute=
         new URL(
-          String(candidate).trim(),
+          value,
           pageUrl
         );
 
@@ -642,13 +955,17 @@ function productImageUrl(html,pageUrl){
       if(safe){
         return safe;
       }
+
     }catch{}
   }
 
   return null;
 }
 
-async function fetchProductImageData(imageUrl){
+async function fetchProductImageData(
+  imageUrl,
+  pageUrl=''
+){
   if(!imageUrl){
     return {
       imageData:'',
@@ -656,26 +973,21 @@ async function fetchProductImageData(imageUrl){
     };
   }
 
-  const controller=
-    new AbortController();
-
-  const timeout=
-    setTimeout(
-      ()=>controller.abort(),
-      6000
-    );
-
   try{
     const response=
-      await fetch(
+      await fetchWithTimeout(
         imageUrl.href,
         {
-          signal:controller.signal,
           headers:{
-            'User-Agent':'Mozilla/5.0 SalonManager',
-            Accept:'image/avif,image/webp,image/png,image/jpeg,*/*;q=0.8'
+            ...browserHeaders(
+              pageUrl
+            ),
+
+            Accept:
+              'image/avif,image/webp,image/png,image/jpeg,*/*;q=0.8'
           }
-        }
+        },
+        7000
       );
 
     if(!response.ok){
@@ -708,15 +1020,15 @@ async function fetchProductImageData(imageUrl){
       };
     }
 
-    const maxBytes=
-      1500000;
-
     const declared=
       Number(
         response.headers
           .get('content-length')||
         0
       );
+
+    const maxBytes=
+      1500000;
 
     if(
       declared&&
@@ -728,61 +1040,25 @@ async function fetchProductImageData(imageUrl){
       };
     }
 
-    const reader=
-      response.body
-        ?.getReader();
+    const buffer=
+      Buffer.from(
+        await response.arrayBuffer()
+      );
 
-    if(!reader){
+    if(
+      !buffer.length||
+      buffer.length>maxBytes
+    ){
       return {
         imageData:'',
         imageUrl:''
       };
     }
 
-    const chunks=[];
-    let total=0;
-
-    while(true){
-      const {done,value}=
-        await reader.read();
-
-      if(done)break;
-
-      total+=
-        value.byteLength;
-
-      if(total>maxBytes){
-        await reader.cancel();
-
-        return {
-          imageData:'',
-          imageUrl:''
-        };
-      }
-
-      chunks.push(value);
-    }
-
-    const merged=
-      Buffer.alloc(total);
-
-    let offset=0;
-
-    for(const chunk of chunks){
-      Buffer
-        .from(chunk)
-        .copy(
-          merged,
-          offset
-        );
-
-      offset+=
-        chunk.byteLength;
-    }
-
     return {
       imageData:
-        `data:${type};base64,${merged.toString('base64')}`,
+        `data:${type};base64,${buffer.toString('base64')}`,
+
       imageUrl:
         imageUrl.href
     };
@@ -792,13 +1068,13 @@ async function fetchProductImageData(imageUrl){
       imageData:'',
       imageUrl:''
     };
-
-  }finally{
-    clearTimeout(timeout);
   }
 }
 
-export default async function handler(req,res){
+export default async function handler(
+  req,
+  res
+){
   cors(req,res);
 
   if(req.method==='OPTIONS'){
@@ -812,7 +1088,8 @@ export default async function handler(req,res){
       .status(405)
       .json({
         ok:false,
-        error:'Method not allowed'
+        error:
+          'Method not allowed'
       });
   }
 
@@ -821,7 +1098,7 @@ export default async function handler(req,res){
       body(req);
 
     const url=
-      safeUrl(
+      cleanProductUrl(
         data.url
       );
 
@@ -842,10 +1119,14 @@ export default async function handler(req,res){
 
     const productName=
       String(
-        data.productName||''
+        data.productName||
+        ''
       )
       .trim()
-      .slice(0,200);
+      .slice(
+        0,
+        200
+      );
 
     if(!requestedCategory){
       return res
@@ -857,102 +1138,91 @@ export default async function handler(req,res){
         });
     }
 
-    const controller=
-      new AbortController();
-
-    const timeout=
-      setTimeout(
-        ()=>controller.abort(),
-        8000
-      );
-
-    let response;
+    let html='';
+    let finalUrl=url;
 
     try{
-      response=
-        await fetch(
-          url.href,
-          {
-            signal:
-              controller.signal,
-
-            headers:{
-              'User-Agent':
-                'Mozilla/5.0 SalonManager',
-              Accept:
-                'text/html,application/xhtml+xml'
-            }
-          }
+      const page=
+        await fetchProductHtml(
+          url
         );
-    }finally{
-      clearTimeout(
-        timeout
+
+      html=
+        page.html;
+
+      finalUrl=
+        page.finalUrl;
+
+    }catch(error){
+      console.warn(
+        'normal product page fetch failed',
+        error.message
       );
     }
 
-    if(!response.ok){
+    let shopify=null;
+
+    try{
+      shopify=
+        await fetchShopifyProduct(
+          finalUrl
+        );
+    }catch{}
+
+    if(
+      !html&&
+      !shopify
+    ){
       throw new Error(
         '商品ページを取得できません'
       );
     }
 
-    const type=
-      String(
-        response.headers
-          .get('content-type')||
-        ''
-      );
-
-    if(
-      !type.includes(
-        'text/html'
-      )
-    ){
-      throw new Error(
-        '商品ページではありません'
-      );
-    }
-
-    const html=
-      (
-        await response.text()
-      )
-      .slice(
-        0,
-        1500000
-      );
+    const htmlTitle=
+      html
+        ?(
+          meta(
+            html,
+            'og:title'
+          )
+          ||
+          decodeHtml(
+            (
+              html.match(
+                /<title[^>]*>([\s\S]*?)<\/title>/i
+              )||[]
+            )[1]||''
+          ).trim()
+        )
+        :'';
 
     const title=
-      meta(
-        html,
-        'og:title'
-      )
-      ||
-      decodeHtml(
-        (
-          html.match(
-            /<title[^>]*>([\s\S]*?)<\/title>/i
-          )||[]
-        )[1]||''
-      ).trim();
+      shopify?.title||
+      htmlTitle||
+      productName;
 
     const summary=
-      meta(
-        html,
-        'description'
-      )
-      ||
-      meta(
-        html,
-        'og:description'
-      );
+      html
+        ?(
+          meta(
+            html,
+            'description'
+          )
+          ||
+          meta(
+            html,
+            'og:description'
+          )
+        )
+        :'';
 
     const fullText=
       [
+        shopify?.description,
         summary,
-        plainText(
-          html
-        )
+        html
+          ?plainText(html)
+          :''
       ]
       .filter(Boolean)
       .join('\n')
@@ -975,19 +1245,42 @@ export default async function handler(req,res){
         {
           category:
             requestedCategory,
+
           productName
         }
       );
 
-    const imageUrl=
-      productImageUrl(
-        html,
-        url.href
-      );
+    let imageUrl=null;
+
+    if(
+      shopify?.imageUrl
+    ){
+      try{
+        imageUrl=
+          safeUrl(
+            new URL(
+              shopify.imageUrl,
+              finalUrl.href
+            ).href
+          );
+      }catch{}
+    }
+
+    if(
+      !imageUrl&&
+      html
+    ){
+      imageUrl=
+        productImageUrl(
+          html,
+          finalUrl.href
+        );
+    }
 
     const image=
       await fetchProductImageData(
-        imageUrl
+        imageUrl,
+        finalUrl.href
       );
 
     return res
@@ -996,13 +1289,16 @@ export default async function handler(req,res){
         ok:true,
 
         title:
-          title.slice(
+          String(
+            title||''
+          )
+          .slice(
             0,
             200
           ),
 
         sourceUrl:
-          url.href,
+          finalUrl.href,
 
         category:
           requestedCategory,
@@ -1022,6 +1318,7 @@ export default async function handler(req,res){
       });
 
   }catch(error){
+
     console.error(
       'product-copy',
       error.message
@@ -1031,6 +1328,7 @@ export default async function handler(req,res){
       .status(502)
       .json({
         ok:false,
+
         error:
           'この商品ページを読み込めませんでした。別の公式商品ページURLを試してください'
       });
