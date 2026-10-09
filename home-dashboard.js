@@ -134,13 +134,34 @@
         ? followupDueItems().length
         : 0;
 
-    const reminders =
-      typeof reminderCandidates === 'function'
-        ? reminderCandidates().length
-        : 0;
+    const reminderRows =
+  typeof reminderCandidates === 'function'
+    ? reminderCandidates()
+    : [];
 
-    const recovery =
-      returnRecoveryCount();
+const recoveryRows =
+  returnRecoveryRows();
+
+const returnKeys = new Set();
+
+reminderRows.forEach(c => {
+  const key = c?.id
+    ? `id:${String(c.id)}`
+    : `name:${normalizeName(c?.name || '')}`;
+
+  if (key !== 'name:') returnKeys.add(key);
+});
+
+recoveryRows.forEach(b => {
+  const key = b?.customerId
+    ? `id:${String(b.customerId)}`
+    : `name:${normalizeName(b?.customer || '')}`;
+
+  if (key !== 'name:') returnKeys.add(key);
+});
+
+const reminders = reminderRows.length;
+const recovery = recoveryRows.length;
 
     return {
       m,
