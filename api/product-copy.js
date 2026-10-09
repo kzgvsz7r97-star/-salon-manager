@@ -590,6 +590,214 @@ function makeCopy(text,title,{category,productName}){
   };
 }
 
+function productImageUrl(html,pageUrl){
+  const candidates=[
+    meta(html,'og:image:secure_url'),
+    meta(html,'og:image'),
+    meta(html,'twitter:image'),
+    meta(html,'twitter:image:src')
+  ];
+
+  const linkHit=String(html||'').match(
+    /<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["'][^>]*>/i
+  );
+
+  if(linkHit?.[1]){
+    candidates.push(
+      decodeHtml(linkHit[1])
+    );
+  }
+
+  const jsonImage=String(html||'').match(
+    /"image"\s*:\s*(?:"([^"]+)"|\[\s*"([^"]+)")/i
+  );
+
+  if(jsonImage){
+    candidates.push(
+      String(
+        jsonImage[1]||
+        jsonImage[2]||
+        ''
+      )
+      .replace(/\\\//g,'/')
+      .replace(/\\u0026/gi,'&')
+    );
+  }
+
+  for(const candidate of candidates){
+    if(!candidate)continue;
+
+    try{
+      const absolute=
+        new URL(
+          String(candidate).trim(),
+          pageUrl
+        );
+
+      const safe=
+        safeUrl(
+          absolute.href
+        );
+
+      if(safe){
+        return safe;
+      }
+    }catch{}
+  }
+
+  return null;
+}
+
+async function fetchProductImageData(imageUrl){
+  if(!imageUrl){
+    return {
+      imageData:'',
+      imageUrl:''
+    };
+  }
+
+  const controller=
+    new AbortController();
+
+  const timeout=
+    setTimeout(
+      ()=>controller.abort(),
+      6000
+    );
+
+  try{
+    const response=
+      await fetch(
+        imageUrl.href,
+        {
+          signal:controller.signal,
+          headers:{
+            'User-Agent':'Mozilla/5.0 SalonManager',
+            Accept:'image/avif,image/webp,image/png,image/jpeg,*/*;q=0.8'
+          }
+        }
+      );
+
+    if(!response.ok){
+      return {
+        imageData:'',
+        imageUrl:''
+      };
+    }
+
+    const type=
+      String(
+        response.headers
+          .get('content-type')||
+        ''
+      )
+      .split(';')[0]
+      .trim()
+      .toLowerCase();
+
+    if(
+      ![
+        'image/jpeg',
+        'image/png',
+        'image/webp'
+      ].includes(type)
+    ){
+      return {
+        imageData:'',
+        imageUrl:''
+      };
+    }
+
+    const maxBytes=
+      1500000;
+
+    const declared=
+      Number(
+        response.headers
+          .get('content-length')||
+        0
+      );
+
+    if(
+      declared&&
+      declared>maxBytes
+    ){
+      return {
+        imageData:'',
+        imageUrl:''
+      };
+    }
+
+    const reader=
+      response.body
+        ?.getReader();
+
+    if(!reader){
+      return {
+        imageData:'',
+        imageUrl:''
+      };
+    }
+
+    const chunks=[];
+    let total=0;
+
+    while(true){
+      const {done,value}=
+        await reader.read();
+
+      if(done)break;
+
+      total+=
+        value.byteLength;
+
+      if(total>maxBytes){
+        await reader.cancel();
+
+        return {
+          imageData:'',
+          imageUrl:''
+        };
+      }
+
+      chunks.push(value);
+    }
+
+    const merged=
+      Buffer.alloc(total);
+
+    let offset=0;
+
+    for(const chunk of chunks){
+      Buffer
+        .from(chunk)
+        .copy(
+          merged,
+          offset
+        );
+
+      offset+=
+        chunk.byteLength;
+    }
+
+    return {
+      imageData:
+        `data:${type};base64,${merged.toString('base64')}`,
+      imageUrl:
+        imageUrl.href
+    };
+
+  }catch{
+    return {
+      imageData:'',
+      imageUrl:''
+    };
+
+  }finally{
+    clearTimeout(timeout);
+  }
+}
+
 export default async function handler(req,res){
   cors(req,res);
 
@@ -654,8 +862,7 @@ export default async function handler(req,res){
 
     const timeout=
       setTimeout(
-        ()=>
-          controller.abort(),
+        ()=>controller.abort(),
         8000
       );
 
@@ -772,6 +979,17 @@ export default async function handler(req,res){
         }
       );
 
+    const imageUrl=
+      productImageUrl(
+        html,
+        url.href
+      );
+
+    const image=
+      await fetchProductImageData(
+        imageUrl
+      );
+
     return res
       .status(200)
       .json({
@@ -793,6 +1011,12 @@ export default async function handler(req,res){
           productName
             ?`${productName} / ${requestedCategory}`
             :requestedCategory,
+
+        imageData:
+          image.imageData,
+
+        imageUrl:
+          image.imageUrl,
 
         ...copy
       });
