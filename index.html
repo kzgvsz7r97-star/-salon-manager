@@ -5683,7 +5683,8 @@ async function publishCatalog(){
             price,
             description,
             recommended,
-            usage
+            usage,
+            imageData
           })=>({
 
             id,
@@ -5717,7 +5718,10 @@ async function publishCatalog(){
 
             recommended,
 
-            usage
+            usage,
+
+            imageData:
+              imageData||''
 
           })
         );
