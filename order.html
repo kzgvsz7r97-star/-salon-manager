@@ -1976,22 +1976,87 @@ $('orderForm')
             'hidden'
           );
 
-        $('success')
-          .innerHTML=`
-            <b>
-              お申し込みありがとうございます。
-            </b>
-            <br><br>
-            受取予定日：
-            ${esc(visit)}
-            <br>
-            合計：
-            ${yen(b.total)}
-            <br><br>
-            担当者に注文が届きました。
-            商品を発注して準備します。
-          `;
+       $('success')
+  .innerHTML=`
+    <b style="font-size:18px">
+      お申し込みありがとうございます。
+    </b>
 
+    <div
+      style="
+        margin-top:18px;
+        padding:14px;
+        background:#faf9f7;
+        border-radius:12px;
+      "
+    >
+      <b>ご注文内容</b>
+
+      <div style="margin-top:10px">
+        ${
+          items
+            .map(i=>{
+              const p=
+                catalog.find(
+                  p=>
+                    String(p.id)===
+                    String(i.productId)
+                );
+
+              if(!p)return '';
+
+              return `
+                <div
+                  style="
+                    display:flex;
+                    justify-content:space-between;
+                    gap:12px;
+                    margin:7px 0;
+                  "
+                >
+                  <span>
+                    ${esc(p.name)} × ${i.quantity}
+                  </span>
+
+                  <span>
+                    ${yen(
+                      Number(p.price||0)*
+                      Number(i.quantity||0)
+                    )}
+                  </span>
+                </div>
+              `;
+            })
+            .join('')
+        }
+      </div>
+    </div>
+
+    <div style="margin-top:16px">
+      受取予定日：<b>${esc(visit)}</b>
+      <br>
+      お支払い：<b>現金 / PayPay</b>
+      <span class="sub">（商品お受け取り時）</span>
+    </div>
+
+    <div
+      style="
+        margin-top:16px;
+        font-size:20px;
+        font-weight:700;
+      "
+    >
+      合計：${yen(b.total)}
+    </div>
+
+    <div
+      class="sub"
+      style="margin-top:16px"
+    >
+      担当者に注文が届きました。<br>
+      商品を発注して準備します。
+    </div>
+  `;
       }catch(err){
 
         $('status')
