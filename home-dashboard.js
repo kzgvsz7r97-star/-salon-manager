@@ -15,34 +15,185 @@
       normalizeName(b.customer || '');
   }
 
-const reminderRows =
-  typeof reminderCandidates === 'function'
-    ? reminderCandidates()
-    : [];
+  function returnRecoveryRows() {
+    const rows = new Map();
 
-const recoveryRows =
-  returnRecoveryRows();
+    (db.bookings || []).forEach(b => {
+      if (
+        b.isModel ||
+        b.returnRecoveryDone ||
+        !['cancelled', 'noshow'].includes(bookingStatus(b))
+      ) {
+        return;
+      }
 
-const returnKeys = new Set();
+      const days = daysBetween(b.date, todayISO);
+      if (days < 0 || days > 30) return;
 
-reminderRows.forEach(c => {
-  const key = c?.id
-    ? `id:${String(c.id)}`
-    : `name:${normalizeName(c?.name || '')}`;
+      const priorVisit = (db.bookings || []).some(x =>
+        !x.isModel &&
+        sameCustomer(b, x) &&
+        (x.date + (x.time || '')) <
+          (b.date + (b.time || '')) &&
+        isVisitedBooking(x)
+      );
 
-  if (key !== 'name:') returnKeys.add(key);
-});
+      if (!priorVisit) return;
 
-recoveryRows.forEach(b => {
-  const key = b?.customerId
-    ? `id:${String(b.customerId)}`
-    : `name:${normalizeName(b?.customer || '')}`;
+      const future = (db.bookings || []).some(x =>
+        !x.isModel &&
+        sameCustomer(b, x) &&
+        String(x.id) !== String(b.id) &&
+        isActiveBooking(x) &&
+        x.date >= todayISO
+      );
 
-  if (key !== 'name:') returnKeys.add(key);
-});
+      if (future) return;
 
-const reminders = reminderRows.length;
-const recovery = recoveryRows.length;
+      const key = b.customerId
+        ? `id:${b.customerId}`
+        : `name:${normalizeName(b.customer || '')}`;
+
+      const old = rows.get(key);
+
+      if (
+        !old ||
+        (b.date + (b.time || '')) >
+          (old.date + (old.time || ''))
+      ) {
+        rows.set(key, b);
+      }
+    });
+
+    return [...rows.values()];
+  }
+
+  function returnPersonKey(value, booking = false) {
+    if (!value) return '';
+
+    if (!booking && value.id) {
+      return `id:${String(value.id)}`;
+    }
+
+    if (booking && value.customerId) {
+      return `id:${String(value.customerId)}`;
+    }
+
+    const name = normalizeName(
+      booking
+        ? value.customer || ''
+        : value.name || ''
+    );
+
+    if (!name) return '';
+
+    const customer = (db.customers || []).find(
+      c => normalizeName(c.name || '') === name
+    );
+
+    if (customer?.id) {
+      return `id:${String(customer.id)}`;
+    }
+
+    return `name:${name}`;
+  }
+
+  function quickStats() {
+    const m =
+      typeof homeMonth !== 'undefined'
+        ? monthString(homeMonth)
+        : monthKey(todayISO);
+
+    const todayRows = (db.bookings || []).filter(
+      b =>
+        b.date === todayISO &&
+        isActiveBooking(b)
+    );
+
+    const todayNormal =
+      todayRows.filter(b => !b.isModel);
+
+    const todayModels =
+      todayRows.filter(b => b.isModel);
+
+    const todayRevenue =
+      todayNormal.reduce(
+        (sum, b) =>
+          sum + Number(b.price || 0),
+        0
+      );
+
+    const month =
+      typeof monthStats === 'function'
+        ? monthStats(m)
+        : { forecast: 0 };
+
+    const plan =
+      typeof goalPlanStats === 'function'
+        ? goalPlanStats(m)
+        : null;
+
+    const goal =
+      typeof getGoal === 'function'
+        ? Number(getGoal(m) || 0)
+        : 0;
+
+    const gap =
+      plan
+        ? Number(plan.gap || 0)
+        : Math.max(
+            0,
+            goal - Number(month.forecast || 0)
+          );
+
+    const need =
+      plan
+        ? plan.count
+        : null;
+
+    const followups =
+      typeof followupDueItems === 'function'
+        ? followupDueItems().length
+        : 0;
+
+    const reminderRows =
+      typeof reminderCandidates === 'function'
+        ? reminderCandidates()
+        : [];
+
+    const recoveryRows =
+      returnRecoveryRows();
+
+    const returnKeys = new Set();
+
+    reminderRows.forEach(c => {
+      const key = returnPersonKey(c, false);
+      if (key) returnKeys.add(key);
+    });
+
+    recoveryRows.forEach(b => {
+      const key = returnPersonKey(b, true);
+      if (key) returnKeys.add(key);
+    });
+
+    const reminders = reminderRows.length;
+    const recovery = recoveryRows.length;
+
+    return {
+      m,
+      todayNormal: todayNormal.length,
+      todayModels: todayModels.length,
+      todayRevenue,
+      forecast: Number(month.forecast || 0),
+      goal,
+      gap,
+      need,
+      followups,
+      reminders,
+      recovery,
+      returnDue: returnKeys.size
+    };
+  }
   function ensureStyle() {
     if (
       document.getElementById(
