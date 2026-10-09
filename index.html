@@ -1764,7 +1764,7 @@ async function publishOwnerProductOrder(){
   const line=db.orderSettings?.lineUrl||'';
   const products=ownerProductsInOrder()
     .filter(p=>p.public)
-    .map(({id,name,category,concern,price,description,recommended,usage})=>({
+    .map(({id,name,category,concern,price,description,recommended,usage,imageData})=>({
       id,
       name,
       category:canonicalProductCategory(category,name),
@@ -1772,9 +1772,10 @@ async function publishOwnerProductOrder(){
       price,
       fulfillment:'salon',
       externalUrl:'',
-      description,
-      recommended,
-      usage
+    description,
+recommended,
+usage,
+imageData:imageData||''
     }));
 
   const r=await fetch(CATALOG_API,{
