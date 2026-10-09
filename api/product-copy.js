@@ -1569,14 +1569,15 @@ export default async function handler(
       }catch{}
     }
 
-    if(
+       if(
       !imageUrl&&
       html
     ){
       imageUrl=
         productImageUrl(
           html,
-          finalUrl.href
+          finalUrl.href,
+          productName
         );
     }
 
