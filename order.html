@@ -1369,12 +1369,15 @@ function updateTotal(){
     .textContent=
       yen(total);
 
-  $('cartBar')
-    .classList
-    .toggle(
-      'hidden',
-      !count
-    );
+ $('cartBar')
+  .classList
+  .toggle(
+    'hidden',
+    !count||
+    $('orderForm')
+      .classList
+      .contains('hidden')
+  );
 }
 
 function goToOrderForm(){
