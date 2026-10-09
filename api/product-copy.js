@@ -860,73 +860,379 @@ async function fetchShopifyProduct(pageUrl){
   return null;
 }
 
+function imageAttr(tag,name){
+  const hit=
+    String(tag||'').match(
+      new RegExp(
+        `${name}=["']([^"']+)["']`,
+        'i'
+      )
+    );
+
+  return hit
+    ?decodeHtml(hit[1]).trim()
+    :'';
+}
+
+function imageAliases(productName){
+  const name=
+    normalize(productName);
+
+  const aliases=[
+    name
+  ];
+
+  if(name.includes('リケラ')){
+    aliases.push(
+      'rekera',
+      'rekera'
+    );
+  }
+
+  if(name.includes('エマルジョン')){
+    aliases.push(
+      'emulsion',
+      'emu'
+    );
+  }
+
+  if(name.includes('ミスト')){
+    aliases.push(
+      'mist'
+    );
+  }
+
+  if(name.includes('オイル')){
+    aliases.push(
+      'oil'
+    );
+  }
+
+  return unique(
+    aliases
+      .map(normalize)
+      .filter(Boolean)
+  );
+}
+
+function badImageWords(value){
+  const raw=
+    normalize(value);
+
+  return [
+    'logo',
+    'ロゴ',
+    'favicon',
+    'icon',
+    'アイコン',
+    'header',
+    'footer',
+    'banner',
+    'バナー',
+    'menu',
+    'sns',
+    'instagram',
+    'facebook',
+    'youtube'
+  ].some(
+    word=>
+      raw.includes(
+        normalize(word)
+      )
+  );
+}
+
+function imageCandidates(
+  html,
+  pageUrl,
+  productName
+){
+  const results=[];
+
+  const source=
+    String(html||'');
+
+  const aliases=
+    imageAliases(
+      productName
+    );
+
+  const productNameNormalized=
+    normalize(
+      productName
+    );
+
+  const tokens=
+    productTokens(
+      productName
+    );
+
+  const regex=
+    /<img\b[^>]*>/gi;
+
+  let match;
+
+  while(
+    (
+      match=
+        regex.exec(source)
+    )
+  ){
+    const tag=
+      match[0];
+
+    const alt=
+      imageAttr(
+        tag,
+        'alt'
+      );
+
+    const rawUrls=[
+      imageAttr(tag,'src'),
+      imageAttr(tag,'data-src'),
+      imageAttr(tag,'data-lazy-src'),
+      imageAttr(tag,'data-original')
+    ];
+
+    const srcset=
+      imageAttr(
+        tag,
+        'srcset'
+      )
+      ||
+      imageAttr(
+        tag,
+        'data-srcset'
+      );
+
+    if(srcset){
+      srcset
+        .split(',')
+        .forEach(part=>{
+          const value=
+            part
+              .trim()
+              .split(/\s+/)[0];
+
+          if(value){
+            rawUrls.push(value);
+          }
+        });
+    }
+
+    const start=
+      Math.max(
+        0,
+        match.index-900
+      );
+
+    const end=
+      Math.min(
+        source.length,
+        match.index+
+        tag.length+
+        1200
+      );
+
+    const nearby=
+      plainText(
+        source.slice(
+          start,
+          end
+        )
+      );
+
+    for(
+      const rawUrl
+      of rawUrls
+    ){
+      if(!rawUrl)continue;
+
+      try{
+        let value=
+          String(rawUrl)
+            .trim();
+
+        if(
+          value.startsWith('//')
+        ){
+          value=
+            'https:'+value;
+        }
+
+        const absolute=
+          new URL(
+            value,
+            pageUrl
+          );
+
+        const safe=
+          safeUrl(
+            absolute.href
+          );
+
+        if(!safe)continue;
+
+        const combined=
+          normalize(
+            [
+              safe.href,
+              alt,
+              nearby
+            ].join(' ')
+          );
+
+        let score=0;
+
+        if(
+          productNameNormalized&&
+          normalize(nearby)
+            .includes(
+              productNameNormalized
+            )
+        ){
+          score+=120;
+        }
+
+        if(
+          productNameNormalized&&
+          normalize(alt)
+            .includes(
+              productNameNormalized
+            )
+        ){
+          score+=100;
+        }
+
+        aliases.forEach(
+          alias=>{
+            if(
+              normalize(
+                safe.href
+              )
+              .includes(alias)
+            ){
+              score+=45;
+            }
+
+            if(
+              normalize(alt)
+                .includes(alias)
+            ){
+              score+=35;
+            }
+          }
+        );
+
+        tokens.forEach(
+          token=>{
+            if(
+              combined.includes(
+                normalize(token)
+              )
+            ){
+              score+=18;
+            }
+          }
+        );
+
+        if(
+          /\.(png|jpe?g|webp)(?:\?|$)/i
+            .test(
+              safe.pathname+
+              safe.search
+            )
+        ){
+          score+=8;
+        }
+
+        if(
+          /product|item|goods|rekera|emu|emulsion|mist|oil/i
+            .test(
+              safe.pathname
+            )
+        ){
+          score+=12;
+        }
+
+        if(
+          badImageWords(
+            safe.href+
+            ' '+
+            alt
+          )
+        ){
+          score-=180;
+        }
+
+        results.push({
+          url:safe,
+          score,
+          index:match.index
+        });
+
+      }catch{}
+    }
+  }
+
+  return results;
+}
+
 function productImageUrl(
   html,
-  pageUrl
+  pageUrl,
+  productName=''
 ){
-  const candidates=[
+  const candidates=
+    imageCandidates(
+      html,
+      pageUrl,
+      productName
+    );
+
+  if(candidates.length){
+    candidates.sort(
+      (a,b)=>
+        b.score-a.score||
+        a.index-b.index
+    );
+
+    if(
+      candidates[0].score>0
+    ){
+      return candidates[0].url;
+    }
+  }
+
+  const fallback=[
     meta(
       html,
       'og:image:secure_url'
     ),
-
     meta(
       html,
       'og:image'
     ),
-
     meta(
       html,
       'twitter:image'
     ),
-
     meta(
       html,
       'twitter:image:src'
     )
   ];
 
-  const linkHit=
-    String(html||'')
-      .match(
-        /<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["'][^>]*>/i
-      );
-
-  if(linkHit?.[1]){
-    candidates.push(
-      decodeHtml(
-        linkHit[1]
-      )
-    );
-  }
-
-  const jsonImage=
-    String(html||'')
-      .match(
-        /"image"\s*:\s*(?:"([^"]+)"|\[\s*"([^"]+)")/i
-      );
-
-  if(jsonImage){
-    candidates.push(
-      String(
-        jsonImage[1]||
-        jsonImage[2]||
-        ''
-      )
-      .replace(
-        /\\\//g,
-        '/'
-      )
-      .replace(
-        /\\u0026/gi,
-        '&'
-      )
-    );
-  }
-
-  for(const candidate of candidates){
-
-    if(!candidate)continue;
+  for(
+    const candidate
+    of fallback
+  ){
+    if(
+      !candidate||
+      badImageWords(candidate)
+    ){
+      continue;
+    }
 
     try{
       let value=
@@ -937,8 +1243,7 @@ function productImageUrl(
         value.startsWith('//')
       ){
         value=
-          'https:'+
-          value;
+          'https:'+value;
       }
 
       const absolute=
@@ -960,9 +1265,7 @@ function productImageUrl(
   }
 
   return null;
-}
-
-async function fetchProductImageData(
+}async function fetchProductImageData(
   imageUrl,
   pageUrl=''
 ){
