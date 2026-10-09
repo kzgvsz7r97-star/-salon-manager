@@ -15,7 +15,7 @@
       normalizeName(b.customer || '');
   }
 
-  function returnRecoveryCount() {
+  function returnRecoveryRows
     const rows = new Map();
 
     (db.bookings || []).forEach(b => {
@@ -66,7 +66,7 @@
       }
     });
 
-    return rows.size;
+    return [...rows.values()];
   }
 
   function quickStats() {
