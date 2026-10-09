@@ -67,266 +67,132 @@
 
     return [...rows.values()];
   }
-  function currentReturnCapacity() {
-    const keys = new Set();
 
-    const reminders =
+  function returnPersonKey(value, booking = false) {
+    if (!value) return '';
+
+    if (!booking && value.id) {
+      return `id:${String(value.id)}`;
+    }
+
+    if (booking && value.customerId) {
+      return `id:${String(value.customerId)}`;
+    }
+
+    const name = normalizeName(
+      booking
+        ? value.customer || ''
+        : value.name || ''
+    );
+
+    if (!name) return '';
+
+    const customer = (db.customers || []).find(
+      c => normalizeName(c.name || '') === name
+    );
+
+    if (customer?.id) {
+      return `id:${String(customer.id)}`;
+    }
+
+    return `name:${name}`;
+  }
+
+  function quickStats() {
+    const m =
+      typeof homeMonth !== 'undefined'
+        ? monthString(homeMonth)
+        : monthKey(todayISO);
+
+    const todayRows = (db.bookings || []).filter(
+      b =>
+        b.date === todayISO &&
+        isActiveBooking(b)
+    );
+
+    const todayNormal =
+      todayRows.filter(b => !b.isModel);
+
+    const todayModels =
+      todayRows.filter(b => b.isModel);
+
+    const todayRevenue =
+      todayNormal.reduce(
+        (sum, b) =>
+          sum + Number(b.price || 0),
+        0
+      );
+
+    const month =
+      typeof monthStats === 'function'
+        ? monthStats(m)
+        : { forecast: 0 };
+
+    const plan =
+      typeof goalPlanStats === 'function'
+        ? goalPlanStats(m)
+        : null;
+
+    const goal =
+      typeof getGoal === 'function'
+        ? Number(getGoal(m) || 0)
+        : 0;
+
+    const gap =
+      plan
+        ? Number(plan.gap || 0)
+        : Math.max(
+            0,
+            goal - Number(month.forecast || 0)
+          );
+
+    const need =
+      plan
+        ? plan.count
+        : null;
+
+    const followups =
+      typeof followupDueItems === 'function'
+        ? followupDueItems().length
+        : 0;
+
+    const reminderRows =
       typeof reminderCandidates === 'function'
         ? reminderCandidates()
         : [];
 
-    reminders.forEach(c => {
-      const key = c?.id
-        ? `id:${String(c.id)}`
-        : `name:${normalizeName(c?.name || '')}`;
+    const recoveryRows =
+      returnRecoveryRows();
 
-      if (key !== 'name:') {
-        keys.add(key);
-      }
+    const returnKeys = new Set();
+
+    reminderRows.forEach(c => {
+      const key = returnPersonKey(c, false);
+      if (key) returnKeys.add(key);
     });
 
-    (db.bookings || []).forEach(b => {
-      if (
-        b.isModel ||
-        b.returnRecoveryDone ||
-        !['cancelled', 'noshow'].includes(bookingStatus(b))
-      ) {
-        return;
-      }
-
-      const days = daysBetween(b.date, todayISO);
-      if (days < 0 || days > 30) return;
-
-      const priorVisit = (db.bookings || []).some(x =>
-        !x.isModel &&
-        sameCustomer(b, x) &&
-        stamp(x) < stamp(b) &&
-        isVisitedBooking(x)
-      );
-
-      if (!priorVisit) return;
-
-      const future = (db.bookings || []).some(x =>
-        !x.isModel &&
-        sameCustomer(b, x) &&
-        String(x.id) !== String(b.id) &&
-        isActiveBooking(x) &&
-        x.date >= todayISO
-      );
-
-      if (future) return;
-
-      const key = b.customerId
-        ? `id:${String(b.customerId)}`
-        : `name:${normalizeName(b.customer || '')}`;
-
-      if (key !== 'name:') {
-        keys.add(key);
-      }
+    recoveryRows.forEach(b => {
+      const key = returnPersonKey(b, true);
+      if (key) returnKeys.add(key);
     });
 
-    return keys.size;
-  }
-
-  function currentTargetBreakdown() {
-    const month = monthKey(todayISO);
-    const stats = monthStats(month);
-    const plan = goalPlanStats(month, stats);
-
-    const goal = Number(getGoal(month) || 0);
-    const gap = Math.max(0, Number(plan.gap || 0));
-
-    const fallbackUnit = Math.max(
-      1,
-      Number(plan.unit || stats.avg || 10000)
-    );
-
-    const history = recentHistory();
-
-    const histNew =
-      history.filter(trueNewVisit);
-
-    const histRepeat =
-      history.filter(
-        b => !trueNewVisit(b)
-      );
-
-    const currentVisits =
-      (db.bookings || []).filter(b =>
-        !b.isModel &&
-        monthKey(b.date) === month &&
-        isVisitedBooking(b)
-      );
-
-    const currentNew =
-      currentVisits.filter(trueNewVisit);
-
-    const currentRepeat =
-      currentVisits.filter(
-        b => !trueNewVisit(b)
-      );
-
-    const newAvg = averagePrice(
-      histNew.length >= 2
-        ? histNew
-        : currentNew,
-      fallbackUnit
-    );
-
-    const repeatAvg = averagePrice(
-      histRepeat.length >= 2
-        ? histRepeat
-        : currentRepeat,
-      fallbackUnit
-    );
-
-    let newShare = 0.4;
-
-    if (history.length >= 5) {
-      newShare =
-        histNew.length / history.length;
-    } else if (currentVisits.length >= 3) {
-      newShare =
-        currentNew.length /
-        currentVisits.length;
-    }
-
-    newShare = Math.max(
-      0,
-      Math.min(
-        1,
-        Number(newShare || 0)
-      )
-    );
-
-    const repeatShare =
-      1 - newShare;
-
-    const blendedUnit = Math.max(
-      1,
-      Math.round(
-        newAvg * newShare +
-        repeatAvg * repeatShare
-      )
-    );
-
-    const returnCapacity =
-      currentReturnCapacity();
-
-    if (!gap) {
-      return {
-        month,
-        goal,
-        forecast:
-          Number(stats.forecast || 0),
-        gap: 0,
-        newNeed: 0,
-        repeatNeed: 0,
-        totalNeed: 0,
-        perDay: 0,
-        remainingDays:
-          Number(plan.days || 0),
-        newAvg,
-        repeatAvg,
-        newShare,
-        returnCapacity,
-        expectedRevenue: 0
-      };
-    }
-
-    let totalNeed =
-      Math.ceil(gap / blendedUnit);
-
-    let newNeed =
-      Math.round(
-        totalNeed * newShare
-      );
-
-    let repeatNeed =
-      Math.max(
-        0,
-        totalNeed - newNeed
-      );
-
-    // 実際に連絡できる再来候補数を上限にする。
-    if (repeatNeed > returnCapacity) {
-      const overflow =
-        repeatNeed - returnCapacity;
-
-      repeatNeed =
-        returnCapacity;
-
-      newNeed +=
-        overflow;
-    }
-
-    let expectedRevenue =
-      newNeed * newAvg +
-      repeatNeed * repeatAvg;
-
-    totalNeed =
-      newNeed + repeatNeed;
-
-    // 売上不足分を追加。
-    // 再来候補に余裕がある場合だけ再来へ、
-    // それ以外は新規へ回す。
-    while (
-      expectedRevenue < gap &&
-      totalNeed < 999
-    ) {
-      const currentRepeatShare =
-        totalNeed > 0
-          ? repeatNeed / totalNeed
-          : 0;
-
-      const canAddRepeat =
-        repeatNeed < returnCapacity;
-
-      if (
-        canAddRepeat &&
-        currentRepeatShare < repeatShare
-      ) {
-        repeatNeed += 1;
-        expectedRevenue += repeatAvg;
-      } else {
-        newNeed += 1;
-        expectedRevenue += newAvg;
-      }
-
-      totalNeed =
-        newNeed + repeatNeed;
-    }
-
-    const remainingDays =
-      Number(plan.days || 0);
-
-    const perDay =
-      remainingDays
-        ? Math.ceil(
-            totalNeed /
-            remainingDays *
-            10
-          ) / 10
-        : null;
+    const reminders = reminderRows.length;
+    const recovery = recoveryRows.length;
 
     return {
-      month,
+      m,
+      todayNormal: todayNormal.length,
+      todayModels: todayModels.length,
+      todayRevenue,
+      forecast: Number(month.forecast || 0),
       goal,
-      forecast:
-        Number(stats.forecast || 0),
       gap,
-      newNeed,
-      repeatNeed,
-      totalNeed,
-      perDay,
-      remainingDays,
-      newAvg,
-      repeatAvg,
-      newShare,
-      returnCapacity,
-      expectedRevenue
+      need,
+      followups,
+      reminders,
+      recovery,
+      returnDue: returnKeys.size
     };
-  }
   }
   function ensureStyle() {
     if (
