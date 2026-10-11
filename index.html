@@ -884,6 +884,7 @@ function mergeDbSafe(localData,remoteData,baseData){
     goals:mergeObjectSafe(local.goals,remote.goals,base?.goals),
     goalPlans:mergeObjectSafe(local.goalPlans,remote.goalPlans,base?.goalPlans),
     orderSettings:mergeObjectSafe(local.orderSettings,remote.orderSettings,base?.orderSettings),
+    lineMenuStats:mergeObjectSafe(local.lineMenuStats,remote.lineMenuStats,base?.lineMenuStats),
     seenOrders:[...new Set([...(remote.seenOrders||[]),...(local.seenOrders||[])])],
     staffProfiles:mergeArraySafe(local.staffProfiles,remote.staffProfiles,base?.staffProfiles),
     syncDeleted,
