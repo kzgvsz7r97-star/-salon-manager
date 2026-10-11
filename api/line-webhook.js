@@ -669,7 +669,9 @@ export default async function handler(
         text ===
           "メニューを相談したいです！" ||
         text === "相談"
-      ) {
+      ) {await recordLineMenuUse(
+  "consult"
+);
         replyText =
           "ご相談ありがとうございます☺️\n\n" +
           "髪型・カラー・メニュー選びなど、気になることをそのまま送ってください！\n\n" +
