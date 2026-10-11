@@ -308,7 +308,75 @@ function slotsForDate({
       })
     );
 }
+async function recordLineMenuUse(kind) {
+  if (
+    ![
+      "availability",
+      "retail",
+      "consult",
+    ].includes(kind)
+  ) {
+    return;
+  }
 
+  try {
+    const rows =
+      await rest(
+        "salon-backups" +
+        "?select=id,created_at,data" +
+        "&order=created_at.desc" +
+        "&limit=1"
+      );
+
+    const state =
+      structuredClone(
+        rows?.[0]?.data || {}
+      );
+
+    const month =
+      japanNow()
+        .date
+        .slice(0, 7);
+
+    const stats =
+      state.lineMenuStats || {};
+
+    const current = {
+      availability: 0,
+      retail: 0,
+      consult: 0,
+      ...(stats[month] || {}),
+    };
+
+    current[kind] =
+      Number(
+        current[kind] || 0
+      ) + 1;
+
+    state.lineMenuStats = {
+      ...stats,
+      [month]: current,
+    };
+
+    await rest(
+      "salon-backups",
+      {
+        method: "POST",
+        headers: {
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify({
+          data: state,
+        }),
+      }
+    );
+  } catch (error) {
+    console.error(
+      "LINE menu stats error:",
+      error
+    );
+  }
+}
 async function makeAvailabilityText() {
   const rows =
     await rest(
