@@ -162,6 +162,8 @@
         : [];
 
     const recoveryRows =
+      const lineMenuStats =
+  db.lineMenuStats?.[m] || {};
       returnRecoveryRows();
 
     const returnKeys = new Set();
