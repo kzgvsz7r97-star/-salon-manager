@@ -637,7 +637,9 @@ export default async function handler(
           "空き状況を確認" ||
         text ===
           "空き状況を確認する"
-      ) {
+      ) {await recordLineMenuUse(
+  "availability"
+);
         replyText =
           await makeAvailabilityText();
       }
