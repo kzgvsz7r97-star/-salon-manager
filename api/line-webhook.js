@@ -650,7 +650,9 @@ export default async function handler(
         text ===
           "商品を注文したいです！" ||
         text === "店販"
-      ) {
+      ) {await recordLineMenuUse(
+  "retail"
+);
         const orderUrl =
           process.env
             .PUBLIC_ORDER_URL ||
