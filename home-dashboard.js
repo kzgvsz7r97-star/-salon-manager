@@ -193,7 +193,24 @@
       followups,
       reminders,
       recovery,
-      returnDue: returnKeys.size
+      returnDue: returnKeys.size,
+
+lineMenuStats: {
+  availability:
+    Number(
+      lineMenuStats.availability || 0
+    ),
+
+  retail:
+    Number(
+      lineMenuStats.retail || 0
+    ),
+
+  consult:
+    Number(
+      lineMenuStats.consult || 0
+    )
+}
     };
   }
   function ensureStyle() {
