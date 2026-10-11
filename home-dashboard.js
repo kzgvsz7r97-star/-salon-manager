@@ -859,7 +859,66 @@ lineMenuStats: {
           </div>
         </div>
       </div>
+<div
+  class="home-ops-card"
+  style="margin-top:8px"
+>
+  <div class="l">
+    LINE導線（${monthNumber}月）
+  </div>
 
+  <div
+    style="
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:8px;
+      margin-top:9px;
+      text-align:center;
+    "
+  >
+    <div>
+      <div class="s">
+        空き状況
+      </div>
+      <div
+        style="
+          font-size:18px;
+          font-weight:900;
+        "
+      >
+        ${s.lineMenuStats.availability}回
+      </div>
+    </div>
+
+    <div>
+      <div class="s">
+        店販
+      </div>
+      <div
+        style="
+          font-size:18px;
+          font-weight:900;
+        "
+      >
+        ${s.lineMenuStats.retail}回
+      </div>
+    </div>
+
+    <div>
+      <div class="s">
+        メニュー相談
+      </div>
+      <div
+        style="
+          font-size:18px;
+          font-weight:900;
+        "
+      >
+        ${s.lineMenuStats.consult}回
+      </div>
+    </div>
+  </div>
+</div>
       <div class="home-ops-progress">
         <i
           style="
