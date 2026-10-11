@@ -321,6 +321,24 @@ async function makeAvailabilityText() {
   const state =
     rows?.[0]?.data || {};
 
+  const updatedAt =
+    rows?.[0]?.created_at
+      ? new Intl.DateTimeFormat(
+          "ja-JP",
+          {
+            timeZone: "Asia/Tokyo",
+            month: "numeric",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }
+        ).format(
+          new Date(
+            rows[0].created_at
+          )
+        )
+      : "不明";
+
   const allBookings =
     Array.isArray(
       state.bookings
@@ -398,10 +416,15 @@ async function makeAvailabilityText() {
   }
 
   if (!days.length) {
-    return (
-      "直近1週間はご予約枠が埋まっています🙇‍♂️\n\n" +
-      "キャンセル等で空きが出る場合もあるので、ご希望日があればお気軽にご相談ください。"
-    );
+    return [
+      "直近1週間はご予約枠が埋まっています🙇‍♂️",
+      "",
+      `最終更新：${updatedAt}`,
+      "",
+      "キャンセル等で空きが出る場合もあるので、ご希望日があればお気軽にご相談ください。",
+      "",
+      "※送信時点の空き状況です。ご返信までに予約が埋まる場合があります。",
+    ].join("\n");
   }
 
   const lines =
@@ -429,14 +452,16 @@ async function makeAvailabilityText() {
 
   return [
     "現在のご予約空き状況です✂️",
+    `最終更新：${updatedAt}`,
     "",
     ...lines,
     "",
     "※カットカラー約2時間を基準に表示しています。",
+    "※送信時点の空き状況です。ご返信までに予約が埋まる場合があります。",
+    "",
     "ご希望のお時間がありましたら、このままLINEでお送りください🙆‍♂️",
   ].join("\n");
 }
-
 export default async function handler(
   req,
   res
