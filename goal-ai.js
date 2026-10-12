@@ -219,13 +219,14 @@ nextMissing,
       });
     }
 
-    rows.push({
-      type: 'acquisition',
-      title: '新規集客を強める',
-      reason: `目標まで${yen(ctx.gap)}・あと${needed || '—'}人`,
-      button: 'AI文面'
-    });
-
+    if (ctx.nextMissing) {
+  rows.push({
+    type: 'nextbooking',
+    title: '次回予約を増やす',
+    reason: `今月来店・次回予約未取得 ${ctx.nextMissing}人`,
+    button: 'AI文面'
+  });
+}
     return rows.slice(0, 3);
   }
 
