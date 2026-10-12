@@ -57,96 +57,138 @@ function uniqueReturnDueCount(reminders, recoveries) {
 
   (reminders || []).forEach(c => {
     const key = c?.id
-      ? `id:${String(c.id)}`
-      : `name:${normalizeName(c?.name || '')}`;
+ const rawKind =
+  String(req.body?.kind || '');
 
-    if (key !== 'name:') {
-      keys.add(key);
-    }
-  });
+const kind =
+  ['story', 'nextbooking']
+    .includes(rawKind)
+    ? rawKind
+    : 'acquisition';
 
-  (recoveries || []).forEach(b => {
-    const key = b?.customerId
-      ? `id:${String(b.customerId)}`
-      : `name:${normalizeName(b?.customer || '')}`;
+const variationKey =
+  String(req.body?.variationKey || '');
 
-    if (key !== 'name:') {
-      keys.add(key);
-    }
-  });
+const variationMode =
+  Number(req.body?.variationMode || 0);
 
-  return keys.size;
-}
+const previousText =
+  String(req.body?.previousText || '')
+    .trim()
+    .slice(0, 1200);
 
-function upcomingAvailability(days = 7) {
-  const m = monthKey(todayISO);
-  const plan = db.goalPlans?.[m] || {};
-  const rows = [];
-  let capacity = 0;
+const metrics =
+  req.body?.metrics || {};
 
-  for (let i = 0; i < days; i++) {
-    const d = dateOnly(todayISO);
-    d.setDate(d.getDate() + i);
+const availability =
+  Array.isArray(req.body?.availability)
+    ? req.body.availability.slice(0, 7)
+    : [];
 
-    const iso = localISO(d);
+const facts = {
+  month: String(metrics.month || ''),
+  goal: safeNumber(metrics.goal),
+  forecast: safeNumber(metrics.forecast),
+  gap: safeNumber(metrics.gap),
+  unit: safeNumber(metrics.unit),
+  needed:
+    metrics.needed == null
+      ? null
+      : safeNumber(metrics.needed),
+  remainingDays:
+    safeNumber(metrics.remainingDays),
+  perDay:
+    metrics.perDay == null
+      ? null
+      : safeNumber(metrics.perDay),
+  newVisits:
+    safeNumber(metrics.newVisits),
+  nextMissing:
+    safeNumber(metrics.nextMissing),
+  availability
+};
 
-    if (
-      plan.mondayOff !== false &&
-      d.getDay() === 1
-    ) {
-      continue;
-    }
+const variationRules = [
+  '一文目を短い質問から始める。CTAは柔らかくする。',
+  '季節や髪の変化から始める。質問形の書き出しは使わない。',
+  'かなり短めにする。絵文字は0〜1個だけ使う。',
+  '来店後の状態を気遣う文から始め、最後を相談ベースで締める。',
+  '少しカジュアルな口調にする。文の順番を普段と変える。',
+  '落ち着いた文章にする。絵文字を使わず自然なLINE文にする。'
+];
 
-    if (
-      (plan.closedDates || []).includes(iso)
-    ) {
-      continue;
-    }
+const variationRule =
+  variationRules[
+    Math.abs(variationMode) %
+    variationRules.length
+  ];
 
-    const ranges = availabilityForDate(
-      iso,
-      11 * 60,
-      21 * 60,
-      DURATION_MIN
-    );
+const task =
+  kind === 'story'
+    ? `Instagramストーリー用の予約訴求文を1案だけ作る。
+空き枠は入力された日時のみ使用する。
+4〜7行程度。
+今回の変化ルール：${variationRule}`
 
-    if (!ranges.length) continue;
+    : kind === 'nextbooking'
+      ? `今月来店済みで次回予約がまだ決まっていないお客様へ送るLINEまたはDMを1案作る。
+monthに合う季節感や髪の悩みを自然に入れる。
+売り込み感は強くしない。
+4〜7行程度。
+名前や予約日時は勝手に作らない。
+今回の変化ルール：${variationRule}`
 
-    const parts = ranges.map(([s, e]) => {
-      capacity +=
-        Math.floor(
-          (e - s) / DURATION_MIN
-        ) + 1;
+      : `今日使う新規集客文を1案作る。
+レイヤーカット・顔まわり・透明感カラーの予約につながる内容にする。
+5〜8行程度。
+今回の変化ルール：${variationRule}`;
 
-      return s === e
-        ? minToClock(s)
-        : `${minToClock(s)}〜${minToClock(e)}`;
-    });
+const prompt = `
+あなたは原宿の美容師向け文章作成アシスタントです。
 
-    rows.push({
-      date: iso,
-      label: dayLabelJa(iso),
-      slots: parts
-    });
-  }
+ターゲット：18〜25歳女性。
+得意：似合わせレイヤー、顔まわり、小顔見えの設計、透明感カラー。
 
-  return {
-    rows,
-    capacity
-  };
-}
+自然な日本語で、美容師本人が送っているような文章にしてください。
 
-  function goalContext() {
-    const month = monthKey(todayISO);
-    const stats = monthStats(month);
-    const plan = goalPlanStats(month, stats);
-    const goal = Number(getGoal(month) || 0);
-    const followups = typeof followupDueItems === 'function'
-      ? followupDueItems()
-      : [];
-    const reminders = typeof reminderCandidates === 'function'
-      ? reminderCandidates()
-      : [];
+今回のvariationKey：
+${variationKey}
+
+前回生成した文章：
+${previousText || 'なし'}
+
+重要：
+前回文章がある場合、同じ文章を返してはいけません。
+特に一文目は前回と同じ書き出しにしないでください。
+
+前回から最低でも3つ、
+・書き出し
+・文の順番
+・言い回し
+・語尾
+・CTA
+・絵文字
+のどれかを変えてください。
+
+単なるほぼ同じ文章の言い換えではなく、
+読んだ時に別パターンだと分かる程度に変えてください。
+
+ただし奇抜、不自然、営業感が強すぎる文章にはしないでください。
+
+禁止：
+虚偽の空き状況。
+入力にない日時。
+根拠のないNo.1表現。
+お客様向け文章への売上額の記載。
+
+データ：
+${JSON.stringify(facts)}
+
+依頼：
+${task}
+
+完成文だけを返してください。
+`.trim();
     const recoveries = returnRecoveryRows();
     const availability = upcomingAvailability(7);
 
