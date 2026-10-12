@@ -444,6 +444,11 @@ async function requestAi(kind, ctx) {
     );
   }
 
+  const variationKey =
+    `${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 10)}`;
+
   const response =
     await fetch(
       GOAL_AI_API,
@@ -457,6 +462,7 @@ async function requestAi(kind, ctx) {
         },
         body: JSON.stringify({
           kind,
+          variationKey,
           metrics: {
             month:
               ctx.month,
@@ -501,7 +507,6 @@ async function requestAi(kind, ctx) {
     body.text || ''
   ).trim();
 }
-
 window.runGoalPriority =
   async function (type) {
     if (type === 'protect') {
