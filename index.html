@@ -2080,43 +2080,261 @@ function storyAvailabilityText(start,end,durationMin,bizStart,bizEnd,excludeMond
   if(!lines.length)return '空き枠はありません';
   return `ご予約空き状況\n\n${lines.join('\n')}\n\nご予約・ご相談はDMまたは予約リンクからお願いします🤍`;
 }
-<div class="home-ops-actions">
-  <button
-    class="ghost"
-    onclick="
-      openTodayHomeBookings()
-    "
-  >
-    今日の予約
-  </button>
+function openStoryAvailability(){
+  const today=todayISO;
+  const d2=new Date();
+  d2.setDate(d2.getDate()+7);
 
-  <button
-    class="ghost"
-    onclick="
-      openHomeFollowups()
-    "
-  >
-    フォロー
-  </button>
+  modal(`
+    <h3>ストーリー作成</h3>
 
-  <button
-    class="ghost"
-    onclick="
-      openHomeReturnManager()
-    "
-  >
-    再来管理
-  </button>
+    <div class="story-tool">
 
-  <button
-    class="ghost"
-    onclick="
-      openStoryAvailability()
-    "
-  >
-    ストーリー作成
-  </button>
-</div>
+      <label>写真</label>
+      <input
+        id="storyPhoto"
+        type="file"
+        accept="image/*"
+        onchange="previewStoryPhoto(this)"
+      >
+
+      <div
+        id="storyPreview"
+        style="
+          position:relative;
+          width:100%;
+          max-width:360px;
+          aspect-ratio:9/16;
+          margin:12px auto;
+          border-radius:18px;
+          overflow:hidden;
+          background:#eee;
+        "
+      >
+        <img
+          id="storyPreviewImage"
+          style="
+            width:100%;
+            height:100%;
+            object-fit:cover;
+            display:none;
+          "
+        >
+
+        <div
+          id="storyPreviewEmpty"
+          style="
+            position:absolute;
+            inset:0;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            color:#888;
+            font-size:13px;
+          "
+        >
+          写真を選択
+        </div>
+
+        <div
+          id="storyPreviewText"
+          style="
+            position:absolute;
+            left:7%;
+            right:7%;
+            bottom:8%;
+            padding:14px;
+            border-radius:14px;
+            background:rgba(255,255,255,.82);
+            color:#111;
+            font-size:14px;
+            line-height:1.55;
+            white-space:pre-wrap;
+            backdrop-filter:blur(6px);
+          "
+        ></div>
+      </div>
+
+      <div class="story-toolbar">
+        <div>
+          <label>開始日</label>
+          <input
+            id="storyStart"
+            type="date"
+            value="${today}"
+            onchange="refreshStoryAvailability()"
+          >
+        </div>
+
+        <div>
+          <label>終了日</label>
+          <input
+            id="storyEnd"
+            type="date"
+            value="${localISO(d2)}"
+            onchange="refreshStoryAvailability()"
+          >
+        </div>
+
+        <div>
+          <label>施術時間</label>
+          <select
+            id="storyDuration"
+            onchange="refreshStoryAvailability()"
+          >
+            <option value="60">1時間</option>
+            <option value="90">1時間30分</option>
+            <option value="120" selected>2時間</option>
+            <option value="150">2時間30分</option>
+            <option value="180">3時間</option>
+          </select>
+        </div>
+
+        <div>
+          <label>月曜定休</label>
+          <select
+            id="storyMonday"
+            onchange="refreshStoryAvailability()"
+          >
+            <option value="exclude" selected>除外する</option>
+            <option value="include">表示する</option>
+          </select>
+        </div>
+
+        <div>
+          <label>営業開始</label>
+          <input
+            id="storyBizStart"
+            type="time"
+            value="11:00"
+            onchange="refreshStoryAvailability()"
+          >
+        </div>
+
+        <div>
+          <label>営業終了</label>
+          <input
+            id="storyBizEnd"
+            type="time"
+            value="21:00"
+            onchange="refreshStoryAvailability()"
+          >
+        </div>
+      </div>
+
+      <div class="story-chiprow">
+        <button onclick="storyPreset(7)">7日間</button>
+        <button onclick="storyPreset(14)">14日間</button>
+        <button onclick="storyPresetMonth()">今月末まで</button>
+      </div>
+
+      <label>ストーリー用テキスト</label>
+
+      <textarea
+        id="storyOutput"
+        class="story-output"
+        oninput="refreshStoryPreviewText()"
+      ></textarea>
+
+      <div class="actions">
+        <button
+          class="ghost"
+          onclick="closeModal()"
+        >
+          閉じる
+        </button>
+
+        <button
+          class="blue"
+          onclick="copyStoryAvailability()"
+        >
+          コピー
+        </button>
+      </div>
+    </div>
+  `);
+
+  refreshStoryAvailability();
+}
+
+function previewStoryPhoto(input){
+  const file=
+    input?.files?.[0];
+
+  if(!file)return;
+
+  const reader=
+    new FileReader();
+
+  reader.onload=function(e){
+    const img=
+      $('storyPreviewImage');
+
+    const empty=
+      $('storyPreviewEmpty');
+
+    if(!img)return;
+
+    img.src=e.target.result;
+    img.style.display='block';
+
+    if(empty){
+      empty.style.display='none';
+    }
+  };
+
+  reader.readAsDataURL(file);
+}
+
+function refreshStoryPreviewText(){
+  const output=
+    $('storyOutput');
+
+  const preview=
+    $('storyPreviewText');
+
+  if(!output||!preview)return;
+
+  preview.textContent=
+    output.value;
+}
+
+function refreshStoryAvailability(){
+  const a=$('storyStart');
+  const b=$('storyEnd');
+
+  if(!a||!b)return;
+
+  const duration=
+    Number(
+      $('storyDuration').value||120
+    );
+
+  const bizStart=
+    timeToMin(
+      $('storyBizStart').value||'11:00'
+    );
+
+  const bizEnd=
+    timeToMin(
+      $('storyBizEnd').value||'21:00'
+    );
+
+  const excludeMonday=
+    $('storyMonday').value==='exclude';
+
+  $('storyOutput').value=
+    storyAvailabilityText(
+      a.value,
+      b.value,
+      duration,
+      bizStart,
+      bizEnd,
+      excludeMonday
+    );
+
+  refreshStoryPreviewText();
+}
 function storyPreset(days){
   const s=dateOnly($('storyStart').value||todayISO)||new Date();
   const e=new Date(s);e.setDate(e.getDate()+days-1);
