@@ -683,8 +683,250 @@ lineMenuStats: {
     if (!host) return;
 
     const s =
-      quickStats();
+  quickStats();
 
+const qualityIssues = [];
+
+const addQualityIssue =
+  (b, title, detail, priority = 5) => {
+    qualityIssues.push({
+      id: String(b?.id || ''),
+      title,
+      detail,
+      priority
+    });
+  };
+
+const qualityBookings =
+  (db.bookings || []).filter(b =>
+    !b.isModel &&
+    monthKey(b.date) === s.m
+  );
+
+qualityBookings.forEach(b => {
+  const status =
+    bookingStatus(b);
+
+  const active =
+    isActiveBooking(b);
+
+  const price =
+    Number(b.price || 0);
+
+  const detail =
+    `${b.date || '日付なし'} ${b.time || ''} ・ ${b.customer || '名前未登録'}`;
+
+  if (
+    b.paymentComplete &&
+    price <= 0
+  ) {
+    addQualityIssue(
+      b,
+      '決済完了なのに金額0円',
+      detail,
+      1
+    );
+  }
+
+  if (
+    status === 'visited' &&
+    !b.paymentComplete
+  ) {
+    addQualityIssue(
+      b,
+      '来店済み・未決済',
+      detail,
+      1
+    );
+  }
+
+  if (
+    active &&
+    status === 'booked' &&
+    b.date < todayISO &&
+    !b.paymentComplete
+  ) {
+    addQualityIssue(
+      b,
+      '過去予約が未処理',
+      detail,
+      2
+    );
+  }
+
+  if (
+    b.paymentComplete &&
+    !String(b.menu || '').trim()
+  ) {
+    addQualityIssue(
+      b,
+      '決済済み・メニュー未入力',
+      detail,
+      3
+    );
+  }
+
+  if (
+    b.paymentComplete &&
+    !String(b.source || '').trim()
+  ) {
+    addQualityIssue(
+      b,
+      '予約媒体が未入力',
+      detail,
+      4
+    );
+  }
+
+  const hasLater =
+    hasLaterBooking(
+      b.customer,
+      b.date
+    );
+
+  if (
+    active &&
+    b.nextBookingTaken &&
+    !hasLater
+  ) {
+    addQualityIssue(
+      b,
+      '次回予約取得済みなのに予約データなし',
+      detail,
+      2
+    );
+  } else if (
+    b.nextBookingId &&
+    !(db.bookings || []).some(
+      x =>
+        String(x.id) ===
+        String(b.nextBookingId)
+    )
+  ) {
+    addQualityIssue(
+      b,
+      '次回予約リンク切れ',
+      detail,
+      3
+    );
+  }
+});
+
+const duplicateMap =
+  new Map();
+
+qualityBookings
+  .filter(isActiveBooking)
+  .forEach(b => {
+    const name =
+      normalizeName(
+        b.customer || ''
+      );
+
+    if (
+      !name ||
+      !b.date ||
+      !b.time
+    ) {
+      return;
+    }
+
+    const key =
+      `${name}|${b.date}|${b.time}`;
+
+    const rows =
+      duplicateMap.get(key) || [];
+
+    rows.push(b);
+    duplicateMap.set(
+      key,
+      rows
+    );
+  });
+
+duplicateMap.forEach(rows => {
+  if (rows.length < 2) return;
+
+  const b = rows[0];
+
+  addQualityIssue(
+    b,
+    '重複予約の可能性',
+    `${b.date} ${b.time} ・ ${b.customer} が${rows.length}件`,
+    1
+  );
+});
+
+qualityIssues.sort(
+  (a, b) =>
+    a.priority - b.priority
+);
+
+window.openHomeDataQuality =
+  function () {
+    const rows =
+      qualityIssues
+        .map(x => `
+          <div class="item">
+            <div class="t">
+              ${esc(x.title)}
+            </div>
+
+            <div class="s">
+              ${esc(x.detail)}
+            </div>
+
+            ${
+              x.id
+                ? `
+                  <button
+                    class="ghost"
+                    style="margin-top:7px"
+                    onclick="
+                      closeModal();
+                      editBooking('${x.id}')
+                    "
+                  >
+                    予約を開く
+                  </button>
+                `
+                : ''
+            }
+          </div>
+        `)
+        .join('');
+
+    modal(`
+      <h3>
+        要確認 ${qualityIssues.length}件
+      </h3>
+
+      <div
+        class="small"
+        style="margin-bottom:10px"
+      >
+        ${Number(s.m.slice(5))}月の予約データを自動チェックしています。
+      </div>
+
+      <div class="list">
+        ${
+          rows ||
+          empty(
+            '今月は問題ありません'
+          )
+        }
+      </div>
+
+      <div class="actions">
+        <button
+          class="ghost"
+          onclick="closeModal()"
+        >
+          閉じる
+        </button>
+      </div>
+    `);
+  };
     const pct =
       s.goal
         ? Math.min(
