@@ -1417,6 +1417,9 @@ function renderReservationWeek(){
       <div class="wk-name">${esc(b.customer||'未登録')}${b.isModel?'・モ':''}</div>
       <div class="wk-meta">${esc(b.time)}${b.end?'〜'+esc(b.end):''}</div>
       <div class="wk-meta">${esc(b.menu||'')}</div>
+      ${b.paymentComplete
+  ? '<div class="wk-meta" style="font-weight:900">✓ 決済完了</div>'
+  : ''}
     </div>`;
   });
   host.innerHTML=html;
