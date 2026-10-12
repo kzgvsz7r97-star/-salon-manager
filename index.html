@@ -1028,8 +1028,14 @@ async function cloudBackup(key=getCloudBackupKey()){
   try{
     const latest=await latestCloudSnapshot(key);
     const remote=latest?normalizedCloudData(latest.data||{}):normalizedCloudData({});
-    const base=readSyncBase();
-    const merged=mergeDbSafe(db,remote,base);
+   const base=readSyncBase();
+
+const merged=
+  mergeDbSafe(
+    db,
+    remote,
+    base || remote
+  );
 
     // ローカルだけで全体上書きせず、必ずクラウド最新と統合してから保存
     await postCloudSnapshot(key,merged);
