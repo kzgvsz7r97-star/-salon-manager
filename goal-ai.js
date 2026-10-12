@@ -157,8 +157,8 @@ const nextMissing = new Set(
       recoveries,
       returnDue: uniqueReturnDueCount(reminders, recoveries),
       availability,
-      newVisits
-      nextMissing,
+  newVisits,
+nextMissing,
     };
   }
 
