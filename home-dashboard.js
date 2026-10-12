@@ -682,8 +682,10 @@ lineMenuStats: {
 
     if (!host) return;
 
-    const s =
+   const s =
   quickStats();
+
+window.__homeGoalStats = s;
 
 const qualityIssues = [];
 
