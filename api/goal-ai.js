@@ -57,20 +57,33 @@ export default async function handler(req, res) {
     return json(res, 503, { error: 'OPENAI_API_KEY未設定' });
   }
 
- const rawKind = String(req.body?.kind || '');
+ const rawKind =
+  String(req.body?.kind || '');
 
-const kind = ['story', 'nextbooking'].includes(rawKind)
-  ? rawKind
-  : 'acquisition';
+const kind =
+  ['story', 'nextbooking']
+    .includes(rawKind)
+    ? rawKind
+    : 'acquisition';
 
 const variationKey =
   String(req.body?.variationKey || '');
 
-const metrics = req.body?.metrics || {};
+const variationMode =
+  Number(req.body?.variationMode || 0);
 
-const availability = Array.isArray(req.body?.availability)
-  ? req.body.availability.slice(0, 7)
-  : [];
+const previousText =
+  String(req.body?.previousText || '')
+    .trim()
+    .slice(0, 1200);
+
+const metrics =
+  req.body?.metrics || {};
+
+const availability =
+  Array.isArray(req.body?.availability)
+    ? req.body.availability.slice(0, 7)
+    : [];
 
 const facts = {
   month: String(metrics.month || ''),
@@ -78,76 +91,104 @@ const facts = {
   forecast: safeNumber(metrics.forecast),
   gap: safeNumber(metrics.gap),
   unit: safeNumber(metrics.unit),
-  needed: metrics.needed == null
-    ? null
-    : safeNumber(metrics.needed),
-  remainingDays: safeNumber(metrics.remainingDays),
-  perDay: metrics.perDay == null
-    ? null
-    : safeNumber(metrics.perDay),
-  newVisits: safeNumber(metrics.newVisits),
-  nextMissing: safeNumber(metrics.nextMissing),
+  needed:
+    metrics.needed == null
+      ? null
+      : safeNumber(metrics.needed),
+  remainingDays:
+    safeNumber(metrics.remainingDays),
+  perDay:
+    metrics.perDay == null
+      ? null
+      : safeNumber(metrics.perDay),
+  newVisits:
+    safeNumber(metrics.newVisits),
+  nextMissing:
+    safeNumber(metrics.nextMissing),
   availability
 };
+
+const variationRules = [
+  '一文目を短い質問から始める。CTAは柔らかくする。',
+  '季節や髪の変化から始める。質問形の書き出しは使わない。',
+  'かなり短めにする。絵文字は0〜1個だけ使う。',
+  '来店後の状態を気遣う文から始め、最後を相談ベースで締める。',
+  '少しカジュアルな口調にする。文の順番を普段と変える。',
+  '落ち着いた文章にする。絵文字を使わず自然なLINE文にする。'
+];
+
+const variationRule =
+  variationRules[
+    Math.abs(variationMode) %
+    variationRules.length
+  ];
 
 const task =
   kind === 'story'
     ? `Instagramストーリー用の予約訴求文を1案だけ作る。
-空き枠は入力された日時をそのまま使い、存在しない枠を作らない。
+空き枠は入力された日時のみ使用する。
 4〜7行程度。
-生成するたびに、書き出し・構成・語尾・CTA・絵文字の使い方を変える。`
+今回の変化ルール：${variationRule}`
 
     : kind === 'nextbooking'
-      ? `今月来店済みで次回予約がまだ決まっていないお客様へ送るLINEまたはDM文面を1案だけ作る。
-入力されたmonthに合った季節感や髪の悩みを自然に1文入れる。
-売り込み感は出しすぎず、来店後の髪の状態を気遣ってから次回来店を促す。
-4〜7行程度。名前や予約日時は勝手に作らない。
-「予約してください」と強く迫らない。
-生成するたびに、書き出し・文章構成・季節表現・語尾・絵文字を変える。`
+      ? `今月来店済みで次回予約がまだ決まっていないお客様へ送るLINEまたはDMを1案作る。
+monthに合う季節感や髪の悩みを自然に入れる。
+売り込み感は強くしない。
+4〜7行程度。
+名前や予約日時は勝手に作らない。
+今回の変化ルール：${variationRule}`
 
-      : `今日使う新規集客文を1案だけ作る。
-目標までの不足人数と残り営業日を踏まえ、レイヤーカット・顔まわり・透明感カラーの予約につながる短い訴求にする。
+      : `今日使う新規集客文を1案作る。
+レイヤーカット・顔まわり・透明感カラーの予約につながる内容にする。
 5〜8行程度。
-生成するたびに、フック・構成・言い回し・CTA・絵文字を変える。`;
+今回の変化ルール：${variationRule}`;
 
 const prompt = `
-あなたは原宿の美容師向け集客アシスタントです。
-優先順位そのものはアプリ側で実データから計算済みです。文章だけを作ってください。
+あなたは原宿の美容師向け文章作成アシスタントです。
 
 ターゲット：18〜25歳女性。
 得意：似合わせレイヤー、顔まわり、小顔見えの設計、透明感カラー。
 
-トーン：
-短い、自然、少し可愛い。
-煽りすぎない。
-説明しすぎない。
-美容師本人が送っているような自然な日本語にする。
+自然な日本語で、美容師本人が送っているような文章にしてください。
 
-重要：
-variationKeyは毎回変わる生成識別子です。
-variationKeyが異なる場合は、前回と同じテンプレートを繰り返さず、
-書き出し・文の順番・語尾・表現・CTA・絵文字の組み合わせをできるだけ変えてください。
-同じ意味でも言い換えを使い、毎回少し違う文章にしてください。
-ただし不自然な変化や奇抜な表現にはしないでください。
-
-禁止：
-予約が埋まっているように見せる虚偽。
-入力にない空き枠の捏造。
-No.1など根拠のない表現。
-赤裸々な売上額をお客様向け文章に書くこと。
-
-variationKey：
+今回のvariationKey：
 ${variationKey}
 
-今日の目標データ：
+前回生成した文章：
+${previousText || 'なし'}
+
+重要：
+前回文章がある場合、同じ文章を返してはいけません。
+特に一文目は前回と同じ書き出しにしないでください。
+
+前回から最低でも3つ、
+・書き出し
+・文の順番
+・言い回し
+・語尾
+・CTA
+・絵文字
+のどれかを変えてください。
+
+単なるほぼ同じ文章の言い換えではなく、
+読んだ時に別パターンだと分かる程度に変えてください。
+
+ただし奇抜、不自然、営業感が強すぎる文章にはしないでください。
+
+禁止：
+虚偽の空き状況。
+入力にない日時。
+根拠のないNo.1表現。
+お客様向け文章への売上額の記載。
+
+データ：
 ${JSON.stringify(facts)}
 
 依頼：
 ${task}
 
-完成文だけを返してください。前置き・解説・見出しは不要です。
+完成文だけを返してください。
 `.trim();
-
   try {
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
