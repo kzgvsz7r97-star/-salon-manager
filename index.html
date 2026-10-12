@@ -1284,7 +1284,7 @@ function setReservationView(v){
   $('viewListBtn').classList.toggle('active',v==='list');
   $('viewCalBtn').classList.toggle('active',v==='calendar');
   $('viewWeekBtn').classList.toggle('active',v==='week');
-  $('reservationListView').classList.toggle('hidden',v!=='list');
+$（'reservationListView'）.classList.remove('hidden');
   $('reservationCalendarView').classList.toggle('hidden',v!=='calendar');
   $('reservationWeekView').classList.toggle('hidden',v!=='week');
   if(v==='week'){
