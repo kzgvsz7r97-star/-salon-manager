@@ -1219,7 +1219,7 @@ ${season}
 
 当日よろしくお願いします！`;
 }
-
+function followupLabel(type){return type==='aftercare'?'アフター連絡':type==='week'?'1週間前連絡':'2日前連絡'}
 function openFollowupMessage(id,type){
   const b=db.bookings.find(x=>x.id===id);if(!b)return;
   const c=customerForBooking(b),text=followupMessageFor(b,type);
