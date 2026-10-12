@@ -1074,61 +1074,43 @@ window.openHomeDataQuality =
           <div class="s">
             当日・1週前・2日前
           </div>
-        </div>
+       <div class="home-ops-actions">
+  <button
+    class="ghost"
+    onclick="
+      openTodayHomeBookings()
+    "
+  >
+    今日の予約
+  </button>
 
-       <div
-  class="
-    home-ops-card
-    ${
-      s.returnDue
-        ? 'attention'
-        : ''
-    }
-  "
-  onclick="
-    openHomeReturnManager()
-  "
->
-  <div class="l">
-    再来要対応
-  </div>
+  <button
+    class="ghost"
+    onclick="
+      openHomeFollowups()
+    "
+  >
+    フォロー
+  </button>
 
-  <div class="v">
-    ${s.returnDue}件
-  </div>
+  <button
+    class="ghost"
+    onclick="
+      openHomeReturnManager()
+    "
+  >
+    再来管理
+  </button>
 
-  <div class="s">
-    45日 ${s.reminders}
-    ・
-    キャンセル後 ${s.recovery}
-  </div>
+  <button
+    class="ghost"
+    onclick="
+      openStoryAvailability()
+    "
+  >
+    ストーリー作成
+  </button>
 </div>
-
-<div
-  class="
-    home-ops-card
-    ${
-      qualityIssues.length
-        ? 'attention'
-        : ''
-    }
-  "
-  style="grid-column:1 / -1;"
-  onclick="
-    openHomeDataQuality()
-  "
->
-  <div class="l">
-    要確認
-  </div>
-
-  <div class="v">
-    ${qualityIssues.length}件
-  </div>
-
-  <div class="s">
-    金額・決済・重複
-  </div>
 </div>
 </div>
 <div
