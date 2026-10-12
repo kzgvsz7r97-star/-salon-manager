@@ -419,7 +419,12 @@ ${slots || '空き枠は予約ページをご確認ください'}
     }
 
     const ctx = goalContext();
-    const title = type === 'story' ? '空き枠ストーリー' : '新規集客文面';
+    const title =
+  type === 'story'
+    ? '空き枠ストーリー'
+    : type === 'nextbooking'
+      ? '次回予約LINE'
+      : '新規集客文面';
 
     modal(`
       <h3>${title}</h3>
