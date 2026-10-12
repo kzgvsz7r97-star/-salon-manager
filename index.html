@@ -2082,20 +2082,168 @@ function storyAvailabilityText(start,end,durationMin,bizStart,bizEnd,excludeMond
 }
 function openStoryAvailability(){
   const today=todayISO;
+
   const d2=new Date();
-  d2.setDate(d2.getDate()+7);
+  d2.setDate(
+    d2.getDate()+6
+  );
+
+  const settings=
+    db.storySettings || {};
+
+  const savedLineUrl=
+    String(
+      settings.lineUrl || ''
+    );
+
+  window.saveStoryLineUrl=
+    function(){
+      const input=
+        $('storyLineUrl');
+
+      const raw=
+        String(
+          input?.value || ''
+        ).trim();
+
+      if(
+        raw &&
+        !safeHTTPS(raw)
+      ){
+        alert(
+          'https://から始まるLINEリンクを入力してください'
+        );
+        return;
+      }
+
+      db.storySettings={
+        ...(db.storySettings || {}),
+        lineUrl:raw
+      };
+
+      save();
+
+      alert(
+        'LINEリンクを保存しました'
+      );
+    };
+
+  window.copyStoryLineUrl=
+    async function(){
+      const input=
+        $('storyLineUrl');
+
+      const raw=
+        String(
+          input?.value ||
+          db.storySettings?.lineUrl ||
+          ''
+        ).trim();
+
+      if(!raw){
+        alert(
+          'LINEリンクを登録してください'
+        );
+        return;
+      }
+
+      if(!safeHTTPS(raw)){
+        alert(
+          'LINEリンクを確認してください'
+        );
+        return;
+      }
+
+      db.storySettings={
+        ...(db.storySettings || {}),
+        lineUrl:raw
+      };
+
+      save();
+
+      try{
+        await navigator.clipboard.writeText(
+          raw
+        );
+
+        alert(
+          'LINEリンクをコピーしました'
+        );
+      }catch(_){
+        const tmp=
+          document.createElement(
+            'textarea'
+          );
+
+        tmp.value=raw;
+        document.body.appendChild(tmp);
+        tmp.select();
+        document.execCommand('copy');
+        tmp.remove();
+
+        alert(
+          'LINEリンクをコピーしました'
+        );
+      }
+    };
 
   modal(`
     <h3>ストーリー作成</h3>
 
     <div class="story-tool">
 
+      <label>
+        予約リンク（LINE）
+      </label>
+
+      <div
+        style="
+          display:grid;
+          grid-template-columns:1fr auto;
+          gap:8px;
+          align-items:end;
+          margin-bottom:8px;
+        "
+      >
+        <input
+          id="storyLineUrl"
+          type="url"
+          placeholder="https://lin.ee/..."
+          value="${esc(savedLineUrl)}"
+        >
+
+        <button
+          class="ghost"
+          onclick="
+            saveStoryLineUrl()
+          "
+        >
+          保存
+        </button>
+      </div>
+
+      <button
+        class="ghost"
+        style="
+          width:100%;
+          margin-bottom:12px;
+        "
+        onclick="
+          copyStoryLineUrl()
+        "
+      >
+        LINEリンクをコピー
+      </button>
+
       <label>写真</label>
+
       <input
         id="storyPhoto"
         type="file"
         accept="image/*"
-        onchange="previewStoryPhoto(this)"
+        onchange="
+          previewStoryPhoto(this)
+        "
       >
 
       <div
@@ -2145,98 +2293,166 @@ function openStoryAvailability(){
             bottom:8%;
             padding:14px;
             border-radius:14px;
-            background:rgba(255,255,255,.82);
+            background:
+              rgba(255,255,255,.82);
             color:#111;
             font-size:14px;
             line-height:1.55;
             white-space:pre-wrap;
-            backdrop-filter:blur(6px);
+            backdrop-filter:
+              blur(6px);
           "
         ></div>
       </div>
 
       <div class="story-toolbar">
+
         <div>
           <label>開始日</label>
+
           <input
             id="storyStart"
             type="date"
             value="${today}"
-            onchange="refreshStoryAvailability()"
+            onchange="
+              refreshStoryAvailability()
+            "
           >
         </div>
 
         <div>
           <label>終了日</label>
+
           <input
             id="storyEnd"
             type="date"
             value="${localISO(d2)}"
-            onchange="refreshStoryAvailability()"
+            onchange="
+              refreshStoryAvailability()
+            "
           >
         </div>
 
         <div>
           <label>施術時間</label>
+
           <select
             id="storyDuration"
-            onchange="refreshStoryAvailability()"
+            onchange="
+              refreshStoryAvailability()
+            "
           >
-            <option value="60">1時間</option>
-            <option value="90">1時間30分</option>
-            <option value="120" selected>2時間</option>
-            <option value="150">2時間30分</option>
-            <option value="180">3時間</option>
+            <option value="60">
+              1時間
+            </option>
+
+            <option value="90">
+              1時間30分
+            </option>
+
+            <option
+              value="120"
+              selected
+            >
+              2時間
+            </option>
+
+            <option value="150">
+              2時間30分
+            </option>
+
+            <option value="180">
+              3時間
+            </option>
           </select>
         </div>
 
         <div>
           <label>月曜定休</label>
+
           <select
             id="storyMonday"
-            onchange="refreshStoryAvailability()"
+            onchange="
+              refreshStoryAvailability()
+            "
           >
-            <option value="exclude" selected>除外する</option>
-            <option value="include">表示する</option>
+            <option
+              value="exclude"
+              selected
+            >
+              除外する
+            </option>
+
+            <option value="include">
+              表示する
+            </option>
           </select>
         </div>
 
         <div>
           <label>営業開始</label>
+
           <input
             id="storyBizStart"
             type="time"
             value="11:00"
-            onchange="refreshStoryAvailability()"
+            onchange="
+              refreshStoryAvailability()
+            "
           >
         </div>
 
         <div>
           <label>営業終了</label>
+
           <input
             id="storyBizEnd"
             type="time"
             value="21:00"
-            onchange="refreshStoryAvailability()"
+            onchange="
+              refreshStoryAvailability()
+            "
           >
         </div>
+
       </div>
 
       <div class="story-chiprow">
-        <button onclick="storyPreset(7)">7日間</button>
-        <button onclick="storyPreset(14)">14日間</button>
-        <button onclick="storyPresetMonth()">今月末まで</button>
+        <button
+          onclick="storyPreset(7)"
+        >
+          7日間
+        </button>
+
+        <button
+          onclick="storyPreset(14)"
+        >
+          14日間
+        </button>
+
+        <button
+          onclick="
+            storyPresetMonth()
+          "
+        >
+          今月末まで
+        </button>
       </div>
 
-      <label>ストーリー用テキスト</label>
+      <label>
+        ストーリー用テキスト
+      </label>
 
       <textarea
         id="storyOutput"
         class="story-output"
-        oninput="refreshStoryPreviewText()"
+        oninput="
+          refreshStoryPreviewText()
+        "
       ></textarea>
 
       <div class="actions">
+
         <button
           class="ghost"
           onclick="closeModal()"
@@ -2246,10 +2462,13 @@ function openStoryAvailability(){
 
         <button
           class="blue"
-          onclick="copyStoryAvailability()"
+          onclick="
+            copyStoryAvailability()
+          "
         >
           コピー
         </button>
+
       </div>
     </div>
   `);
