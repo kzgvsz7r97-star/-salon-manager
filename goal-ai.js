@@ -379,69 +379,132 @@ function availabilityPayload(ctx) {
 }
 
 function aiFallback(kind, ctx) {
+  window.__goalAiFallbackSeq =
+    (Number(window.__goalAiFallbackSeq || 0) + 1) % 6;
+
+  const v = window.__goalAiFallbackSeq;
+
   if (kind === 'nextbooking') {
     const month =
-      Number(
-        String(ctx.month || '')
-          .slice(5, 7)
-      );
+      Number(String(ctx.month || '').slice(5, 7));
 
-    const season = {
-      1:'乾燥で毛先がまとまりづらい時期なので、気になるところあれば一緒に整えられます◎',
-      2:'乾燥やパサつきが出やすい時期なので、扱いやすく整えられます◎',
-      3:'春先は広がりや扱いづらさが出やすいので、気になるところあればご相談ください◎',
-      4:'湿気が増える前に、顔まわりやレイヤーを整えておくのがおすすめです◎',
-      5:'梅雨前で広がりやすくなる時期なので、扱いやすく整えられます◎',
-      6:'湿気でうねりや広がりが出やすい時期なので、まとまりやすく整えられます◎',
-      7:'紫外線や色落ちも出やすいので、カットやカラーのメンテナンスがおすすめです◎',
-      8:'紫外線や冷房で乾燥しやすいので、毛先のメンテナンスもおすすめです◎',
-      9:'夏のダメージや色落ちが出やすい頃なので、一度整えるのがおすすめです◎',
-      10:'少し乾燥しやすくなってきたので、毛先や顔まわりのメンテナンスがおすすめです◎',
-      11:'乾燥や静電気が出やすい時期なので、まとまりやすく整えておくのがおすすめです◎',
-      12:'年末前に一度髪を綺麗に整えておくのがおすすめです◎'
-    }[month] || '';
+    const seasons = {
+      1:'乾燥で毛先がまとまりづらくなりやすい時期です◎',
+      2:'乾燥やパサつきが出やすい時期です◎',
+      3:'春先は広がりや扱いづらさが出やすい時期です◎',
+      4:'少しずつ湿気が増えてくる時期です◎',
+      5:'梅雨前で広がりが気になりやすい時期です◎',
+      6:'湿気でうねりや広がりが出やすい時期です◎',
+      7:'紫外線や色落ちが気になりやすい時期です◎',
+      8:'紫外線や冷房で乾燥しやすい時期です◎',
+      9:'夏のダメージや色落ちが出やすい頃です◎',
+      10:'少し乾燥しやすくなってくる時期です◎',
+      11:'乾燥や静電気が気になりやすい時期です◎',
+      12:'年末前に髪を整える方が増える時期です◎'
+    };
 
-    return `その後、髪の状態いかがですか？
+    const season = seasons[month] || '';
+
+    const variants = [
+      `その後、髪の状態いかがですか？
 
 ${season}
+毛先や顔まわりで気になるところあれば、また整えられます◎
 
-次回まだ決まってなければ、
-タイミング合う時にいつでもご相談ください☺️`;
+次回まだ決まってなければ、タイミング合う時にいつでもご相談ください☺️`,
+
+      `前回から髪の扱いやすさどうですか？
+
+${season}
+気になってきたところがあれば、そろそろメンテナンスしてもいい頃です◎
+
+また都合合う時に気軽に連絡してください！`,
+
+      `最近、髪で気になるところ出てきてないですか？☺️
+
+${season}
+顔まわりや毛先だけでも整えると扱いやすくなります◎
+
+次回まだでしたら、いつでも相談してください！`,
+
+      `${season}
+
+前回のスタイル、その後どうですか？
+扱いづらくなってきたところがあれば一度見させてください◎
+
+タイミング良い時にまたお待ちしてます！`,
+
+      `そろそろ髪の状態どうかなと思って連絡しました！
+
+${season}
+気になるところが出てきてたら、次回また相談しながら決めましょう◎
+
+予定合う時にいつでもどうぞ☺️`,
+
+      `前回から少し経ちましたが、髪の調子いかがですか？
+
+${season}
+無理に周期合わせなくて大丈夫なので、気になってきたタイミングでまたご相談ください◎`
+    ];
+
+    return variants[v % variants.length];
   }
 
   if (kind === 'story') {
     const slots =
       ctx.availability.rows
         .slice(0, 4)
-        .map(
-          x =>
-            `${x.label}  ${x.slots.join(' / ')}`
-        )
+        .map(x => `${x.label}  ${x.slots.join(' / ')}`)
         .join('\n');
 
-    return `ご予約空きあります◎
+    const variants = [
+      `今週まだご案内できます◎
 
 ${slots || '空き枠は予約ページをご確認ください'}
 
-レイヤーカット・顔まわり・透明感カラーご相談ください✂️
-ご予約はプロフィールのリンクからお願いします。`;
+レイヤー・顔まわり・透明感カラーご相談ください✂️
+ご予約はプロフィールから！`,
+
+      `髪変えたい方、空きあります🫶
+
+${slots || '空き枠は予約ページをご確認ください'}
+
+顔まわりやレイヤーも相談しながら決められます◎
+DM・予約リンクからどうぞ！`,
+
+      `今週の空き枠です✂️
+
+${slots || '空き枠は予約ページをご確認ください'}
+
+ワンカールで扱いやすいレイヤーおすすめです◎
+ご予約お待ちしてます！`
+    ];
+
+    return variants[v % variants.length];
   }
 
-  return `今月まだご案内できます◎
+  const variants = [
+    `今月まだご案内できます◎
+レイヤーや顔まわりを変えたい方、気軽にご相談ください✂️
+ご予約はプロフィールのリンクからお願いします。`,
 
-レイヤーカット・顔まわり・透明感カラーで迷っている方は気軽にご相談ください✂️
+    `なんとなく髪型変えたい方へ◎
+顔まわり・レイヤー・透明感カラーまで相談しながら決められます！
+ご予約・相談お待ちしてます。`,
 
-ご予約はプロフィールのリンクからお願いします。`;
+    `ワンカールでも扱いやすいレイヤーおすすめです✂️
+雰囲気を変えたい方は気軽にご相談ください◎
+ご予約はプロフィールから！`
+  ];
+
+  return variants[v % variants.length];
 }
 
-async function requestAi(kind, ctx) {
-  const key =
-    getCloudBackupKey();
+async function requestAi(kind, ctx, previousText = '') {
+  const key = getCloudBackupKey();
 
   if (!key) {
-    throw new Error(
-      '同期キーが未設定です'
-    );
+    throw new Error('同期キーが未設定です');
   }
 
   const variationKey =
@@ -449,41 +512,36 @@ async function requestAi(kind, ctx) {
       .toString(36)
       .slice(2, 10)}`;
 
+  const variationMode =
+    Math.floor(Math.random() * 6);
+
   const response =
     await fetch(
       GOAL_AI_API,
       {
         method: 'POST',
         headers: {
-          'Content-Type':
-            'application/json',
-          'X-Backup-Key':
-            key
+          'Content-Type': 'application/json',
+          'X-Backup-Key': key
         },
         body: JSON.stringify({
           kind,
           variationKey,
+          variationMode,
+          previousText:
+            String(previousText || '')
+              .slice(0, 1200),
           metrics: {
-            month:
-              ctx.month,
-            goal:
-              ctx.goal,
-            forecast:
-              ctx.forecast,
-            gap:
-              ctx.gap,
-            unit:
-              ctx.unit,
-            needed:
-              ctx.needed,
-            remainingDays:
-              ctx.remainingDays,
-            perDay:
-              ctx.perDay,
-            newVisits:
-              ctx.newVisits,
-            nextMissing:
-              ctx.nextMissing
+            month: ctx.month,
+            goal: ctx.goal,
+            forecast: ctx.forecast,
+            gap: ctx.gap,
+            unit: ctx.unit,
+            needed: ctx.needed,
+            remainingDays: ctx.remainingDays,
+            perDay: ctx.perDay,
+            newVisits: ctx.newVisits,
+            nextMissing: ctx.nextMissing
           },
           availability:
             availabilityPayload(ctx)
@@ -503,9 +561,7 @@ async function requestAi(kind, ctx) {
     );
   }
 
-  return String(
-    body.text || ''
-  ).trim();
+  return String(body.text || '').trim();
 }
 window.runGoalPriority =
   async function (type) {
