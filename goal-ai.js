@@ -137,10 +137,30 @@ function upcomingAvailability(days = 7) {
 }
 
 function goalContext() {
-  const month = monthKey(todayISO);
-  const stats = monthStats(month);
-  const plan = goalPlanStats(month, stats);
-  const goal = Number(getGoal(month) || 0);
+  const shared =
+    window.__homeGoalStats || null;
+
+  const month =
+    shared?.m ||
+    monthKey(todayISO);
+
+  const stats =
+    monthStats(month);
+
+  const plan =
+    goalPlanStats(
+      month,
+      stats
+    );
+
+  const sameMonth =
+    shared &&
+    shared.m === month;
+
+  const goal =
+    sameMonth
+      ? Number(shared.goal || 0)
+      : Number(getGoal(month) || 0);
 
   const followups =
     typeof followupDueItems === 'function'
@@ -176,7 +196,9 @@ function goalContext() {
           !nextBookingTakenForBooking(b)
         )
         .map(b =>
-          normalizeName(b.customer || '')
+          normalizeName(
+            b.customer || ''
+          )
         )
         .filter(Boolean)
     ).size;
@@ -184,21 +206,44 @@ function goalContext() {
   return {
     month,
     goal,
-    forecast: Number(stats.forecast || 0),
-    sales: Number(stats.sales || 0),
-    gap: Number(plan.gap || 0),
-    unit: Number(plan.unit || 0),
-    needed: plan.count,
-    remainingDays: Number(plan.days || 0),
-    perDay: plan.perDay,
+
+    forecast:
+      sameMonth
+        ? Number(shared.forecast || 0)
+        : Number(stats.forecast || 0),
+
+    sales:
+      Number(stats.sales || 0),
+
+    gap:
+      sameMonth
+        ? Number(shared.gap || 0)
+        : Number(plan.gap || 0),
+
+    unit:
+      Number(plan.unit || 0),
+
+    needed:
+      sameMonth
+        ? shared.need
+        : plan.count,
+
+    remainingDays:
+      Number(plan.days || 0),
+
+    perDay:
+      plan.perDay,
+
     followups,
     reminders,
     recoveries,
+
     returnDue:
       uniqueReturnDueCount(
         reminders,
         recoveries
       ),
+
     availability,
     newVisits,
     nextMissing
