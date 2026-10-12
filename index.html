@@ -1220,27 +1220,6 @@ ${season}
 当日よろしくお願いします！`;
 }
 
-その後、髪の状態どうですか？
-気になるところや扱いづらいところあれば、いつでも連絡ください！${next?`
-
-次回は${jpShortDate(next.date)} ${next.time}〜でお待ちしてます！`:`\n\nまた気になってきた頃にいつでもご相談ください！`}`;
-  }
-  if(type==='week'){
-    return `${name}さん、こんにちは！
-
-次回のご予約が${jpShortDate(b.date)} ${b.time}〜になってます！
-変更などあれば早めにご連絡ください🙇‍♂️
-
-当日よろしくお願いします！`;
-  }
-  return `${name}さん、こんにちは！
-
-${jpShortDate(b.date)} ${b.time}〜ご予約いただいてます！
-変更などなければそのままお待ちしてます🙇‍♂️
-
-当日よろしくお願いします！`;
-}
-function followupLabel(type){return type==='aftercare'?'アフター連絡':type==='week'?'1週間前連絡':'2日前連絡'}
 function openFollowupMessage(id,type){
   const b=db.bookings.find(x=>x.id===id);if(!b)return;
   const c=customerForBooking(b),text=followupMessageFor(b,type);
