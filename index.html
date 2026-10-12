@@ -2091,15 +2091,15 @@ function openStoryAvailability(){
   const settings=
     db.storySettings || {};
 
-  const savedLineUrl=
+  const savedLimeUrl=
     String(
-      settings.lineUrl || ''
+      settings.limeUrl || ''
     );
 
-  window.saveStoryLineUrl=
+  window.saveStoryLimeUrl=
     function(){
       const input=
-        $('storyLineUrl');
+        $('storyLimeUrl');
 
       const raw=
         String(
@@ -2111,52 +2111,52 @@ function openStoryAvailability(){
         !safeHTTPS(raw)
       ){
         alert(
-          'https://から始まるLINEリンクを入力してください'
+          'https://から始まるLIMEリンクを入力してください'
         );
         return;
       }
 
       db.storySettings={
         ...(db.storySettings || {}),
-        lineUrl:raw
+        limeUrl:raw
       };
 
       save();
 
       alert(
-        'LINEリンクを保存しました'
+        'LIMEリンクを保存しました'
       );
     };
 
-  window.copyStoryLineUrl=
+  window.copyStoryLimeUrl=
     async function(){
       const input=
-        $('storyLineUrl');
+        $('storyLimeUrl');
 
       const raw=
         String(
           input?.value ||
-          db.storySettings?.lineUrl ||
+          db.storySettings?.limeUrl ||
           ''
         ).trim();
 
       if(!raw){
         alert(
-          'LINEリンクを登録してください'
+          'LIMEリンクを登録してください'
         );
         return;
       }
 
       if(!safeHTTPS(raw)){
         alert(
-          'LINEリンクを確認してください'
+          'LIMEリンクを確認してください'
         );
         return;
       }
 
       db.storySettings={
         ...(db.storySettings || {}),
-        lineUrl:raw
+        limeUrl:raw
       };
 
       save();
@@ -2167,7 +2167,7 @@ function openStoryAvailability(){
         );
 
         alert(
-          'LINEリンクをコピーしました'
+          'LIMEリンクをコピーしました'
         );
       }catch(_){
         const tmp=
@@ -2182,7 +2182,7 @@ function openStoryAvailability(){
         tmp.remove();
 
         alert(
-          'LINEリンクをコピーしました'
+          'LIMEリンクをコピーしました'
         );
       }
     };
@@ -2193,7 +2193,7 @@ function openStoryAvailability(){
     <div class="story-tool">
 
       <label>
-        予約リンク（LINE）
+        予約リンク（LIME）
       </label>
 
       <div
@@ -2206,16 +2206,16 @@ function openStoryAvailability(){
         "
       >
         <input
-          id="storyLineUrl"
+          id="storyLimeUrl"
           type="url"
-          placeholder="https://lin.ee/..."
-          value="${esc(savedLineUrl)}"
+          placeholder="https://..."
+          value="${esc(savedLimeUrl)}"
         >
 
         <button
           class="ghost"
           onclick="
-            saveStoryLineUrl()
+            saveStoryLimeUrl()
           "
         >
           保存
@@ -2229,10 +2229,10 @@ function openStoryAvailability(){
           margin-bottom:12px;
         "
         onclick="
-          copyStoryLineUrl()
+          copyStoryLimeUrl()
         "
       >
-        LINEリンクをコピー
+        LIMEリンクをコピー
       </button>
 
       <label>写真</label>
