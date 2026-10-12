@@ -1755,7 +1755,32 @@ function renderSales(){
     ...extras.map(x=>({...x,type:'追加売上'})),
     ...db.retail.filter(x=>monthKey(x.date)===m).map(x=>({...x,type:'店販'}))
   ].sort((a,b)=>b.date.localeCompare(a.date));
-
+$('paidBookingList').innerHTML =
+  bookingRows.length
+    ? bookingRows
+        .sort((a,b)=>
+          String(b.date||'').localeCompare(
+            String(a.date||'')
+          )
+        )
+        .map(b=>`
+          <div class="item">
+            <div class="t">
+              ${esc(b.date||'')}
+              ${esc(b.time||'')}
+              ・
+              ${esc(b.customer||'未登録')}
+            </div>
+            <div class="s">
+              ${esc(b.menu||'')}
+              ・
+              ${yen(Number(b.price||0))}
+              ・ ✓ 決済完了
+            </div>
+          </div>
+        `)
+        .join('')
+    : empty('この月の会計済み予約はありません');
   $('salesList').innerHTML=all.length?all.map(x=>`<div class="item"><div class="t">${esc(x.date)} ${yen(x.amount)}</div><div class="s">${esc(x.type)} ・ ${esc(x.customer||x.product||'')}</div></div>`).join(''):empty('売上データはまだありません');
   renderMonthlyAnalysis();
 }
