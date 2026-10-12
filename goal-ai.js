@@ -131,7 +131,17 @@ function uniqueReturnDueCount(reminders, recoveries) {
       b.newGuest &&
       isVisitedBooking(b)
     ).length;
-
+const nextMissing = new Set(
+  (db.bookings || [])
+    .filter(b =>
+      !b.isModel &&
+      monthKey(b.date) === month &&
+      isVisitedBooking(b) &&
+      !nextBookingTakenForBooking(b)
+    )
+    .map(b => normalizeName(b.customer || ''))
+    .filter(Boolean)
+).size;
     return {
       month,
       goal,
@@ -148,6 +158,7 @@ function uniqueReturnDueCount(reminders, recoveries) {
       returnDue: uniqueReturnDueCount(reminders, recoveries),
       availability,
       newVisits
+      nextMissing,
     };
   }
 
