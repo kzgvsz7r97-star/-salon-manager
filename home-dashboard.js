@@ -1074,34 +1074,60 @@ window.openHomeDataQuality =
           </div>
         </div>
 
-        <div
-          class="
-            home-ops-card
-            ${
-              s.returnDue
-                ? 'attention'
-                : ''
-            }
-          "
-          onclick="
-            openHomeReturnManager()
-          "
-        >
-          <div class="l">
-            再来要対応
-          </div>
+       <div
+  class="
+    home-ops-card
+    ${
+      s.returnDue
+        ? 'attention'
+        : ''
+    }
+  "
+  onclick="
+    openHomeReturnManager()
+  "
+>
+  <div class="l">
+    再来要対応
+  </div>
 
-          <div class="v">
-            ${s.returnDue}件
-          </div>
+  <div class="v">
+    ${s.returnDue}件
+  </div>
 
-          <div class="s">
-            45日 ${s.reminders}
-            ・
-            キャンセル後 ${s.recovery}
-          </div>
-        </div>
-      </div>
+  <div class="s">
+    45日 ${s.reminders}
+    ・
+    キャンセル後 ${s.recovery}
+  </div>
+</div>
+
+<div
+  class="
+    home-ops-card
+    ${
+      qualityIssues.length
+        ? 'attention'
+        : ''
+    }
+  "
+  onclick="
+    openHomeDataQuality()
+  "
+>
+  <div class="l">
+    要確認
+  </div>
+
+  <div class="v">
+    ${qualityIssues.length}件
+  </div>
+
+  <div class="s">
+    金額・決済・重複
+  </div>
+</div>
+</div>
 <div
   class="home-ops-card"
   style="margin-top:8px"
