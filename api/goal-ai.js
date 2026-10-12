@@ -57,15 +57,236 @@ export default async function handler(req, res) {
     return json(res, 503, { error: 'OPENAI_API_KEY未設定' });
   }
 
- const rawKind =
+const rawKind =
   String(req.body?.kind || '');
 
 const kind =
-  ['story', 'nextbooking']
-    .includes(rawKind)
+  [
+    'story',
+    'nextbooking',
+    'storydesign'
+  ].includes(rawKind)
     ? rawKind
     : 'acquisition';
 
+const imageData =
+  String(
+    req.body?.imageData || ''
+  );
+  if(kind === 'storydesign'){
+  if(
+    !/^data:image\/(jpeg|jpg|png|webp);base64,/i
+      .test(imageData)
+  ){
+    return json(
+      res,
+      400,
+      {
+        error:
+          '画像を確認してください'
+      }
+    );
+  }
+
+  const designPrompt = `
+Instagramストーリー用の美容師の写真を分析してください。
+
+ターゲット：
+18〜25歳女性。
+
+世界観：
+上品、シンプル、大人可愛い。
+安っぽくしない。
+写真を主役にする。
+文字を詰め込みすぎない。
+
+この写真に空き枠の文字を載せます。
+
+写真の明るさ、余白、人物や髪の位置、
+背景の情報量を見て、
+読みやすく写真を邪魔しないデザインを3案作ってください。
+
+使用できる値だけを使ってください。
+
+font:
+"maru"
+"mincho"
+"gothic"
+
+position:
+"top"
+"center"
+"bottom"
+
+textColor:
+"white"
+"black"
+
+panel:
+"none"
+"softWhite"
+"softBlack"
+
+align:
+"left"
+"center"
+
+size:
+"small"
+"medium"
+"large"
+
+必ずJSONだけを返してください。
+
+形式：
+{
+  "recommended":0,
+  "variants":[
+    {
+      "font":"maru",
+      "position":"bottom",
+      "textColor":"white",
+      "panel":"softBlack",
+      "align":"left",
+      "size":"medium",
+      "reason":"短い理由"
+    },
+    {
+      "font":"mincho",
+      "position":"top",
+      "textColor":"black",
+      "panel":"softWhite",
+      "align":"center",
+      "size":"medium",
+      "reason":"短い理由"
+    },
+    {
+      "font":"gothic",
+      "position":"bottom",
+      "textColor":"white",
+      "panel":"none",
+      "align":"left",
+      "size":"large",
+      "reason":"短い理由"
+    }
+  ]
+}
+`.trim();
+
+  try{
+    const response =
+      await fetch(
+        'https://api.openai.com/v1/responses',
+        {
+          method:'POST',
+
+          headers:{
+            'Content-Type':
+              'application/json',
+
+            Authorization:
+              `Bearer ${apiKey}`
+          },
+
+          body:JSON.stringify({
+            model:MODEL,
+
+            input:[
+              {
+                role:'user',
+
+                content:[
+                  {
+                    type:
+                      'input_text',
+
+                    text:
+                      designPrompt
+                  },
+
+                  {
+                    type:
+                      'input_image',
+
+                    image_url:
+                      imageData,
+
+                    detail:'high'
+                  }
+                ]
+              }
+            ],
+
+            max_output_tokens:700
+          })
+        }
+      );
+
+    const body =
+      await response
+        .json()
+        .catch(
+          ()=>({})
+        );
+
+    if(!response.ok){
+      console.error(
+        'Story design AI error',
+        response.status,
+        body?.error?.message ||
+          body
+      );
+
+      return json(
+        res,
+        502,
+        {
+          error:
+            '写真を分析できませんでした'
+        }
+      );
+    }
+
+    const text=
+      outputText(body);
+
+    if(!text){
+      return json(
+        res,
+        502,
+        {
+          error:
+            'AIの返答が空でした'
+        }
+      );
+    }
+
+    return json(
+      res,
+      200,
+      {
+        ok:true,
+        text,
+        model:MODEL
+      }
+    );
+
+  }catch(error){
+    console.error(
+      'story design failed',
+      error
+    );
+
+    return json(
+      res,
+      500,
+      {
+        error:
+          '写真分析に失敗しました'
+      }
+    );
+  }
+}
 const variationKey =
   String(req.body?.variationKey || '');
 
