@@ -189,6 +189,48 @@ ${task}
 
 完成文だけを返してください。
 `.trim();
+得意：似合わせレイヤー、顔まわり、小顔見えの設計、透明感カラー。
+
+自然な日本語で、美容師本人が送っているような文章にしてください。
+
+今回のvariationKey：
+${variationKey}
+
+前回生成した文章：
+${previousText || 'なし'}
+
+重要：
+前回文章がある場合、同じ文章を返してはいけません。
+特に一文目は前回と同じ書き出しにしないでください。
+
+前回から最低でも3つ、
+・書き出し
+・文の順番
+・言い回し
+・語尾
+・CTA
+・絵文字
+のどれかを変えてください。
+
+単なるほぼ同じ文章の言い換えではなく、
+読んだ時に別パターンだと分かる程度に変えてください。
+
+ただし奇抜、不自然、営業感が強すぎる文章にはしないでください。
+
+禁止：
+虚偽の空き状況。
+入力にない日時。
+根拠のないNo.1表現。
+お客様向け文章への売上額の記載。
+
+データ：
+${JSON.stringify(facts)}
+
+依頼：
+${task}
+
+完成文だけを返してください。
+`.trim();
     const recoveries = returnRecoveryRows();
     const availability = upcomingAvailability(7);
 
@@ -707,22 +749,57 @@ window.runGoalPriority =
       ctx
     );
   };
-  async function fillGoalAiText(type, ctx) {
-    const output = document.getElementById('goalAiOutput');
-    const status = document.getElementById('goalAiStatus');
-    if (!output) return;
+ async function fillGoalAiText(type, ctx) {
+  const output =
+    document.getElementById('goalAiOutput');
 
-    output.value = 'AI作成中…';
-    try {
-      const text = await requestAi(type, ctx);
-      output.value = text || aiFallback(type, ctx);
-      if (status) status.textContent = '目標差と空き枠からAIで作成しました。';
-    } catch (e) {
-      output.value = aiFallback(type, ctx);
-      if (status) status.textContent = `${e.message}。いまは目標ベースのテンプレを表示しています。`;
+  const status =
+    document.getElementById('goalAiStatus');
+
+  if (!output) return;
+
+  const previousText =
+    output.value &&
+    output.value !== 'AI作成中…'
+      ? output.value.trim()
+      : '';
+
+  output.value = 'AI作成中…';
+
+  try {
+    const text =
+      await requestAi(
+        type,
+        ctx,
+        previousText
+      );
+
+    const same =
+      previousText &&
+      text.replace(/\s+/g, '') ===
+      previousText.replace(/\s+/g, '');
+
+    output.value =
+      !text || same
+        ? aiFallback(type, ctx)
+        : text;
+
+    if (status) {
+      status.textContent =
+        same
+          ? '前回と同じだったため別パターンに切り替えました。'
+          : 'AIで別パターンを生成しました。';
+    }
+  } catch (e) {
+    output.value =
+      aiFallback(type, ctx);
+
+    if (status) {
+      status.textContent =
+        `${e.message}。別パターンのテンプレを表示しています。`;
     }
   }
-
+}
   window.regenerateGoalAi = async function (type) {
     await fillGoalAiText(type, goalContext());
   };
