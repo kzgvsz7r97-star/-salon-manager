@@ -1159,12 +1159,66 @@ function futureBookingAfter(name,afterDate){
   const n=normalizeName(name);
   return activeBookings().filter(x=>normalizeName(x.customer)===n&&x.date>afterDate).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time))[0]||null;
 }
+function monthlyFollowupLine(date){
+  const month=Number(String(date||todayISO).slice(5,7));
+
+  const lines={
+    1:'乾燥で毛先がまとまりづらい時期なので、気になるところあれば教えてください◎',
+    2:'まだ乾燥しやすい時期なので、パサつきやまとまりで気になるところあれば教えてください◎',
+    3:'春先は乾燥や広がりが出やすいので、扱いづらいところあれば教えてください◎',
+    4:'少しずつ湿気も増えてくるので、広がりや顔まわりで気になるところあれば教えてください◎',
+    5:'梅雨前で広がりやすくなる時期なので、扱いづらいところあれば教えてください◎',
+    6:'湿気でうねりや広がりが出やすい時期なので、気になるところあれば教えてください◎',
+    7:'紫外線で乾燥や色落ちもしやすいので、気になるところあれば教えてください◎',
+    8:'紫外線や冷房で乾燥しやすい時期なので、毛先や色落ちで気になるところあれば教えてください◎',
+    9:'夏のダメージや色落ちが出やすい時期なので、気になるところあれば教えてください◎',
+    10:'最近少し乾燥しやすくなってきたので、毛先のまとまりや色落ちで気になるところあれば教えてください◎',
+    11:'乾燥や静電気が出やすい時期なので、まとまりづらいところあれば教えてください◎',
+    12:'年末に向けて乾燥しやすい時期なので、気になるところあれば教えてください◎'
+  };
+
+  return lines[month]||'髪で気になるところあれば教えてください◎';
+}
+
 function followupMessageFor(b,type){
-  const name=(b.customer||'').trim(),next=futureBookingAfter(name,b.date);
+  const name=(b.customer||'').trim();
+  const next=futureBookingAfter(name,b.date);
+  const season=monthlyFollowupLine(b.date);
+
   if(type==='aftercare'){
     const days=Math.max(0,daysBetween(b.date,todayISO));
-    const opening=days===0?`${name}さん、今日はありがとうございました！🙇‍♂️`:`${name}さん、先日はありがとうございました！🙇‍♂️`;
+    const opening=days===0
+      ?`${name}さん、今日はありがとうございました！🙇‍♂️`
+      :`${name}さん、先日はありがとうございました！🙇‍♂️`;
+
     return `${opening}
+
+その後、髪の状態どうですか？
+${season}${next?`
+
+次回は${jpShortDate(next.date)} ${next.time}〜でお待ちしてます！`:`\n\nまた気になってきた頃にいつでもご相談ください！`}`;
+  }
+
+  if(type==='week'){
+    return `${name}さん、こんにちは！
+
+次回のご予約が${jpShortDate(b.date)} ${b.time}〜になってます！
+
+${season}
+変更などあれば早めにご連絡ください🙇‍♂️
+
+当日よろしくお願いします！`;
+  }
+
+  return `${name}さん、こんにちは！
+
+${jpShortDate(b.date)} ${b.time}〜ご予約いただいてます！
+
+${season}
+変更などなければそのままお待ちしてます🙇‍♂️
+
+当日よろしくお願いします！`;
+}
 
 その後、髪の状態どうですか？
 気になるところや扱いづらいところあれば、いつでも連絡ください！${next?`
