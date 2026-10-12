@@ -1113,6 +1113,7 @@ window.openHomeDataQuality =
         : ''
     }
   "
+  style="grid-column:1 / -1;"
   onclick="
     openHomeDataQuality()
   "
