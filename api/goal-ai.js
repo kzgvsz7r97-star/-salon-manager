@@ -57,29 +57,50 @@ export default async function handler(req, res) {
     return json(res, 503, { error: 'OPENAI_API_KEY未設定' });
   }
 
-  const kind = req.body?.kind === 'story' ? 'story' : 'acquisition';
-  const metrics = req.body?.metrics || {};
-  const availability = Array.isArray(req.body?.availability)
-    ? req.body.availability.slice(0, 7)
-    : [];
+ const rawKind = String(req.body?.kind || '');
 
-  const facts = {
-    goal: safeNumber(metrics.goal),
-    forecast: safeNumber(metrics.forecast),
-    gap: safeNumber(metrics.gap),
-    unit: safeNumber(metrics.unit),
-    needed: metrics.needed == null ? null : safeNumber(metrics.needed),
-    remainingDays: safeNumber(metrics.remainingDays),
-    perDay: metrics.perDay == null ? null : safeNumber(metrics.perDay),
-    newVisits: safeNumber(metrics.newVisits),
-    availability
-  };
+const kind = ['story', 'nextbooking'].includes(rawKind)
+  ? rawKind
+  : 'acquisition';
 
-  const task = kind === 'story'
+const metrics = req.body?.metrics || {};
+
+const availability = Array.isArray(req.body?.availability)
+  ? req.body.availability.slice(0, 7)
+  : [];
+
+const facts = {
+  month: String(metrics.month || ''),
+  goal: safeNumber(metrics.goal),
+  forecast: safeNumber(metrics.forecast),
+  gap: safeNumber(metrics.gap),
+  unit: safeNumber(metrics.unit),
+  needed: metrics.needed == null
+    ? null
+    : safeNumber(metrics.needed),
+  remainingDays: safeNumber(metrics.remainingDays),
+  perDay: metrics.perDay == null
+    ? null
+    : safeNumber(metrics.perDay),
+  newVisits: safeNumber(metrics.newVisits),
+  nextMissing: safeNumber(metrics.nextMissing),
+  availability
+};
+
+const task =
+  kind === 'story'
     ? `Instagramストーリー用の予約訴求文を1案だけ作る。空き枠は入力された日時をそのまま使い、存在しない枠を作らない。4〜7行程度。最初の1行は短いフック。最後は予約リンクかDMへのCTA。`
-    : `今日使う新規集客文を1案だけ作る。目標までの不足人数と残り営業日を踏まえ、レイヤーカット・顔まわり・透明感カラーの予約につながる短い訴求にする。Instagramストーリーまたは予約媒体にそのまま転用できる5〜8行程度。最後は予約・相談CTA。`;
 
-  const prompt = `
+    : kind === 'nextbooking'
+      ? `今月来店済みで次回予約がまだ決まっていないお客様へ送るLINEまたはDM文面を1案だけ作る。
+入力されたmonthに合った季節感や髪の悩みを自然に1文だけ入れる。
+売り込み感は出しすぎず、来店後の髪の状態を気遣ってから次回来店を促す。
+4〜7行程度。名前や予約日時は勝手に作らない。
+「予約してください」と強く迫らず、「タイミング合う時に」「気になってきた頃に」など自然な誘導にする。`
+
+      : `今日使う新規集客文を1案だけ作る。目標までの不足人数と残り営業日を踏まえ、レイヤーカット・顔まわり・透明感カラーの予約につながる短い訴求にする。Instagramストーリーまたは予約媒体にそのまま転用できる5〜8行程度。最後は予約・相談CTA。`;
+
+const prompt = `
 あなたは原宿の美容師向け集客アシスタントです。
 優先順位そのものはアプリ側で目標差から計算済みです。あなたは文章だけを作ってください。
 
@@ -95,7 +116,7 @@ ${JSON.stringify(facts)}
 ${task}
 
 完成文だけを返してください。前置き・解説・見出しは不要です。
-  `.trim();
+`.trim();
 
   try {
     const response = await fetch('https://api.openai.com/v1/responses', {
