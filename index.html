@@ -2080,57 +2080,43 @@ function storyAvailabilityText(start,end,durationMin,bizStart,bizEnd,excludeMond
   if(!lines.length)return '空き枠はありません';
   return `ご予約空き状況\n\n${lines.join('\n')}\n\nご予約・ご相談はDMまたは予約リンクからお願いします🤍`;
 }
-function openStoryAvailability(){
-  const today=todayISO;
-  const d2=new Date();d2.setDate(d2.getDate()+7);
-  modal(`<h3>ストーリー用 空き枠</h3>
-    <div class="story-tool">
-      <div class="story-toolbar">
-        <div><label>開始日</label><input id="storyStart" type="date" value="${today}" onchange="refreshStoryAvailability()"></div>
-        <div><label>終了日</label><input id="storyEnd" type="date" value="${localISO(d2)}" onchange="refreshStoryAvailability()"></div>
-        <div><label>施術時間</label>
-          <select id="storyDuration" onchange="refreshStoryAvailability()">
-            <option value="60">1時間</option>
-            <option value="90">1時間30分</option>
-            <option value="120" selected>2時間</option>
-            <option value="150">2時間30分</option>
-            <option value="180">3時間</option>
-          </select>
-        </div>
-        <div><label>月曜定休</label>
-          <select id="storyMonday" onchange="refreshStoryAvailability()">
-            <option value="exclude" selected>除外する</option>
-            <option value="include">表示する</option>
-          </select>
-        </div>
-        <div><label>営業開始</label><input id="storyBizStart" type="time" value="11:00" onchange="refreshStoryAvailability()"></div>
-        <div><label>営業終了</label><input id="storyBizEnd" type="time" value="21:00" onchange="refreshStoryAvailability()"></div>
-      </div>
+<div class="home-ops-actions">
+  <button
+    class="ghost"
+    onclick="
+      openTodayHomeBookings()
+    "
+  >
+    今日の予約
+  </button>
 
-      <div class="story-chiprow">
-        <button onclick="storyPreset(7)">7日間</button>
-        <button onclick="storyPreset(14)">14日間</button>
-        <button onclick="storyPresetMonth()">今月末まで</button>
-      </div>
+  <button
+    class="ghost"
+    onclick="
+      openHomeFollowups()
+    "
+  >
+    フォロー
+  </button>
 
-      <label>ストーリー用テキスト</label>
-      <textarea id="storyOutput" class="story-output"></textarea>
+  <button
+    class="ghost"
+    onclick="
+      openHomeReturnManager()
+    "
+  >
+    再来管理
+  </button>
 
-      <div class="actions">
-        <button class="ghost" onclick="closeModal()">閉じる</button>
-        <button class="blue" onclick="copyStoryAvailability()">コピー</button>
-      </div>
-    </div>`);
-  refreshStoryAvailability();
-}
-function refreshStoryAvailability(){
-  const a=$('storyStart'),b=$('storyEnd');if(!a||!b)return;
-  const duration=Number($('storyDuration').value||120);
-  const bizStart=timeToMin($('storyBizStart').value||'11:00');
-  const bizEnd=timeToMin($('storyBizEnd').value||'21:00');
-  const excludeMonday=$('storyMonday').value==='exclude';
-  $('storyOutput').value=storyAvailabilityText(a.value,b.value,duration,bizStart,bizEnd,excludeMonday);
-}
+  <button
+    class="ghost"
+    onclick="
+      openStoryAvailability()
+    "
+  >
+    ストーリー作成
+  </button>
+</div>
 function storyPreset(days){
   const s=dateOnly($('storyStart').value||todayISO)||new Date();
   const e=new Date(s);e.setDate(e.getDate()+days-1);
