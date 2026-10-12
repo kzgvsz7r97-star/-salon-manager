@@ -345,37 +345,42 @@ ${slots || '空き枠は予約ページをご確認ください'}
 レイヤーカット・顔まわり・透明感カラーで迷っている方は気軽にご相談ください✂️
 ご予約はプロフィールのリンクからお願いします。`;
 }
-  async function requestAi(kind, ctx) {
-    const key = getCloudBackupKey();
-    if (!key) throw new Error('同期キーが未設定です');
+ async function requestAi(kind, ctx) {
+  const key = getCloudBackupKey();
+  if (!key) throw new Error('同期キーが未設定です');
 
-    const response = await fetch(GOAL_AI_API, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Backup-Key': key
+  const response = await fetch(GOAL_AI_API, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Backup-Key': key
+    },
+    body: JSON.stringify({
+      kind,
+      metrics: {
+        month: ctx.month,
+        goal: ctx.goal,
+        forecast: ctx.forecast,
+        gap: ctx.gap,
+        unit: ctx.unit,
+        needed: ctx.needed,
+        remainingDays: ctx.remainingDays,
+        perDay: ctx.perDay,
+        newVisits: ctx.newVisits,
+        nextMissing: ctx.nextMissing
       },
-      body: JSON.stringify({
-        kind,
-        metrics: {
-          goal: ctx.goal,
-          forecast: ctx.forecast,
-          gap: ctx.gap,
-          unit: ctx.unit,
-          needed: ctx.needed,
-          remainingDays: ctx.remainingDays,
-          perDay: ctx.perDay,
-          newVisits: ctx.newVisits
-        },
-        availability: availabilityPayload(ctx)
-      })
-    });
+      availability: availabilityPayload(ctx)
+    })
+  });
 
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.error || 'AI文面を作れませんでした');
-    return String(body.text || '').trim();
+  const body = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(body.error || 'AI文面を作れませんでした');
   }
 
+  return String(body.text || '').trim();
+}
   window.runGoalPriority = async function (type) {
     if (type === 'protect') {
       if (typeof openHomeFollowups === 'function') openHomeFollowups();
