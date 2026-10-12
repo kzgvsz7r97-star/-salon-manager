@@ -221,14 +221,12 @@ function goalContext() {
       });
     }
 
-    if (ctx.nextMissing) {
-      rows.push({
-        type: 'nextbooking',
-        title: '次回予約を増やす',
-        reason: `今月来店・次回予約未取得 ${ctx.nextMissing}人`,
-        button: 'AI文面'
-      });
-    }
+    rows.push({
+      type: 'nextbooking',
+      title: '次回予約を増やす',
+      reason: `今月来店・次回予約未取得 ${ctx.nextMissing || 0}人`,
+      button: 'AI文面'
+    });
 
     if (ctx.returnDue) {
       rows.push({
@@ -251,14 +249,12 @@ function goalContext() {
     });
   }
 
-  if (ctx.nextMissing) {
-    rows.push({
-      type: 'nextbooking',
-      title: '次回予約を増やす',
-      reason: `今月来店・次回予約未取得 ${ctx.nextMissing}人`,
-      button: 'AI文面'
-    });
-  }
+  rows.push({
+    type: 'nextbooking',
+    title: '次回予約を増やす',
+    reason: `今月来店・次回予約未取得 ${ctx.nextMissing || 0}人`,
+    button: 'AI文面'
+  });
 
   if (ctx.followups.length) {
     rows.push({
@@ -267,9 +263,7 @@ function goalContext() {
       reason: `見込み${yen(ctx.forecast)}を落とさない`,
       button: 'フォローを見る'
     });
-  }
-
-  if (ctx.returnDue) {
+  } else if (ctx.returnDue) {
     rows.push({
       type: 'return',
       title: `再来フォロー ${ctx.returnDue}件`,
@@ -280,7 +274,6 @@ function goalContext() {
 
   return rows.slice(0, 3);
 }
-
 function ensureStyle() {
   if (document.getElementById('goalAiStyle')) return;
 
