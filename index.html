@@ -323,7 +323,7 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
       <button class="blue" onclick="openImport()">SHAiRE取込</button>
     </div>
     <button class="soft" style="width:100%;margin-bottom:12px" onclick="openStoryAvailability()">ストーリー用 空き枠を作る</button>
-
+<button id="reservationListToggle" class="soft hidden" style="width:100%;margin:14px 0 8px" onclick="toggleReservationList()">予約一覧 ▼</button>
     <div id="reservationListView">
       <div id="reservationTotals"></div>
       <div id="reservationSourceSummary"></div>
@@ -1281,16 +1281,63 @@ function calendarHTML(monthDate,selected,handler){
 }
 function setReservationView(v){
   reservationView=v;
+
   $('viewListBtn').classList.toggle('active',v==='list');
   $('viewCalBtn').classList.toggle('active',v==='calendar');
   $('viewWeekBtn').classList.toggle('active',v==='week');
-$('reservationListView').classList.remove('hidden');
+
   $('reservationCalendarView').classList.toggle('hidden',v!=='calendar');
   $('reservationWeekView').classList.toggle('hidden',v!=='week');
+
+  const list=$('reservationListView');
+  const toggle=$('reservationListToggle');
+  const section=$('reservations');
+
+  if(v==='list'){
+    toggle.classList.add('hidden');
+    list.classList.remove('hidden');
+
+    section.insertBefore(
+      toggle,
+      $('reservationCalendarView')
+    );
+
+    section.insertBefore(
+      list,
+      $('reservationCalendarView')
+    );
+  }else{
+    toggle.classList.remove('hidden');
+    list.classList.add('hidden');
+
+    section.appendChild(toggle);
+    section.appendChild(list);
+  }
+
+  toggle.textContent='予約一覧 ▼';
+
   if(v==='week'){
-    reservationWeekStart=startOfWeekISO(reservationSelectedDate||todayISO);
+    reservationWeekStart=startOfWeekISO(
+      reservationSelectedDate||todayISO
+    );
     renderReservationWeek();
-  }else if(v==='calendar')renderReservationCalendar();
+  }else if(v==='calendar'){
+    renderReservationCalendar();
+  }
+}
+
+function toggleReservationList(){
+  const list=$('reservationListView');
+  const toggle=$('reservationListToggle');
+
+  const opening=list.classList.contains('hidden');
+
+  list.classList.toggle('hidden');
+
+  toggle.textContent=
+    opening
+      ?'予約一覧 ▲'
+      :'予約一覧 ▼';
 }
 function resetBookingFilters(){
   ['bookingFilterName','bookingFilterFrom','bookingFilterTo'].forEach(id=>{if($(id))$(id).value=''});
