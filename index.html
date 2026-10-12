@@ -2453,23 +2453,32 @@ function openStoryAvailability(){
 
       <div class="actions">
 
-        <button
-          class="ghost"
-          onclick="closeModal()"
-        >
-          閉じる
-        </button>
+  <button
+    class="ghost"
+    onclick="closeModal()"
+  >
+    閉じる
+  </button>
 
-        <button
-          class="blue"
-          onclick="
-            copyStoryAvailability()
-          "
-        >
-          コピー
-        </button>
+  <button
+    class="ghost"
+    onclick="
+      copyStoryAvailability()
+    "
+  >
+    コピー
+  </button>
 
-      </div>
+  <button
+    class="blue"
+    onclick="
+      createStoryImage()
+    "
+  >
+    画像作成
+  </button>
+
+</div>
     </div>
   `);
 
@@ -2852,6 +2861,12 @@ window.applyStoryDesign=
 
     if(!v||!preview)return;
 
+    window.__storySelectedDesign=
+      {
+        ...v,
+        index
+      };
+
     const fonts={
       maru:
         '"Hiragino Maru Gothic ProN", sans-serif',
@@ -2928,6 +2943,481 @@ window.applyStoryDesign=
       preview.style.bottom=
         '8%';
     }
+  };
+
+function storyCanvasRoundRect(
+  ctx,
+  x,
+  y,
+  w,
+  h,
+  r
+){
+  const radius=
+    Math.min(
+      r,
+      w/2,
+      h/2
+    );
+
+  ctx.beginPath();
+
+  ctx.moveTo(
+    x+radius,
+    y
+  );
+
+  ctx.lineTo(
+    x+w-radius,
+    y
+  );
+
+  ctx.quadraticCurveTo(
+    x+w,
+    y,
+    x+w,
+    y+radius
+  );
+
+  ctx.lineTo(
+    x+w,
+    y+h-radius
+  );
+
+  ctx.quadraticCurveTo(
+    x+w,
+    y+h,
+    x+w-radius,
+    y+h
+  );
+
+  ctx.lineTo(
+    x+radius,
+    y+h
+  );
+
+  ctx.quadraticCurveTo(
+    x,
+    y+h,
+    x,
+    y+h-radius
+  );
+
+  ctx.lineTo(
+    x,
+    y+radius
+  );
+
+  ctx.quadraticCurveTo(
+    x,
+    y,
+    x+radius,
+    y
+  );
+
+  ctx.closePath();
+}
+
+function storyWrapText(
+  ctx,
+  text,
+  maxWidth
+){
+  const result=[];
+
+  String(text||'')
+    .split('\n')
+    .forEach(line=>{
+
+      if(!line){
+        result.push('');
+        return;
+      }
+
+      let current='';
+
+      for(
+        const ch of line
+      ){
+        const test=
+          current+ch;
+
+        if(
+          current &&
+          ctx.measureText(
+            test
+          ).width >
+            maxWidth
+        ){
+          result.push(
+            current
+          );
+
+          current=ch;
+        }
+        else{
+          current=test;
+        }
+      }
+
+      result.push(
+        current
+      );
+    });
+
+  return result;
+}
+
+window.createStoryImage=
+  async function(){
+
+    const img=
+      $('storyPreviewImage');
+
+    const output=
+      $('storyOutput');
+
+    if(
+      !img ||
+      !img.src ||
+      img.style.display === 'none'
+    ){
+      alert(
+        '先に写真を選択してください'
+      );
+      return;
+    }
+
+    const canvas=
+      document.createElement(
+        'canvas'
+      );
+
+    canvas.width=
+      1080;
+
+    canvas.height=
+      1920;
+
+    const ctx=
+      canvas.getContext(
+        '2d'
+      );
+
+    const source=
+      new Image();
+
+    source.onload=
+      async function(){
+
+        const cw=
+          canvas.width;
+
+        const ch=
+          canvas.height;
+
+        const scale=
+          Math.max(
+            cw/source.width,
+            ch/source.height
+          );
+
+        const drawW=
+          source.width*scale;
+
+        const drawH=
+          source.height*scale;
+
+        const dx=
+          (cw-drawW)/2;
+
+        const dy=
+          (ch-drawH)/2;
+
+        ctx.drawImage(
+          source,
+          dx,
+          dy,
+          drawW,
+          drawH
+        );
+
+        const v=
+          window
+            .__storySelectedDesign ||
+          {
+            font:'gothic',
+            position:'bottom',
+            textColor:'black',
+            panel:'softWhite',
+            align:'left',
+            size:'medium'
+          };
+
+        const fontSizes={
+          small:39,
+          medium:45,
+          large:54
+        };
+
+        const fontFamilies={
+          maru:
+            '"Hiragino Maru Gothic ProN", sans-serif',
+
+          mincho:
+            '"Hiragino Mincho ProN", serif',
+
+          gothic:
+            '-apple-system, BlinkMacSystemFont, sans-serif'
+        };
+
+        const fontSize=
+          fontSizes[v.size] ||
+          45;
+
+        ctx.font=
+          `600 ${fontSize}px ${
+            fontFamilies[v.font] ||
+            fontFamilies.gothic
+          }`;
+
+        ctx.textBaseline=
+          'top';
+
+        ctx.textAlign=
+          v.align === 'center'
+            ? 'center'
+            : 'left';
+
+        const margin=
+          76;
+
+        const padding=
+          42;
+
+        const maxTextWidth=
+          cw -
+          margin*2 -
+          padding*2;
+
+        const lines=
+          storyWrapText(
+            ctx,
+            output?.value || '',
+            maxTextWidth
+          );
+
+        const lineHeight=
+          Math.round(
+            fontSize*1.55
+          );
+
+        const textHeight=
+          Math.max(
+            lineHeight,
+            lines.length*
+            lineHeight
+          );
+
+        const boxWidth=
+          cw-margin*2;
+
+        const boxHeight=
+          textHeight+
+          padding*2;
+
+        let boxY=
+          ch-
+          Math.round(
+            ch*.08
+          )-
+          boxHeight;
+
+        if(
+          v.position === 'top'
+        ){
+          boxY=
+            Math.round(
+              ch*.08
+            );
+        }
+        else if(
+          v.position ===
+          'center'
+        ){
+          boxY=
+            Math.round(
+              (ch-boxHeight)/2
+            );
+        }
+
+        if(
+          v.panel ===
+          'softWhite'
+        ){
+          ctx.fillStyle=
+            'rgba(255,255,255,.82)';
+
+          storyCanvasRoundRect(
+            ctx,
+            margin,
+            boxY,
+            boxWidth,
+            boxHeight,
+            36
+          );
+
+          ctx.fill();
+        }
+        else if(
+          v.panel ===
+          'softBlack'
+        ){
+          ctx.fillStyle=
+            'rgba(0,0,0,.46)';
+
+          storyCanvasRoundRect(
+            ctx,
+            margin,
+            boxY,
+            boxWidth,
+            boxHeight,
+            36
+          );
+
+          ctx.fill();
+        }
+
+        ctx.fillStyle=
+          v.textColor === 'white'
+            ? '#fff'
+            : '#111';
+
+        if(
+          v.panel === 'none' &&
+          v.textColor === 'white'
+        ){
+          ctx.shadowColor=
+            'rgba(0,0,0,.55)';
+
+          ctx.shadowBlur=
+            18;
+
+          ctx.shadowOffsetY=
+            3;
+        }
+
+        const textX=
+          v.align === 'center'
+            ? cw/2
+            : margin+padding;
+
+        let textY=
+          boxY+padding;
+
+        lines.forEach(
+          line=>{
+
+            ctx.fillText(
+              line,
+              textX,
+              textY
+            );
+
+            textY+=
+              lineHeight;
+          }
+        );
+
+        ctx.shadowColor=
+          'transparent';
+
+        const blob=
+          await new Promise(
+            resolve=>
+              canvas.toBlob(
+                resolve,
+                'image/jpeg',
+                .94
+              )
+          );
+
+        if(!blob){
+          alert(
+            '画像を作成できませんでした'
+          );
+          return;
+        }
+
+        const file=
+          new File(
+            [blob],
+            `story-${todayISO}.jpg`,
+            {
+              type:
+                'image/jpeg'
+            }
+          );
+
+        if(
+          navigator.share &&
+          navigator.canShare &&
+          navigator.canShare({
+            files:[file]
+          })
+        ){
+          try{
+            await navigator.share({
+              files:[file],
+              title:
+                'Instagramストーリー'
+            });
+
+            return;
+          }
+          catch(error){
+            if(
+              error?.name ===
+              'AbortError'
+            ){
+              return;
+            }
+          }
+        }
+
+        const url=
+          URL.createObjectURL(
+            blob
+          );
+
+        const a=
+          document.createElement(
+            'a'
+          );
+
+        a.href=url;
+
+        a.download=
+          `story-${todayISO}.jpg`;
+
+        document.body
+          .appendChild(a);
+
+        a.click();
+
+        a.remove();
+
+        setTimeout(
+          ()=>
+            URL.revokeObjectURL(
+              url
+            ),
+          1500
+        );
+      };
+
+    source.src=
+      img.src;
   };
 function refreshStoryPreviewText(){
   const output=
