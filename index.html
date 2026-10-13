@@ -3618,7 +3618,12 @@ async function refreshStoryAvailability(){
             'Content-Type':'application/json',
             'X-Backup-Key':key
           },
-          body:JSON.stringify({
+         body:JSON.stringify({
+  kind:'story',
+  currentDate: todayISO,
+  availability:[
+    baseText
+  ],
             kind:'story',
             availability:[
               baseText
