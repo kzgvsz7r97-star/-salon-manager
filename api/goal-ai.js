@@ -215,7 +215,7 @@ size:
               `Bearer ${apiKey}`
           },
 
-          body:JSON.stringify({
+               body:JSON.stringify({
             model:MODEL,
 
             input:[
@@ -244,7 +244,7 @@ size:
               }
             ],
 
-            max_output_tokens:700
+            max_output_tokens:1400
           })
         }
       );
