@@ -3492,38 +3492,6 @@ window.createStoryImage=
           ctx.shadowColor=
             'rgba(0,0,0,.55)';
 
-          ctx.shadowBlur=
-            18;
-
-          ctx.shadowOffsetY=
-            3;
-        }
-
-        const textX=
-          v.align === 'center'
-            ? safeBoxX+
-              boxWidth/2
-            : safeBoxX+
-              padding;
-
-        let textY=
-          safeBoxY+
-          padding;
-
-        visibleLines.forEach(
-          line=>{
-
-            ctx.fillText(
-              line,
-              textX,
-              textY
-            );
-
-            textY+=
-              lineHeight;
-          }
-        );
-
         ctx.shadowColor=
           'transparent';
         const blob=
