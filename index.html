@@ -2750,19 +2750,30 @@ async function analyzeStoryDesign(
       }
     );
 
-  const body=
-    await response
-      .json()
-      .catch(
-        ()=>({})
-      );
+ const raw=
+  await response.text();
 
-  if(!response.ok){
-    throw new Error(
-      body?.error ||
-      'AI分析に失敗しました'
-    );
-  }
+let body={};
+
+try{
+  body=
+    raw
+      ? JSON.parse(raw)
+      : {};
+}catch(_){
+  body={};
+}
+
+if(!response.ok){
+  throw new Error(
+    body?.error ||
+    `AI分析に失敗しました（HTTP ${response.status}）${
+      raw
+        ? ' ' + raw.slice(0,180)
+        : ''
+    }`
+  );
+}
 
   let raw=
     String(
