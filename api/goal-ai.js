@@ -468,7 +468,9 @@ const facts = {
     safeNumber(metrics.newVisits),
   nextMissing:
     safeNumber(metrics.nextMissing),
-  availability
+ currentDate,
+visitPeriod,
+availability
 };
 
 const variationRules = [
