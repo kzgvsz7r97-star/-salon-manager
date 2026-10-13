@@ -115,37 +115,141 @@ const imageData =
     );
   }
 
-          body:JSON.stringify({
-            model:MODEL,
+      const designPrompt = `
+Instagramストーリー用の美容師の写真を分析してください。
 
-            input:[
-              {
-                role:'user',
+ターゲット：
+18〜25歳女性。
 
-                content:[
-                  {
-                    type:
-                      'input_text',
+世界観：
+上品、シンプル、大人可愛い。
+安っぽくしない。
+写真を主役にする。
+文字を詰め込みすぎない。
 
-                    text:
-                      designPrompt
-                  },
+目的：
+この写真の上に「予約空き状況」の文字を載せます。
 
-                  {
-                    type:
-                      'input_image',
+最重要ルール：
+・顔に文字やパネルを被せない
+・髪型、髪の質感、毛先に極力被せない
+・人物の魅力を隠さない
+・空いている背景を最優先で使う
+・文字エリアは画面全体の35%以内
+・写真の主役を邪魔する場合は文字を小さくする
+・単にtop / center / bottomで決めず、実際の余白を見て判断する
 
-                    image_url:
-                      imageData,
+必ず以下を分析してください：
+1. 顔の位置
+2. 髪の位置と広がり
+3. 人物全体の位置
+4. 背景の空いている場所
+5. 明るい場所 / 暗い場所
+6. 文字を置いても邪魔にならない領域
 
-                    detail:'high'
-                  }
-                ]
-              }
-            ],
+3案は必ず違うレイアウトにしてください。
 
-            max_output_tokens:1400
-          })
+使用できる値：
+
+font:
+"maru"
+"mincho"
+"gothic"
+
+position:
+"top"
+"center"
+"bottom"
+
+textColor:
+"white"
+"black"
+
+panel:
+"none"
+"softWhite"
+"softBlack"
+
+align:
+"left"
+"center"
+
+size:
+"small"
+"medium"
+"large"
+
+さらに、文字配置の詳細を0〜100の割合で返してください。
+
+x:
+文字ブロック左端の横位置。
+
+y:
+文字ブロック上端の縦位置。
+
+width:
+30〜90。
+
+maxHeight:
+20〜35。
+
+panelOpacity:
+0〜0.75。
+
+人物や髪に被る案はおすすめにしないでください。
+3案とも同じ位置にしないでください。
+
+必ずJSONだけを返してください。
+
+形式：
+{
+  "recommended":0,
+  "variants":[
+    {
+      "font":"mincho",
+      "position":"top",
+      "textColor":"black",
+      "panel":"softWhite",
+      "align":"left",
+      "size":"small",
+      "x":8,
+      "y":8,
+      "width":48,
+      "maxHeight":28,
+      "panelOpacity":0.45,
+      "reason":"左上の背景に余白があり、顔と髪を避けられるため"
+    },
+    {
+      "font":"maru",
+      "position":"bottom",
+      "textColor":"white",
+      "panel":"softBlack",
+      "align":"left",
+      "size":"small",
+      "x":7,
+      "y":68,
+      "width":52,
+      "maxHeight":25,
+      "panelOpacity":0.4,
+      "reason":"人物を避けた背景側に小さく配置できるため"
+    },
+    {
+      "font":"gothic",
+      "position":"top",
+      "textColor":"black",
+      "panel":"none",
+      "align":"center",
+      "size":"small",
+      "x":12,
+      "y":7,
+      "width":44,
+      "maxHeight":24,
+      "panelOpacity":0,
+      "reason":"明るい余白のみを使い写真を最も邪魔しないため"
+    }
+  ]
+}
+`.trim();
 
   try{
     const response =
