@@ -161,9 +161,15 @@ Instagramストーリー用の美容師の写真を分析してください。
 3案の作り方：
 ・顔に被る案は1つも出さない
 ・安全な下側余白がある場合、recommendedは原則として下配置にする
-・2案目、3案目は別の安全な余白がある場合だけ位置を変える
-・安全な余白が1か所しかない場合は、無理に位置を変えず、同じ安全領域の中でサイズ・横位置・パネル濃度を変える
-・顔や髪を避けるためなら、3案が似た位置になってもよい
+・3案は必ず配置座標を変える
+・少なくとも2案は y を10以上離す
+・少なくとも2案は x を8以上離す
+・同じ x / y の組み合わせを3案で使わない
+・安全な下側余白がある場合、1案目は下側を優先する
+・2案目は上側または左右の別余白を使う
+・3案目は1案目・2案目と違う安全領域を使う
+・安全な余白が1か所しかない場合のみ、同じ領域内で位置を少しずらしてよい
+・顔や髪に重なるくらいなら、3案の差を小さくしてよい
 
 使用できる値：
 
@@ -212,7 +218,14 @@ maxHeight:
 panelOpacity:
 0〜0.75。
 
-必ずJSONだけを返してください。
+重要：
+・実際の配置は position ではなく x / y を優先して決める
+・下配置なら y は55〜78を目安にする
+・上配置なら y は5〜28を目安にする
+・中央配置なら y は32〜52を目安にする
+・3案の x / y を同じにしない
+・顔にかかる配置は禁止
+
 必ずJSONだけを返してください。
 
 形式：
@@ -221,45 +234,45 @@ panelOpacity:
   "variants":[
     {
       "font":"mincho",
-      "position":"top",
+      "position":"bottom",
       "textColor":"black",
       "panel":"softWhite",
       "align":"left",
       "size":"small",
       "x":8,
-      "y":8,
-      "width":48,
-      "maxHeight":28,
-      "panelOpacity":0.45,
-      "reason":"左上の背景に余白があり、顔と髪を避けられるため"
+      "y":66,
+      "width":46,
+      "maxHeight":25,
+      "panelOpacity":0.4,
+      "reason":"下側の安全な余白を使えるため"
     },
     {
       "font":"maru",
-      "position":"bottom",
-      "textColor":"white",
-      "panel":"softBlack",
+      "position":"top",
+      "textColor":"black",
+      "panel":"softWhite",
       "align":"left",
       "size":"small",
       "x":7,
-      "y":68,
-      "width":52,
-      "maxHeight":25,
-      "panelOpacity":0.4,
-      "reason":"人物を避けた背景側に小さく配置できるため"
+      "y":9,
+      "width":42,
+      "maxHeight":24,
+      "panelOpacity":0.35,
+      "reason":"上側の別の余白を使えるため"
     },
     {
       "font":"gothic",
-      "position":"top",
-      "textColor":"black",
-      "panel":"none",
+      "position":"bottom",
+      "textColor":"white",
+      "panel":"softBlack",
       "align":"center",
       "size":"small",
-      "x":12,
-      "y":7,
-      "width":44,
-      "maxHeight":24,
-      "panelOpacity":0,
-      "reason":"明るい余白のみを使い写真を最も邪魔しないため"
+      "x":44,
+      "y":70,
+      "width":43,
+      "maxHeight":23,
+      "panelOpacity":0.38,
+      "reason":"下側の右寄りに別の安全領域があるため"
     }
   ]
 }
