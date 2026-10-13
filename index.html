@@ -2607,28 +2607,34 @@ function previewStoryPhoto(input){
         );
 
       }catch(error){
-        console.error(
-          'story design error',
-          error
-        );
+  console.error(
+    'story design error',
+    error
+  );
 
-        if(host){
-          host.innerHTML=
-            `
-            <div
-              class="small"
-              style="
-                padding:10px;
-                background:#fff3f3;
-                border-radius:12px;
-              "
-            >
-              AIデザイン分析に失敗しました。
-              写真はそのまま使用できます。
-            </div>
-            `;
+  if(host){
+    host.innerHTML=
+      `
+      <div
+        class="small"
+        style="
+          padding:10px;
+          background:#fff3f3;
+          border-radius:12px;
+          line-height:1.5;
+        "
+      >
+        AIデザイン分析に失敗しました。<br>
+        ${
+          esc(
+            error?.message ||
+            '原因不明'
+          )
         }
-      }
+      </div>
+      `;
+  }
+}
     };
 
   reader.readAsDataURL(
