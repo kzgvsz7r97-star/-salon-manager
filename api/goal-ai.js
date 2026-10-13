@@ -115,90 +115,37 @@ const imageData =
     );
   }
 
-  const designPrompt = `
-Instagramストーリー用の美容師の写真を分析してください。
+          body:JSON.stringify({
+            model:MODEL,
 
-ターゲット：
-18〜25歳女性。
+            input:[
+              {
+                role:'user',
 
-世界観：
-上品、シンプル、大人可愛い。
-安っぽくしない。
-写真を主役にする。
-文字を詰め込みすぎない。
+                content:[
+                  {
+                    type:
+                      'input_text',
 
-この写真に空き枠の文字を載せます。
+                    text:
+                      designPrompt
+                  },
 
-写真の明るさ、余白、人物や髪の位置、
-背景の情報量を見て、
-読みやすく写真を邪魔しないデザインを3案作ってください。
+                  {
+                    type:
+                      'input_image',
 
-使用できる値だけを使ってください。
+                    image_url:
+                      imageData,
 
-font:
-"maru"
-"mincho"
-"gothic"
+                    detail:'high'
+                  }
+                ]
+              }
+            ],
 
-position:
-"top"
-"center"
-"bottom"
-
-textColor:
-"white"
-"black"
-
-panel:
-"none"
-"softWhite"
-"softBlack"
-
-align:
-"left"
-"center"
-
-size:
-"small"
-"medium"
-"large"
-
-必ずJSONだけを返してください。
-
-形式：
-{
-  "recommended":0,
-  "variants":[
-    {
-      "font":"maru",
-      "position":"bottom",
-      "textColor":"white",
-      "panel":"softBlack",
-      "align":"left",
-      "size":"medium",
-      "reason":"短い理由"
-    },
-    {
-      "font":"mincho",
-      "position":"top",
-      "textColor":"black",
-      "panel":"softWhite",
-      "align":"center",
-      "size":"medium",
-      "reason":"短い理由"
-    },
-    {
-      "font":"gothic",
-      "position":"bottom",
-      "textColor":"white",
-      "panel":"none",
-      "align":"left",
-      "size":"large",
-      "reason":"短い理由"
-    }
-  ]
-}
-`.trim();
+            max_output_tokens:1400
+          })
 
   try{
     const response =
