@@ -31,6 +31,18 @@ function setCors(req, res) {
     'Content-Type, X-Backup-Key'
   );
 }
+function json(res, status, body) {
+  res
+    .status(status)
+    .setHeader(
+      'Content-Type',
+      'application/json; charset=utf-8'
+    );
+
+  res.end(
+    JSON.stringify(body)
+  );
+}
 function outputText(body) {
   if (typeof body?.output_text === 'string' && body.output_text.trim()) {
     return body.output_text.trim();
