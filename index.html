@@ -2936,9 +2936,9 @@ window.applyStoryDesign=
     };
 
     const sizes={
-      small:'13px',
-      medium:'15px',
-      large:'18px'
+      small:'12px',
+      medium:'14px',
+      large:'16px'
     };
 
     preview.style.fontFamily=
@@ -2947,7 +2947,7 @@ window.applyStoryDesign=
 
     preview.style.fontSize=
       sizes[v.size] ||
-      sizes.medium;
+      sizes.small;
 
     preview.style.textAlign=
       v.align === 'center'
@@ -2959,11 +2959,22 @@ window.applyStoryDesign=
         ? '#fff'
         : '#111';
 
+    const opacity=
+      Math.max(
+        0,
+        Math.min(
+          0.75,
+          Number(
+            v.panelOpacity
+          ) || 0
+        )
+      );
+
     preview.style.background=
       v.panel === 'softWhite'
-        ? 'rgba(255,255,255,.82)'
+        ? `rgba(255,255,255,${opacity || 0.45})`
         : v.panel === 'softBlack'
-          ? 'rgba(0,0,0,.46)'
+          ? `rgba(0,0,0,${opacity || 0.4})`
           : 'transparent';
 
     preview.style.textShadow=
@@ -2972,36 +2983,69 @@ window.applyStoryDesign=
         ? '0 1px 6px rgba(0,0,0,.55)'
         : 'none';
 
+    const x=
+      Math.max(
+        2,
+        Math.min(
+          88,
+          Number(v.x) || 8
+        )
+      );
+
+    const y=
+      Math.max(
+        2,
+        Math.min(
+          85,
+          Number(v.y) || 8
+        )
+      );
+
+    const width=
+      Math.max(
+        30,
+        Math.min(
+          90,
+          Number(v.width) || 50
+        )
+      );
+
+    const maxHeight=
+      Math.max(
+        20,
+        Math.min(
+          35,
+          Number(v.maxHeight) || 28
+        )
+      );
+
+    preview.style.left=
+      `${x}%`;
+
     preview.style.top=
+      `${y}%`;
+
+    preview.style.right=
       'auto';
 
     preview.style.bottom=
       'auto';
 
+    preview.style.width=
+      `${width}%`;
+
+    preview.style.maxHeight=
+      `${maxHeight}%`;
+
     preview.style.transform=
       'none';
 
-    if(
-      v.position === 'top'
-    ){
-      preview.style.top=
-        '8%';
-    }
-    else if(
-      v.position === 'center'
-    ){
-      preview.style.top=
-        '50%';
+    preview.style.overflow=
+      'hidden';
 
-      preview.style.transform=
-        'translateY(-50%)';
-    }
-    else{
-      preview.style.bottom=
-        '8%';
-    }
+    preview.style.boxSizing=
+      'border-box';
   };
-
 function storyCanvasRoundRect(
   ctx,
   x,
