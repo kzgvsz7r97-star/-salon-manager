@@ -3564,7 +3564,7 @@ function refreshStoryPreviewText(){
     output.value;
 }
 
-function refreshStoryAvailability(){
+async function refreshStoryAvailability(){
   const a=$('storyStart');
   const b=$('storyEnd');
 
@@ -3588,7 +3588,7 @@ function refreshStoryAvailability(){
   const excludeMonday=
     $('storyMonday').value==='exclude';
 
-  $('storyOutput').value=
+  const baseText=
     storyAvailabilityText(
       a.value,
       b.value,
@@ -3598,7 +3598,61 @@ function refreshStoryAvailability(){
       excludeMonday
     );
 
+  $('storyOutput').value=
+    baseText;
+
   refreshStoryPreviewText();
+
+  const key=
+    getCloudBackupKey();
+
+  if(!key)return;
+
+  try{
+    const response=
+      await fetch(
+        'https://salon-manager-kzgvsz7r97-star.vercel.app/api/goal-ai',
+        {
+          method:'POST',
+          headers:{
+            'Content-Type':'application/json',
+            'X-Backup-Key':key
+          },
+          body:JSON.stringify({
+            kind:'story',
+            availability:[
+              baseText
+            ],
+            variationKey:
+              `${a.value}-${b.value}`,
+            variationMode:
+              Math.floor(
+                Date.now()/1000
+              )
+          })
+        }
+      );
+
+    const body=
+      await response.json();
+
+    if(
+      response.ok &&
+      body?.text
+    ){
+      $('storyOutput').value=
+        String(
+          body.text
+        ).trim();
+
+      refreshStoryPreviewText();
+    }
+  }catch(error){
+    console.error(
+      'story text AI error',
+      error
+    );
+  }
 }
 function storyPreset(days){
   const s=dateOnly($('storyStart').value||todayISO)||new Date();
