@@ -434,7 +434,15 @@ const previousText =
 
 const metrics =
   req.body?.metrics || {};
+const currentDate =
+  normalizeCurrentDate(
+    req.body?.currentDate
+  );
 
+const visitPeriod =
+  visitPeriodFromCurrentDate(
+    currentDate
+  );
 const availability =
   Array.isArray(req.body?.availability)
     ? req.body.availability.slice(0, 7)
