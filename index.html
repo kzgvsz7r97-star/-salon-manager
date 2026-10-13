@@ -2935,19 +2935,14 @@ window.applyStoryDesign=
         '-apple-system, BlinkMacSystemFont, sans-serif'
     };
 
-    const sizes={
-      small:'12px',
-      medium:'14px',
-      large:'16px'
+    const baseSizes={
+      small:14,
+      medium:16
     };
 
     preview.style.fontFamily=
       fonts[v.font] ||
       fonts.gothic;
-
-    preview.style.fontSize=
-      sizes[v.size] ||
-      sizes.small;
 
     preview.style.textAlign=
       v.align === 'center'
@@ -2963,7 +2958,7 @@ window.applyStoryDesign=
       Math.max(
         0,
         Math.min(
-          0.75,
+          0.55,
           Number(
             v.panelOpacity
           ) || 0
@@ -2972,9 +2967,9 @@ window.applyStoryDesign=
 
     preview.style.background=
       v.panel === 'softWhite'
-        ? `rgba(255,255,255,${opacity || 0.45})`
+        ? `rgba(255,255,255,${opacity || 0.32})`
         : v.panel === 'softBlack'
-          ? `rgba(0,0,0,${opacity || 0.4})`
+          ? `rgba(0,0,0,${opacity || 0.28})`
           : 'transparent';
 
     preview.style.textShadow=
@@ -2985,66 +2980,69 @@ window.applyStoryDesign=
 
     const x=
       Math.max(
-        2,
+        3,
         Math.min(
-          88,
+          55,
           Number(v.x) || 8
-        )
-      );
-
-    const y=
-      Math.max(
-        2,
-        Math.min(
-          85,
-          Number(v.y) || 8
         )
       );
 
     const width=
       Math.max(
-        30,
+        42,
         Math.min(
-          90,
-          Number(v.width) || 50
-        )
-      );
-
-    const maxHeight=
-      Math.max(
-        20,
-        Math.min(
-          35,
-          Number(v.maxHeight) || 28
+          70,
+          Number(v.width) || 55
         )
       );
 
     preview.style.left=
       `${x}%`;
 
-    preview.style.top=
-      `${y}%`;
-
     preview.style.right=
       'auto';
 
-    preview.style.bottom=
+    preview.style.top=
       'auto';
+
+    preview.style.bottom=
+      '6%';
 
     preview.style.width=
       `${width}%`;
 
     preview.style.maxHeight=
-      `${maxHeight}%`;
+      '38%';
 
     preview.style.transform=
       'none';
 
     preview.style.overflow=
-      'hidden';
+      'visible';
 
     preview.style.boxSizing=
       'border-box';
+
+    preview.style.lineHeight=
+      '1.45';
+
+    let size=
+      baseSizes[v.size] ||
+      14;
+
+    preview.style.fontSize=
+      `${size}px`;
+
+    while(
+      preview.scrollHeight >
+        preview.clientHeight &&
+      size > 11
+    ){
+      size-=1;
+
+      preview.style.fontSize=
+        `${size}px`;
+    }
   };
 function storyCanvasRoundRect(
   ctx,
