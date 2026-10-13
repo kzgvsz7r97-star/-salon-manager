@@ -3258,13 +3258,7 @@ window.createStoryImage=
             panelOpacity:.45
           };
 
-        const fontSizes={
-          small:36,
-          medium:42,
-          large:48
-        };
-
-        const fontFamilies={
+             const fontFamilies={
           maru:
             '"Hiragino Maru Gothic ProN", sans-serif',
 
@@ -3275,15 +3269,13 @@ window.createStoryImage=
             '-apple-system, BlinkMacSystemFont, sans-serif'
         };
 
-        const fontSize=
-          fontSizes[v.size] ||
-          fontSizes.small;
+        let fontSize=
+          v.size === 'medium'
+            ? 46
+            : 40;
 
-        ctx.font=
-          `600 ${fontSize}px ${
-            fontFamilies[v.font] ||
-            fontFamilies.gothic
-          }`;
+        const minFontSize=
+          30;
 
         ctx.textBaseline=
           'top';
@@ -3295,141 +3287,118 @@ window.createStoryImage=
 
         const x=
           Math.max(
-            2,
+            3,
             Math.min(
-              88,
+              55,
               Number(v.x) || 8
-            )
-          );
-
-        const y=
-          Math.max(
-            2,
-            Math.min(
-              85,
-              Number(v.y) || 8
             )
           );
 
         const width=
           Math.max(
-            30,
+            42,
             Math.min(
-              90,
-              Number(v.width) || 50
-            )
-          );
-
-        const maxHeight=
-          Math.max(
-            20,
-            Math.min(
-              35,
-              Number(v.maxHeight) || 28
+              70,
+              Number(v.width) || 55
             )
           );
 
         const padding=
           34;
 
-        const boxX=
-          Math.round(
-            cw*(x/100)
-          );
-
-        const boxY=
-          Math.round(
-            ch*(y/100)
-          );
-
         const boxWidth=
           Math.round(
             cw*(width/100)
           );
 
-        const maxBoxHeight=
-          Math.round(
-            ch*(maxHeight/100)
-          );
-
-        const maxTextWidth=
-          Math.max(
-            120,
-            boxWidth-
-            padding*2
-          );
-
-        const lines=
-          storyWrapText(
-            ctx,
-            output?.value || '',
-            maxTextWidth
-          );
-
-        const lineHeight=
-          Math.round(
-            fontSize*1.5
-          );
-
-        const allowedTextHeight=
-          Math.max(
-            lineHeight,
-            maxBoxHeight-
-            padding*2
-          );
-
-        const maxLines=
-          Math.max(
-            1,
-            Math.floor(
-              allowedTextHeight/
-              lineHeight
-            )
-          );
-
-        const visibleLines=
-          lines.slice(
-            0,
-            maxLines
-          );
-
-        const textHeight=
-          Math.max(
-            lineHeight,
-            visibleLines.length*
-            lineHeight
-          );
-
-        const boxHeight=
-          Math.min(
-            maxBoxHeight,
-            textHeight+
-            padding*2
-          );
-
-        const safeBoxX=
+        const boxX=
           Math.max(
             0,
             Math.min(
               cw-boxWidth,
-              boxX
+              Math.round(
+                cw*(x/100)
+              )
             )
           );
 
-        const safeBoxY=
-          Math.max(
-            0,
-            Math.min(
-              ch-boxHeight,
-              boxY
-            )
+        const maxBoxHeight=
+          Math.round(
+            ch*.38
           );
+
+        const maxTextWidth=
+          Math.max(
+            160,
+            boxWidth-
+            padding*2
+          );
+
+        let lines=[];
+        let lineHeight=0;
+        let textHeight=0;
+        let boxHeight=0;
+
+        while(
+          fontSize>=minFontSize
+        ){
+          ctx.font=
+            `600 ${fontSize}px ${
+              fontFamilies[v.font] ||
+              fontFamilies.gothic
+            }`;
+
+          lines=
+            storyWrapText(
+              ctx,
+              output?.value || '',
+              maxTextWidth
+            );
+
+          lineHeight=
+            Math.round(
+              fontSize*1.45
+            );
+
+          textHeight=
+            Math.max(
+              lineHeight,
+              lines.length*
+              lineHeight
+            );
+
+          boxHeight=
+            textHeight+
+            padding*2;
+
+          if(
+            boxHeight<=
+            maxBoxHeight
+          ){
+            break;
+          }
+
+          fontSize-=2;
+        }
+
+        boxHeight=
+          Math.min(
+            maxBoxHeight,
+            boxHeight
+          );
+
+        const safeBoxY=
+          ch-
+          Math.round(
+            ch*.06
+          )-
+          boxHeight;
 
         const opacity=
           Math.max(
             0,
             Math.min(
-              .75,
+              .55,
               Number(
                 v.panelOpacity
               ) || 0
@@ -3442,12 +3411,12 @@ window.createStoryImage=
         ){
           ctx.fillStyle=
             `rgba(255,255,255,${
-              opacity || .45
+              opacity || .32
             })`;
 
           storyCanvasRoundRect(
             ctx,
-            safeBoxX,
+            boxX,
             safeBoxY,
             boxWidth,
             boxHeight,
@@ -3462,12 +3431,12 @@ window.createStoryImage=
         ){
           ctx.fillStyle=
             `rgba(0,0,0,${
-              opacity || .4
+              opacity || .28
             })`;
 
           storyCanvasRoundRect(
             ctx,
-            safeBoxX,
+            boxX,
             safeBoxY,
             boxWidth,
             boxHeight,
@@ -3486,6 +3455,40 @@ window.createStoryImage=
           v.panel === 'none' &&
           v.textColor === 'white'
         ){
+          ctx.shadowColor=
+            'rgba(0,0,0,.55)';
+
+          ctx.shadowBlur=
+            18;
+
+          ctx.shadowOffsetY=
+            3;
+        }
+
+        const textX=
+          v.align === 'center'
+            ? boxX+
+              boxWidth/2
+            : boxX+
+              padding;
+
+        let textY=
+          safeBoxY+
+          padding;
+
+        lines.forEach(
+          line=>{
+
+            ctx.fillText(
+              line,
+              textX,
+              textY
+            );
+
+            textY+=
+              lineHeight;
+          }
+        );
           ctx.shadowColor=
             'rgba(0,0,0,.55)';
 
