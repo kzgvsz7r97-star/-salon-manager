@@ -2978,23 +2978,11 @@ window.applyStoryDesign=
         ? '0 1px 6px rgba(0,0,0,.55)'
         : 'none';
 
-    const x=
-      Math.max(
-        3,
-        Math.min(
-          55,
-          Number(v.x) || 8
-        )
-      );
+       const x=
+      6;
 
     const width=
-      Math.max(
-        42,
-        Math.min(
-          70,
-          Number(v.width) || 55
-        )
-      );
+      88;
 
     preview.style.left=
       `${x}%`;
@@ -3006,10 +2994,13 @@ window.applyStoryDesign=
       'auto';
 
     preview.style.bottom=
-      '6%';
+      '5%';
 
     preview.style.width=
       `${width}%`;
+
+    preview.style.maxHeight=
+      '40%';
 
     preview.style.maxHeight=
       '38%';
