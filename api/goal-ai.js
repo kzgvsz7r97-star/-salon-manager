@@ -60,7 +60,32 @@ function safeNumber(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
 }
+function normalizeCurrentDate(value) {
+  const raw = String(value || '').trim();
 
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw;
+  }
+
+  return new Date().toISOString().slice(0, 10);
+}
+
+function visitPeriodFromCurrentDate(currentDate) {
+  const [year, month, day] =
+    currentDate.split('-').map(Number);
+
+  const previousMonthDate =
+    new Date(Date.UTC(year, month - 2, 1));
+
+  const previousMonth =
+    previousMonthDate.getUTCMonth() + 1;
+
+  if (day <= 15) {
+    return `${previousMonth}月頭〜${previousMonth}月中旬`;
+  }
+
+  return `${previousMonth}月中旬〜${previousMonth}月末`;
+}
 export default async function handler(req, res) {
   setCors(req, res);
 
