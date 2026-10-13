@@ -3618,23 +3618,19 @@ async function refreshStoryAvailability(){
             'Content-Type':'application/json',
             'X-Backup-Key':key
           },
-         body:JSON.stringify({
+    body:JSON.stringify({
   kind:'story',
-  currentDate: todayISO,
+  currentDate:todayISO,
   availability:[
     baseText
   ],
-            kind:'story',
-            availability:[
-              baseText
-            ],
-            variationKey:
-              `${a.value}-${b.value}`,
-            variationMode:
-              Math.floor(
-                Date.now()/1000
-              )
-          })
+  variationKey:
+    `${a.value}-${b.value}`,
+  variationMode:
+    Math.floor(
+      Date.now()/1000
+    )
+})
         }
       );
 
