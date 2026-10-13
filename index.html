@@ -3243,7 +3243,7 @@ window.createStoryImage=
           drawH
         );
 
-        const v=
+              const v=
           window
             .__storySelectedDesign ||
           {
@@ -3252,13 +3252,18 @@ window.createStoryImage=
             textColor:'black',
             panel:'softWhite',
             align:'left',
-            size:'medium'
+            size:'medium',
+            x:8,
+            y:68,
+            width:50,
+            maxHeight:28,
+            panelOpacity:.45
           };
 
         const fontSizes={
-          small:39,
-          medium:45,
-          large:54
+          small:36,
+          medium:42,
+          large:48
         };
 
         const fontFamilies={
@@ -3274,7 +3279,7 @@ window.createStoryImage=
 
         const fontSize=
           fontSizes[v.size] ||
-          45;
+          fontSizes.small;
 
         ctx.font=
           `600 ${fontSize}px ${
@@ -3290,16 +3295,71 @@ window.createStoryImage=
             ? 'center'
             : 'left';
 
-        const margin=
-          76;
+        const x=
+          Math.max(
+            2,
+            Math.min(
+              88,
+              Number(v.x) || 8
+            )
+          );
+
+        const y=
+          Math.max(
+            2,
+            Math.min(
+              85,
+              Number(v.y) || 8
+            )
+          );
+
+        const width=
+          Math.max(
+            30,
+            Math.min(
+              90,
+              Number(v.width) || 50
+            )
+          );
+
+        const maxHeight=
+          Math.max(
+            20,
+            Math.min(
+              35,
+              Number(v.maxHeight) || 28
+            )
+          );
 
         const padding=
-          42;
+          34;
+
+        const boxX=
+          Math.round(
+            cw*(x/100)
+          );
+
+        const boxY=
+          Math.round(
+            ch*(y/100)
+          );
+
+        const boxWidth=
+          Math.round(
+            cw*(width/100)
+          );
+
+        const maxBoxHeight=
+          Math.round(
+            ch*(maxHeight/100)
+          );
 
         const maxTextWidth=
-          cw -
-          margin*2 -
-          padding*2;
+          Math.max(
+            120,
+            boxWidth-
+            padding*2
+          );
 
         const lines=
           storyWrapText(
@@ -3310,62 +3370,90 @@ window.createStoryImage=
 
         const lineHeight=
           Math.round(
-            fontSize*1.55
+            fontSize*1.5
+          );
+
+        const allowedTextHeight=
+          Math.max(
+            lineHeight,
+            maxBoxHeight-
+            padding*2
+          );
+
+        const maxLines=
+          Math.max(
+            1,
+            Math.floor(
+              allowedTextHeight/
+              lineHeight
+            )
+          );
+
+        const visibleLines=
+          lines.slice(
+            0,
+            maxLines
           );
 
         const textHeight=
           Math.max(
             lineHeight,
-            lines.length*
+            visibleLines.length*
             lineHeight
           );
 
-        const boxWidth=
-          cw-margin*2;
-
         const boxHeight=
-          textHeight+
-          padding*2;
+          Math.min(
+            maxBoxHeight,
+            textHeight+
+            padding*2
+          );
 
-        let boxY=
-          ch-
-          Math.round(
-            ch*.08
-          )-
-          boxHeight;
+        const safeBoxX=
+          Math.max(
+            0,
+            Math.min(
+              cw-boxWidth,
+              boxX
+            )
+          );
 
-        if(
-          v.position === 'top'
-        ){
-          boxY=
-            Math.round(
-              ch*.08
-            );
-        }
-        else if(
-          v.position ===
-          'center'
-        ){
-          boxY=
-            Math.round(
-              (ch-boxHeight)/2
-            );
-        }
+        const safeBoxY=
+          Math.max(
+            0,
+            Math.min(
+              ch-boxHeight,
+              boxY
+            )
+          );
+
+        const opacity=
+          Math.max(
+            0,
+            Math.min(
+              .75,
+              Number(
+                v.panelOpacity
+              ) || 0
+            )
+          );
 
         if(
           v.panel ===
           'softWhite'
         ){
           ctx.fillStyle=
-            'rgba(255,255,255,.82)';
+            `rgba(255,255,255,${
+              opacity || .45
+            })`;
 
           storyCanvasRoundRect(
             ctx,
-            margin,
-            boxY,
+            safeBoxX,
+            safeBoxY,
             boxWidth,
             boxHeight,
-            36
+            28
           );
 
           ctx.fill();
@@ -3375,15 +3463,17 @@ window.createStoryImage=
           'softBlack'
         ){
           ctx.fillStyle=
-            'rgba(0,0,0,.46)';
+            `rgba(0,0,0,${
+              opacity || .4
+            })`;
 
           storyCanvasRoundRect(
             ctx,
-            margin,
-            boxY,
+            safeBoxX,
+            safeBoxY,
             boxWidth,
             boxHeight,
-            36
+            28
           );
 
           ctx.fill();
@@ -3410,13 +3500,16 @@ window.createStoryImage=
 
         const textX=
           v.align === 'center'
-            ? cw/2
-            : margin+padding;
+            ? safeBoxX+
+              boxWidth/2
+            : safeBoxX+
+              padding;
 
         let textY=
-          boxY+padding;
+          safeBoxY+
+          padding;
 
-        lines.forEach(
+        visibleLines.forEach(
           line=>{
 
             ctx.fillText(
@@ -3432,7 +3525,6 @@ window.createStoryImage=
 
         ctx.shadowColor=
           'transparent';
-
         const blob=
           await new Promise(
             resolve=>
