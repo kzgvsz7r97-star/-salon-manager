@@ -2775,31 +2775,31 @@ if(!response.ok){
   );
 }
 
-  let raw=
-    String(
-      body?.text || ''
-    ).trim();
+  let aiText=
+  String(
+    body?.text || ''
+  ).trim();
 
-  raw=
-    raw
-      .replace(
-        /^```json\s*/i,
-        ''
-      )
-      .replace(
-        /^```\s*/i,
-        ''
-      )
-      .replace(
-        /\s*```$/,
-        ''
-      )
-      .trim();
+aiText=
+  aiText
+    .replace(
+      /^```json\s*/i,
+      ''
+    )
+    .replace(
+      /^```\s*/i,
+      ''
+    )
+    .replace(
+      /\s*```$/,
+      ''
+    )
+    .trim();
 
-  const data=
-    JSON.parse(
-      raw
-    );
+const data=
+  JSON.parse(
+    aiText
+  );
 
   const variants=
     Array.isArray(
