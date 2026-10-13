@@ -1,21 +1,36 @@
 const MODEL = process.env.OPENAI_MODEL || 'gpt-6-luna';
-const ALLOWED_ORIGIN = 'https://kzgvsz7r97-star.github.io';
+const ALLOWED_ORIGINS = new Set([
+  'https://kzgvsz7r97-star.github.io',
+  'https://salon-manager-kzgvsz7r97-star.vercel.app'
+]);
 
 function setCors(req, res) {
   const origin = req.headers.origin || '';
-  if (origin === ALLOWED_ORIGIN) {
-    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+
+  if (
+    ALLOWED_ORIGINS.has(origin)
+  ) {
+    res.setHeader(
+      'Access-Control-Allow-Origin',
+      origin
+    );
   }
-  res.setHeader('Vary', 'Origin');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Backup-Key');
-}
 
-function json(res, status, body) {
-  res.status(status).setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.end(JSON.stringify(body));
-}
+  res.setHeader(
+    'Vary',
+    'Origin'
+  );
 
+  res.setHeader(
+    'Access-Control-Allow-Methods',
+    'POST, OPTIONS'
+  );
+
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, X-Backup-Key'
+  );
+}
 function outputText(body) {
   if (typeof body?.output_text === 'string' && body.output_text.trim()) {
     return body.output_text.trim();
