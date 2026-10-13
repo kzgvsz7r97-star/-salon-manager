@@ -257,21 +257,26 @@ size:
         );
 
     if(!response.ok){
-      console.error(
-        'Story design AI error',
-        response.status,
-        body?.error?.message ||
-          body
-      );
+  const detail=
+    body?.error?.message ||
+    body?.error?.code ||
+    JSON.stringify(body);
 
-      return json(
-        res,
-        502,
-        {
-          error:
-            '写真を分析できませんでした'
-        }
-      );
+  console.error(
+    'Story design AI error',
+    response.status,
+    detail
+  );
+
+  return json(
+    res,
+    502,
+    {
+      error:
+        `写真を分析できませんでした: ${detail}`
+    }
+  );
+}
     }
 
     const text=
