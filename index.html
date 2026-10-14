@@ -2907,31 +2907,34 @@ function setLocalStoryDesign(){
       textColor:'white',
       panel:'softBlack',
       size:'small',
-      panelOpacity:.30
+      panelOpacity:.28
     },
     {
-      font:'mincho',
+      font:'gothic',
       align:'left',
       textColor:'black',
       panel:'softWhite',
       size:'small',
-      panelOpacity:.34
+      panelOpacity:.30
     },
     {
-      font:'maru',
+      font:'gothic',
       align:'left',
       textColor:'white',
       panel:'softBlack',
       size:'small',
-      panelOpacity:.24
+      panelOpacity:.20
     }
   ];
 
-  const index=
-    new Date().getDate()%
+  window.__storyDesignIndex =
+    ((window.__storyDesignIndex ?? -1) + 1) %
     designs.length;
 
-  window.__storyDesignVariants=
+  const index =
+    window.__storyDesignIndex;
+
+  window.__storyDesignVariants =
     designs;
 
   window.applyStoryDesign(index);
