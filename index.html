@@ -2078,7 +2078,7 @@ function storyAvailabilityText(start,end,durationMin,bizStart,bizEnd,excludeMond
     lines.push(`${dayLabelJa(iso)}  ${parts.join(' / ')}`);
   });
   if(!lines.length)return '空き枠はありません';
-  return `ご予約空き状況\n\n${lines.join('\n')}\n\nご予約・ご相談はDMまたは予約リンクからお願いします🤍`;
+  return `ご予約空き状況\n\n${lines.join('\n')}\n\n`;
 }
 function openStoryAvailability(){
   const today=todayISO;
@@ -2602,9 +2602,7 @@ function previewStoryPhoto(input){
             e.target.result
           );
 
-        await analyzeStoryDesign(
-          imageData
-        );
+      
 
       }catch(error){
   console.error(
