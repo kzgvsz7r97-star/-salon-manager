@@ -1,4 +1,7 @@
 const MODEL = process.env.OPENAI_MODEL || 'gpt-6-luna';
+const DESIGN_MODEL =
+  process.env.OPENAI_DESIGN_MODEL ||
+  'gpt-6.1-sol';
 const ALLOWED_ORIGINS = new Set([
   'https://kzgvsz7r97-star.github.io',
   'https://salon-manager-kzgvsz7r97-star.vercel.app'
@@ -315,7 +318,7 @@ panelOpacity:
           },
 
                body:JSON.stringify({
-            model:MODEL,
+         model:DESIGN_MODEL,
 
             input:[
               {
