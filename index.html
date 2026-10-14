@@ -3563,7 +3563,39 @@ function refreshStoryPreviewText(){
   preview.textContent=
     output.value;
 }
+function storyVisitPeriod(){
+  const d=new Date();
 
+  const month=
+    d.getMonth()===0
+      ? 12
+      : d.getMonth();
+
+  const day=d.getDate();
+
+  if(day<=15){
+    return `${month}月頭〜${month}月中旬`;
+  }
+
+  return `${month}月中旬〜${month}月末`;
+}
+
+function storyRecommendText(){
+  const options=[
+    '・毛先のパサつきが気になる',
+    '・カラーの色落ちが気になる',
+    '・顔まわりが扱いづらい',
+    '・レイヤーの形が崩れてきた'
+  ];
+
+  const index=
+    new Date().getDate()%options.length;
+
+  return [
+    options[index],
+    options[(index+1)%options.length]
+  ].join('\n');
+}
 async function refreshStoryAvailability(){
   const a=$('storyStart');
   const b=$('storyEnd');
