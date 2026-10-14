@@ -3700,10 +3700,12 @@ function storyRecommendText(){
     seasonal[month] ||
     seasonal[10];
 
-  const index=
-    new Date().getDate()%
-    options.length;
+  window.__storyTextIndex =
+  ((window.__storyTextIndex ?? -1) + 1) %
+  options.length;
 
+const index =
+  window.__storyTextIndex;
   return [
     options[index],
     options[(index+1)%options.length]
