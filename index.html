@@ -2078,7 +2078,7 @@ function storyAvailabilityText(start,end,durationMin,bizStart,bizEnd,excludeMond
     lines.push(`${dayLabelJa(iso)}  ${parts.join(' / ')}`);
   });
   if(!lines.length)return '空き枠はありません';
-  return `ご予約空き状況\n\n${lines.join('\n')}\n\n`;
+return `${lines.join('\n')}\n`;
 }
 function openStoryAvailability(){
   const today=todayISO;
