@@ -2899,7 +2899,43 @@ const data=
     recommended
   );
 }
+function setLocalStoryDesign(){
+  const designs=[
+    {
+      font:'gothic',
+      align:'left',
+      textColor:'white',
+      panel:'softBlack',
+      size:'small',
+      panelOpacity:.30
+    },
+    {
+      font:'mincho',
+      align:'left',
+      textColor:'black',
+      panel:'softWhite',
+      size:'small',
+      panelOpacity:.34
+    },
+    {
+      font:'maru',
+      align:'left',
+      textColor:'white',
+      panel:'softBlack',
+      size:'small',
+      panelOpacity:.24
+    }
+  ];
 
+  const index=
+    new Date().getDate()%
+    designs.length;
+
+  window.__storyDesignVariants=
+    designs;
+
+  window.applyStoryDesign(index);
+}
 window.applyStoryDesign=
   function(index){
 
