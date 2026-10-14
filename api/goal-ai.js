@@ -599,7 +599,7 @@ ${task}
       body: JSON.stringify({
         model: MODEL,
         input: prompt,
-        max_output_tokens: 260
+        max_output_tokens: 500
       })
     });
 
