@@ -692,7 +692,21 @@ async function openRecoveryHistory(){
         return `<div class="item">
           <div class="t">${esc(when)} ・ ${esc(x.reason||'自動保存')}</div>
           <div class="s">予約 ${count}件 / 顧客 ${customers}人</div>
-          <button class="soft" style="width:100%;margin-top:8px" onclick="restoreRecoverySnapshot('${esc(x.id)}')">この状態に戻す</button>
+      <button
+  class="soft"
+  style="width:100%;margin-top:8px"
+  onclick="restoreRecoverySnapshot('${esc(x.id)}')"
+>
+  この状態に戻す
+</button>
+
+<button
+  class="soft"
+  style="width:100%;margin-top:8px"
+  onclick="restoreRevenueFromRecovery('${esc(x.id)}')"
+>
+  予約・売上だけ戻す
+</button>
         </div>`;
       }).join('')
       :'<div class="empty">自動バックアップはまだありません</div>'}
