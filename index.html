@@ -1211,8 +1211,51 @@ async function syncFromCloud(force=false,keyOverride=''){
 }
 
 function save(){
-  localStorage.setItem(KEY,JSON.stringify(db));
-  stampLocalSave('自動保存');
+  const now=Date.now();
+  const base=readSyncBase();
+
+  const touchChanged=(kind)=>{
+    const baseMap=itemMap(base?.[kind]||[]);
+
+    db[kind]=(db[kind]||[]).map(item=>{
+      if(!item?.id)return item;
+
+      const old=baseMap.get(String(item.id));
+
+      if(
+        !old ||
+        !sameJSON(
+          {...item,updatedAt:undefined},
+          {...old,updatedAt:undefined}
+        )
+      ){
+        return {
+          ...item,
+          updatedAt:now
+        };
+      }
+
+      return item;
+    });
+  };
+
+  [
+    'bookings',
+    'customers',
+    'sales',
+    'retail',
+    'products'
+  ].forEach(touchChanged);
+
+  localStorage.setItem(
+    KEY,
+    JSON.stringify(db)
+  );
+
+  stampLocalSave(
+    '自動保存'
+  );
+
   renderAll();
 
   if(!cloudApplying){
