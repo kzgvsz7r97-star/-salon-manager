@@ -961,23 +961,80 @@ function mergeArrayFirst(localArr,remoteArr){
 function mergeArraySafe(localArr,remoteArr,baseArr){
   if(!baseArr)return mergeArrayFirst(localArr,remoteArr);
 
-  const local=itemMap(localArr),remote=itemMap(remoteArr),base=itemMap(baseArr),out=[];
-  const keys=new Set([...remote.keys(),...local.keys(),...base.keys()]);
+  const local=itemMap(localArr);
+  const remote=itemMap(remoteArr);
+  const base=itemMap(baseArr);
+  const out=[];
+
+  const keys=new Set([
+    ...remote.keys(),
+    ...local.keys(),
+    ...base.keys()
+  ]);
 
   keys.forEach(k=>{
-    const l=local.get(k),r=remote.get(k),b=base.get(k);
-    const localChanged=!!l&&!sameJSON(l,b);
-    const localDeleted=!!b&&!l;
-    const remoteChanged=!!r&&!sameJSON(r,b);
+    const l=local.get(k);
+    const r=remote.get(k);
+    const b=base.get(k);
+
+    const localChanged=
+      !!l&&!sameJSON(l,b);
+
+    const remoteChanged=
+      !!r&&!sameJSON(r,b);
+
+    const localDeleted=
+      !!b&&!l;
 
     if(localDeleted){
-      if(remoteChanged&&r)out.push(r);
+      if(remoteChanged&&r){
+        out.push(r);
+      }
       return;
     }
 
-    if(localChanged&&l){out.push(l);return;}
-    if(r){out.push(r);return;}
-    if(l)out.push(l);
+    if(
+      localChanged&&
+      remoteChanged&&
+      l&&r
+    ){
+      const localTime=
+        Number(l.updatedAt||0);
+
+      const remoteTime=
+        Number(r.updatedAt||0);
+
+      if(localTime||remoteTime){
+        out.push(
+          localTime>remoteTime
+            ?l
+            :r
+        );
+      }else{
+        out.push(r);
+      }
+
+      return;
+    }
+
+    if(localChanged&&l){
+      out.push(l);
+      return;
+    }
+
+    if(remoteChanged&&r){
+      out.push(r);
+      return;
+    }
+
+    if(r){
+      out.push(r);
+      return;
+    }
+
+    if(l){
+      out.push(l);
+    }
   });
 
   return out;
