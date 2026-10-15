@@ -1083,7 +1083,25 @@ function mergeDeletedMaps(localDeleted={},remoteDeleted={}){
   return out;
 }
 function removeDeletedItems(items,deletedMap){
-  return (items||[]).filter(x=>!x?.id||!deletedMap?.[String(x.id)]);
+  return (items||[]).filter(x=>{
+    if(!x?.id)return true;
+
+    const deletedAt=
+      Number(
+        deletedMap?.[String(x.id)]||0
+      );
+
+    if(!deletedAt){
+      return true;
+    }
+
+    const updatedAt=
+      Number(
+        x.updatedAt||0
+      );
+
+    return updatedAt>deletedAt;
+  });
 }
 
 function mergeDbSafe(localData,remoteData,baseData){
