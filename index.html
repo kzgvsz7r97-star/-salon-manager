@@ -763,6 +763,7 @@ return `<div class="item" ${target?'style="border:2px solid #111"':''}>
     売上 <b>${yen(total)}</b>
     ${target?' ← 正常候補':''}
   </div>
+  <button
   class="soft"
   style="width:100%;margin-top:8px"
   onclick="restoreRecoverySnapshot('${esc(x.id)}')"
