@@ -712,7 +712,77 @@ async function openRecoveryHistory(){
       :'<div class="empty">自動バックアップはまだありません</div>'}
     <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button></div>`);
 }
+async function restoreRevenueFromRecovery(id){
+  let rows=[];
 
+  try{
+    rows=await recoverySnapshots();
+  }catch{
+    return alert('バックアップを読み込めませんでした');
+  }
+
+  const snap=
+    rows.find(x=>x.id===id);
+
+  if(!snap){
+    return alert('バックアップが見つかりません');
+  }
+
+  const oldData=
+    normalizedCloudData(
+      snap.data||{}
+    );
+
+  const ok=
+    confirm(
+      `${savedTimeLabel(snap.createdAt)} の\n予約・売上だけ戻しますか？\n\n顧客・店販設定・ストーリー設定などは現在のまま残します。`
+    );
+
+  if(!ok)return;
+
+  await createRecoverySnapshot(
+    '売上部分復元前'
+  );
+
+  db.bookings=
+    structuredClone(
+      oldData.bookings||[]
+    );
+
+  db.sales=
+    structuredClone(
+      oldData.sales||[]
+    );
+
+  db.retail=
+    structuredClone(
+      oldData.retail||[]
+    );
+
+  localStorage.setItem(
+    KEY,
+    JSON.stringify(db)
+  );
+
+  cloudDirty=true;
+
+  renderAll();
+  updateLastSavedLabel();
+
+  await createRecoverySnapshot(
+    '予約・売上のみ復元'
+  );
+
+  closeModal();
+
+  syncStatus(
+    '予約・売上だけ復元しました。内容確認後に同期してください'
+  );
+
+  alert(
+    '予約・売上だけ復元しました。\n金額を確認してください。'
+  );
+}
 async function restoreRecoverySnapshot(id){
   let rows=[];
   try{rows=await recoverySnapshots();}
