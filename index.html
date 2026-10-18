@@ -311,6 +311,22 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
 <script>
 window.__cloudBackupRows = [];
 
+// 復元ロック中は同期キー入力を出さない
+if(
+  localStorage.getItem(
+    'salonManagerRestoreLock'
+  )==='1'
+){
+  sessionStorage.setItem(
+    'salonManagerBackupPromptSkipped',
+    '1'
+  );
+
+  localStorage.removeItem(
+    'salonManagerCloudBackupKey'
+  );
+}
+
 window.openCloudBackupHistoryStandalone = async function(){
   const API =
     'https://salon-manager-kzgvsz7r97-star.vercel.app/api/backup';
@@ -679,7 +695,7 @@ window.restoreCloudSnapshot = function(index){
   const ok =
     confirm(
       `${dateText} の状態に戻しますか？\n\n` +
-      `現在のサロマネのデータを、この時点の内容に戻します。`
+      `現在のサロマネを、このバックアップ時点の状態に戻します。`
     );
 
   if(!ok)return;
@@ -696,21 +712,27 @@ window.restoreCloudSnapshot = function(index){
     );
   }
 
-  const syncKey =
-    localStorage.getItem(
-      'salonManagerCloudBackupKey'
-    );
-
-  if(syncKey){
-    localStorage.setItem(
-      'salonManagerCloudBackupKeyBeforeRestore',
-      syncKey
-    );
-  }
-
+  // 復元データを保存
   localStorage.setItem(
     'salonManagerV2',
     JSON.stringify(backup)
+  );
+
+  // 古い同期基準を消す
+  localStorage.removeItem(
+    'salonManagerSyncBaseV3'
+  );
+
+  // 自動同期を停止する印
+  localStorage.setItem(
+    'salonManagerRestoreLock',
+    '1'
+  );
+
+  // このタブでも同期キー入力を止める
+  sessionStorage.setItem(
+    'salonManagerBackupPromptSkipped',
+    '1'
   );
 
   localStorage.removeItem(
@@ -719,7 +741,7 @@ window.restoreCloudSnapshot = function(index){
 
   alert(
     'バックアップ時点の状態に戻しました。\n\n' +
-    '自動同期で元に戻されないよう、いったんクラウド同期を停止しています。'
+    'クラウド同期を停止した状態で再読み込みします。'
   );
 
   location.reload();
