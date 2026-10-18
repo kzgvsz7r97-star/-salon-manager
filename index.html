@@ -1188,6 +1188,12 @@ function removeDeletedItems(items,deletedMap){
         x.updatedAt||0
       );
 
+    // 旧データはupdatedAtを持っていないので、
+    // 古い削除履歴だけで勝手に消さない
+    if(!updatedAt){
+      return true;
+    }
+
     return updatedAt>deletedAt;
   });
 }
