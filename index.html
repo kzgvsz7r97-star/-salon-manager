@@ -762,114 +762,83 @@ function stampLocalSave(reason='自動保存'){
 
 async function openRecoveryHistory(){
   let rows=[];
+
   try{
     rows=await recoverySnapshots();
   }catch(err){
     console.error(err);
-    return alert('自動バックアップ履歴を開けませんでした');
+    return alert(
+      '自動バックアップ履歴を開けませんでした'
+    );
   }
 
-  modal(`<h3>自動バックアップ履歴</h3>
-    <div class="small" style="margin-bottom:10px">直近10世代まで、この端末内に保存しています。復元前にも現在の状態を1世代保存します。</div>
-    ${rows.length
-      ?rows.map(x=>{
-        const d=
-  normalizedCloudData(
-    x.data||{}
-  );
+  modal(`
+    <h3>自動バックアップ履歴</h3>
 
-const count=
-  Array.isArray(d.bookings)
-    ?d.bookings.length
-    :0;
+    <div
+      class="small"
+      style="margin-bottom:10px"
+    >
+      直近10世代まで、この端末内に保存しています。
+    </div>
 
-const customers=
-  Array.isArray(d.customers)
-    ?d.customers.length
-    :0;
+    ${
+      rows.length
+        ?rows.map(x=>{
+          const d=
+            x.data||{};
 
-const m=
-  monthString(
-    new Date()
-  );
+          const count=
+            Array.isArray(d.bookings)
+              ?d.bookings.length
+              :0;
 
-const normalPaid=
-  (d.bookings||[])
-    .filter(b=>
-      monthKey(b.date)===m &&
-      isActiveBooking(b) &&
-      !b.isModel &&
-      b.paymentComplete
-    );
+          const customers=
+            Array.isArray(d.customers)
+              ?d.customers.length
+              :0;
 
-const bookingSales=
-  normalPaid.reduce(
-    (sum,b)=>
-      sum+Number(b.price||0),
-    0
-  );
+          const when=
+            savedTimeLabel(
+              x.createdAt
+            );
 
-const extraSales=
-  (d.sales||[])
-    .filter(s=>
-      monthKey(s.date)===m
-    )
-    .reduce(
-      (sum,s)=>
-        sum+Number(s.amount||0),
-      0
-    );
+          return `
+            <div class="item">
+              <div class="t">
+                ${esc(when)}
+                ・
+                ${esc(x.reason||'自動保存')}
+              </div>
 
-const retailSales=
-  (d.retail||[])
-    .filter(r=>
-      monthKey(r.date)===m
-    )
-    .reduce(
-      (sum,r)=>
-        sum+Number(r.amount||0),
-      0
-    );
+              <div class="s">
+                予約 ${count}件
+                /
+                顧客 ${customers}人
+              </div>
 
-const total=
-  bookingSales+
-  extraSales+
-  retailSales;
+              <button
+                class="soft"
+                style="width:100%;margin-top:8px"
+                onclick="restoreRecoverySnapshot('${esc(x.id)}')"
+              >
+                この状態に戻す
+              </button>
+            </div>
+          `;
+        }).join('')
+        :'<div class="empty">自動バックアップはまだありません</div>'
+    }
 
-const when=
-  savedTimeLabel(
-    x.createdAt
-  );
-
-const target=
-  total===256865;
-
-return `<div class="item" ${target?'style="border:2px solid #111"':''}>
-  <div class="t">${esc(when)} ・ ${esc(x.reason||'自動保存')}</div>
-  <div class="s">
-    予約 ${count}件 / 顧客 ${customers}人<br>
-    売上 <b>${yen(total)}</b>
-    ${target?' ← 正常候補':''}
-  </div>
-  <button
-  class="soft"
-  style="width:100%;margin-top:8px"
-  onclick="restoreRecoverySnapshot('${esc(x.id)}')"
->
-  この状態に戻す
-</button>
-
-<button
-  class="soft"
-  style="width:100%;margin-top:8px"
-  onclick="restoreRevenueFromRecovery('${esc(x.id)}')"
->
-  予約・売上だけ戻す
-</button>
-        </div>`;
-      }).join('')
-      :'<div class="empty">自動バックアップはまだありません</div>'}
-    <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button></div>`);
+    <div class="actions">
+      <button
+        class="ghost"
+        onclick="closeModal()"
+      >
+        閉じる
+      </button>
+    </div>
+  `);
 }
 async function restoreRevenueFromRecovery(id){
   let rows=[];
