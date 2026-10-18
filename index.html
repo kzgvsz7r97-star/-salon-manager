@@ -1096,7 +1096,8 @@ window.openRecoveryHistory=
   openRecoveryHistory;
 
 window.restoreRecoverySnapshotByIndex=
-  restoreRecoverySnapshotByIndex;function getCloudBackupKey(){
+  restoreRecoverySnapshotByIndex;
+  function getCloudBackupKey(){
   let key=localStorage.getItem(CLOUD_BACKUP_KEY_STORAGE)||'';
   if(key)return key;
 
