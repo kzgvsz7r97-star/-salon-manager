@@ -700,51 +700,97 @@ window.restoreCloudSnapshot = function(index){
 
   if(!ok)return;
 
-  const current =
-    localStorage.getItem(
-      'salonManagerV2'
+  try{
+    const current =
+      localStorage.getItem(
+        'salonManagerV2'
+      );
+
+    if(current){
+      localStorage.setItem(
+        'salonManagerBeforeCloudRestore',
+        current
+      );
+    }
+
+    localStorage.setItem(
+      'salonManagerRestoreLock',
+      '1'
     );
 
-  if(current){
+    sessionStorage.setItem(
+      'salonManagerBackupPromptSkipped',
+      '1'
+    );
+
+    localStorage.removeItem(
+      'salonManagerCloudBackupKey'
+    );
+
+    localStorage.removeItem(
+      'salonManagerSyncBaseV3'
+    );
+
+    const restored =
+      typeof normalizedCloudData==='function'
+        ? normalizedCloudData(backup)
+        : structuredClone(backup);
+
+    db =
+      structuredClone(restored);
+
     localStorage.setItem(
-      'salonManagerBeforeCloudRestore',
-      current
+      'salonManagerV2',
+      JSON.stringify(db)
+    );
+
+    if(
+      typeof renderAll==='function'
+    ){
+      renderAll();
+    }
+
+    if(
+      typeof setReservationView==='function'
+    ){
+      setReservationView('list');
+    }
+
+    if(
+      typeof updateLastSavedLabel==='function'
+    ){
+      updateLastSavedLabel();
+    }
+
+    const overlay =
+      document.getElementById(
+        'cloudHistoryStandalone'
+      );
+
+    if(overlay){
+      overlay.remove();
+    }
+
+    alert(
+      'バックアップ時点の状態に戻しました。\n\n' +
+      '画面にも反映済みです。\n' +
+      'クラウド同期は一時停止しています。'
+    );
+
+  }catch(err){
+    console.error(
+      'restore error',
+      err
+    );
+
+    alert(
+      '復元エラー\n\n' +
+      (
+        err?.message ||
+        String(err)
+      )
     );
   }
-
-  // 復元データを保存
-  localStorage.setItem(
-    'salonManagerV2',
-    JSON.stringify(backup)
-  );
-
-  // 古い同期基準を消す
-  localStorage.removeItem(
-    'salonManagerSyncBaseV3'
-  );
-
-  // 自動同期を停止する印
-  localStorage.setItem(
-    'salonManagerRestoreLock',
-    '1'
-  );
-
-  // このタブでも同期キー入力を止める
-  sessionStorage.setItem(
-    'salonManagerBackupPromptSkipped',
-    '1'
-  );
-
-  localStorage.removeItem(
-    'salonManagerCloudBackupKey'
-  );
-
-  alert(
-    'バックアップ時点の状態に戻しました。\n\n' +
-    'クラウド同期を停止した状態で再読み込みします。'
-  );
-
-  location.reload();
 };
 </script>
       <div id="lastSavedLabel" class="small" style="margin-top:8px">最終保存：確認中…</div>
