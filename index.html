@@ -303,10 +303,236 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
    <button
   class="soft"
   style="width:100%;margin-top:8px"
-  onclick="openCloudBackupHistory()"
+  onclick="openCloudBackupHistoryStandalone()"
 >
   クラウドバックアップ履歴
 </button>
+
+<script>
+window.openCloudBackupHistoryStandalone = async function(){
+  const API =
+    'https://salon-manager-kzgvsz7r97-star.vercel.app/api/backup';
+
+  const KEY_NAME =
+    'salonManagerCloudBackupKey';
+
+  let key =
+    localStorage.getItem(KEY_NAME) || '';
+
+  if(!key){
+    key = (
+      prompt(
+        'クラウド同期キーを入力してください'
+      ) || ''
+    ).trim();
+
+    if(!key){
+      return;
+    }
+
+    localStorage.setItem(
+      KEY_NAME,
+      key
+    );
+  }
+
+  try{
+    const res =
+      await fetch(
+        API,
+        {
+          method:'GET',
+          headers:{
+            'X-Backup-Key':key
+          },
+          cache:'no-store'
+        }
+      );
+
+    const body =
+      await res.json();
+
+    if(!res.ok){
+      throw new Error(
+        body?.error ||
+        '取得できませんでした'
+      );
+    }
+
+    const rows =
+      Array.isArray(body.backups)
+        ? body.backups
+        : [];
+
+    if(!rows.length){
+      alert(
+        'クラウドバックアップはありません'
+      );
+      return;
+    }
+
+    const old =
+      document.getElementById(
+        'cloudHistoryStandalone'
+      );
+
+    if(old){
+      old.remove();
+    }
+
+    const overlay =
+      document.createElement('div');
+
+    overlay.id =
+      'cloudHistoryStandalone';
+
+    overlay.style.cssText = `
+      position:fixed;
+      inset:0;
+      z-index:999999;
+      background:rgba(0,0,0,.45);
+      display:flex;
+      align-items:flex-end;
+      justify-content:center;
+    `;
+
+    const panel =
+      document.createElement('div');
+
+    panel.style.cssText = `
+      width:100%;
+      max-width:560px;
+      max-height:85vh;
+      overflow:auto;
+      background:#fff;
+      border-radius:20px 20px 0 0;
+      padding:20px;
+      box-sizing:border-box;
+      color:#111;
+    `;
+
+    const title =
+      document.createElement('h3');
+
+    title.textContent =
+      'クラウドバックアップ履歴';
+
+    panel.appendChild(title);
+
+    rows.forEach((row,index)=>{
+      const data =
+        row?.data || {};
+
+      const bookings =
+        Array.isArray(data.bookings)
+          ? data.bookings.length
+          : 0;
+
+      const customers =
+        Array.isArray(data.customers)
+          ? data.customers.length
+          : 0;
+
+      const sales =
+        Array.isArray(data.sales)
+          ? data.sales.length
+          : 0;
+
+      const retail =
+        Array.isArray(data.retail)
+          ? data.retail.length
+          : 0;
+
+      const dateRaw =
+        row.created_at ||
+        row.createdAt ||
+        '';
+
+      let dateText =
+        dateRaw;
+
+      try{
+        dateText =
+          new Date(dateRaw)
+            .toLocaleString(
+              'ja-JP'
+            );
+      }catch(e){}
+
+      const item =
+        document.createElement('div');
+
+      item.style.cssText = `
+        border:1px solid #ddd;
+        border-radius:12px;
+        padding:12px;
+        margin-top:10px;
+      `;
+
+      item.innerHTML = `
+        <div style="font-weight:700">
+          ${index + 1}. ${dateText}
+        </div>
+
+        <div style="
+          font-size:13px;
+          margin-top:6px;
+          line-height:1.6
+        ">
+          予約 ${bookings}件<br>
+          顧客 ${customers}人<br>
+          追加売上 ${sales}件<br>
+          店販 ${retail}件
+        </div>
+      `;
+
+      panel.appendChild(item);
+    });
+
+    const close =
+      document.createElement('button');
+
+    close.textContent =
+      '閉じる';
+
+    close.style.cssText = `
+      width:100%;
+      margin-top:16px;
+      padding:14px;
+      border:0;
+      border-radius:12px;
+      font-size:16px;
+    `;
+
+    close.onclick =
+      ()=>overlay.remove();
+
+    panel.appendChild(close);
+
+    overlay.appendChild(panel);
+
+    overlay.onclick =
+      e=>{
+        if(e.target===overlay){
+          overlay.remove();
+        }
+      };
+
+    document.body.appendChild(
+      overlay
+    );
+
+  }catch(err){
+    alert(
+      'クラウド履歴エラー\n\n' +
+      (
+        err?.message ||
+        String(err)
+      )
+    );
+  }
+};
+</script>
       <div id="lastSavedLabel" class="small" style="margin-top:8px">最終保存：確認中…</div>
       <div class="small" style="margin-top:2px">端末内に直近10世代を自動保存します。</div>
       <button class="blue" style="width:100%;margin-top:8px" onclick="manualCloudSync()">今すぐ同期</button>
