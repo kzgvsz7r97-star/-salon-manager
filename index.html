@@ -300,7 +300,13 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
         <button onclick="exportBackup()">バックアップ保存</button>
         <button class="soft" onclick="document.getElementById('backupImportFile').click()">バックアップ復元</button>
       </div>
-      <button class="soft" style="width:100%;margin-top:8px" onclick="openRecoveryHistory()">自動バックアップ履歴</button>
+   <button
+  class="soft"
+  style="width:100%;margin-top:8px"
+  onclick="openCloudBackupHistory()"
+>
+  クラウドバックアップ履歴
+</button>
       <div id="lastSavedLabel" class="small" style="margin-top:8px">最終保存：確認中…</div>
       <div class="small" style="margin-top:2px">端末内に直近10世代を自動保存します。</div>
       <button class="blue" style="width:100%;margin-top:8px" onclick="manualCloudSync()">今すぐ同期</button>
