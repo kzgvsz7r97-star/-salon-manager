@@ -309,7 +309,6 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
 </button>
 
 <script>
-
 window.__cloudBackupRows = [];
 
 window.openCloudBackupHistoryStandalone = async function(){
@@ -522,39 +521,6 @@ window.openCloudBackupHistoryStandalone = async function(){
         thisMonthExtraSales+
         thisMonthRetail;
 
-      const allBookingSales =
-        activeBookings
-          .filter(
-            b=>!!b.paymentComplete
-          )
-          .reduce(
-            (sum,b)=>
-              sum+
-              Number(b.price||0),
-            0
-          );
-
-      const allExtraSales =
-        sales.reduce(
-          (sum,s)=>
-            sum+
-            Number(s.amount||0),
-          0
-        );
-
-      const allRetail =
-        retail.reduce(
-          (sum,r)=>
-            sum+
-            Number(r.amount||0),
-          0
-        );
-
-      const allTotal =
-        allBookingSales+
-        allExtraSales+
-        allRetail;
-
       const dateRaw =
         row.created_at ||
         row.createdAt ||
@@ -621,16 +587,6 @@ window.openCloudBackupHistoryStandalone = async function(){
           </span>
         </div>
 
-        <div style="
-          margin-top:8px;
-          font-size:13px;
-          line-height:1.6;
-        ">
-          累計売上 ${yen(allTotal)}<br>
-          追加売上 ${sales.length}件 /
-          店販 ${retail.length}件
-        </div>
-
         <button
           style="
             width:100%;
@@ -640,9 +596,9 @@ window.openCloudBackupHistoryStandalone = async function(){
             border-radius:10px;
             font-weight:700;
           "
-          onclick="restoreMissingCloudData(${index})"
+          onclick="restoreCloudSnapshot(${index})"
         >
-          不足データだけ復旧
+          この状態に戻す
         </button>
       `;
 
@@ -692,8 +648,7 @@ window.openCloudBackupHistoryStandalone = async function(){
   }
 };
 
-window.restoreMissingCloudData =
-function(index){
+window.restoreCloudSnapshot = function(index){
   const row =
     window.__cloudBackupRows?.[index];
 
@@ -707,123 +662,64 @@ function(index){
   const backup =
     row.data || {};
 
-  const current =
-    JSON.parse(
-      localStorage.getItem(
-        'salonManagerV2'
-      ) || '{}'
-    );
+  const createdAt =
+    row.created_at ||
+    row.createdAt ||
+    '';
 
-  const mergeMissing =
-    (currentArr,backupArr)=>{
-      const now =
-        Array.isArray(currentArr)
-          ? currentArr
-          : [];
+  let dateText =
+    createdAt;
 
-      const old =
-        Array.isArray(backupArr)
-          ? backupArr
-          : [];
-
-      const ids =
-        new Set(
-          now
-            .filter(x=>x?.id)
-            .map(
-              x=>String(x.id)
-            )
-        );
-
-      const added =
-        old.filter(
-          x=>
-            x?.id &&
-            !ids.has(
-              String(x.id)
-            )
-        );
-
-      return {
-        merged:[
-          ...now,
-          ...added
-        ],
-        addedCount:
-          added.length
-      };
-    };
-
-  const bookings =
-    mergeMissing(
-      current.bookings,
-      backup.bookings
-    );
-
-  const customers =
-    mergeMissing(
-      current.customers,
-      backup.customers
-    );
-
-  const sales =
-    mergeMissing(
-      current.sales,
-      backup.sales
-    );
-
-  const retail =
-    mergeMissing(
-      current.retail,
-      backup.retail
-    );
-
-  const totalAdded =
-    bookings.addedCount+
-    customers.addedCount+
-    sales.addedCount+
-    retail.addedCount;
+  try{
+    dateText =
+      new Date(createdAt)
+        .toLocaleString('ja-JP');
+  }catch(e){}
 
   const ok =
     confirm(
-      `不足データを復旧しますか？\n\n`+
-      `予約 +${bookings.addedCount}件\n`+
-      `顧客 +${customers.addedCount}人\n`+
-      `追加売上 +${sales.addedCount}件\n`+
-      `店販 +${retail.addedCount}件\n\n`+
-      `現在あるデータは上書きしません。`
+      `${dateText} の状態に戻しますか？\n\n` +
+      `現在のサロマネのデータを、この時点の内容に戻します。`
     );
 
   if(!ok)return;
 
-  if(totalAdded===0){
-    alert(
-      '不足しているデータはありませんでした'
+  const current =
+    localStorage.getItem(
+      'salonManagerV2'
     );
-    return;
+
+  if(current){
+    localStorage.setItem(
+      'salonManagerBeforeCloudRestore',
+      current
+    );
   }
 
-  const restored = {
-    ...current,
-    bookings:
-      bookings.merged,
-    customers:
-      customers.merged,
-    sales:
-      sales.merged,
-    retail:
-      retail.merged
-  };
+  const syncKey =
+    localStorage.getItem(
+      'salonManagerCloudBackupKey'
+    );
+
+  if(syncKey){
+    localStorage.setItem(
+      'salonManagerCloudBackupKeyBeforeRestore',
+      syncKey
+    );
+  }
 
   localStorage.setItem(
     'salonManagerV2',
-    JSON.stringify(restored)
+    JSON.stringify(backup)
+  );
+
+  localStorage.removeItem(
+    'salonManagerCloudBackupKey'
   );
 
   alert(
-    `復旧しました。\n\n`+
-    `合計 ${totalAdded}件追加しました。\n`+
-    `ページを再読み込みします。`
+    'バックアップ時点の状態に戻しました。\n\n' +
+    '自動同期で元に戻されないよう、いったんクラウド同期を停止しています。'
   );
 
   location.reload();
