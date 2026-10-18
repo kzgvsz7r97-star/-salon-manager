@@ -761,32 +761,24 @@ function stampLocalSave(reason='自動保存'){
 }
 
 async function openRecoveryHistory(){
-  let rows=[];
-
   try{
-    rows=await recoverySnapshots();
-  }catch(err){
-    console.error(err);
-    return alert(
-      '自動バックアップ履歴を開けませんでした'
-    );
-  }
+    const rows=
+      await Promise.race([
+        recoverySnapshots(),
+        new Promise((_,reject)=>
+          setTimeout(
+            ()=>reject(
+              new Error('バックアップ読み込みがタイムアウトしました')
+            ),
+            5000
+          )
+        )
+      ]);
 
-  modal(`
-    <h3>自動バックアップ履歴</h3>
-
-    <div
-      class="small"
-      style="margin-bottom:10px"
-    >
-      直近10世代まで、この端末内に保存しています。
-    </div>
-
-    ${
+    const html=
       rows.length
         ?rows.map(x=>{
-          const d=
-            x.data||{};
+          const d=x.data||{};
 
           const count=
             Array.isArray(d.bookings)
@@ -798,49 +790,53 @@ async function openRecoveryHistory(){
               ?d.customers.length
               :0;
 
-          const when=
-            savedTimeLabel(
-              x.createdAt
-            );
-
           return `
             <div class="item">
               <div class="t">
-                ${esc(when)}
+                ${esc(savedTimeLabel(x.createdAt))}
                 ・
                 ${esc(x.reason||'自動保存')}
               </div>
 
               <div class="s">
-                予約 ${count}件
-                /
+                予約 ${count}件 /
                 顧客 ${customers}人
               </div>
-
-              <button
-                class="soft"
-                style="width:100%;margin-top:8px"
-                onclick="restoreRecoverySnapshot('${esc(x.id)}')"
-              >
-                この状態に戻す
-              </button>
             </div>
           `;
         }).join('')
-        :'<div class="empty">自動バックアップはまだありません</div>'
-    }
+        :'<div class="empty">バックアップはありません</div>';
 
-    <div class="actions">
-      <button
-        class="ghost"
-        onclick="closeModal()"
-      >
-        閉じる
-      </button>
-    </div>
-  `);
+    modal(`
+      <h3>自動バックアップ履歴</h3>
+
+      ${html}
+
+      <div class="actions">
+        <button
+          class="ghost"
+          onclick="closeModal()"
+        >
+          閉じる
+        </button>
+      </div>
+    `);
+
+  }catch(err){
+    console.error(
+      'Recovery history error',
+      err
+    );
+
+    alert(
+      'バックアップ履歴エラー\n\n' +
+      (
+        err?.message ||
+        String(err)
+      )
+    );
+  }
 }
-async function restoreRevenueFromRecovery(id){
   let rows=[];
 
   try{
