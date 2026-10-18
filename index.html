@@ -419,74 +419,220 @@ window.openCloudBackupHistoryStandalone = async function(){
 
     panel.appendChild(title);
 
-    rows.forEach((row,index)=>{
-      const data =
-        row?.data || {};
+   rows.forEach((row,index)=>{
+  const data =
+    row?.data || {};
 
-      const bookings =
-        Array.isArray(data.bookings)
-          ? data.bookings.length
-          : 0;
+  const bookings =
+    Array.isArray(data.bookings)
+      ? data.bookings
+      : [];
 
-      const customers =
-        Array.isArray(data.customers)
-          ? data.customers.length
-          : 0;
+  const customers =
+    Array.isArray(data.customers)
+      ? data.customers
+      : [];
 
-      const sales =
-        Array.isArray(data.sales)
-          ? data.sales.length
-          : 0;
+  const sales =
+    Array.isArray(data.sales)
+      ? data.sales
+      : [];
 
-      const retail =
-        Array.isArray(data.retail)
-          ? data.retail.length
-          : 0;
+  const retail =
+    Array.isArray(data.retail)
+      ? data.retail
+      : [];
 
-      const dateRaw =
-        row.created_at ||
-        row.createdAt ||
-        '';
+  const now =
+    new Date();
 
-      let dateText =
-        dateRaw;
+  const currentMonth =
+    `${now.getFullYear()}-${String(
+      now.getMonth()+1
+    ).padStart(2,'0')}`;
 
-      try{
-        dateText =
-          new Date(dateRaw)
-            .toLocaleString(
-              'ja-JP'
-            );
-      }catch(e){}
+  const activeBookings =
+    bookings.filter(b=>{
+      const status =
+        String(
+          b.status||
+          ''
+        ).toLowerCase();
 
-      const item =
-        document.createElement('div');
+      return (
+        status!=='cancelled' &&
+        status!=='canceled' &&
+        status!=='noshow'
+      );
+    });
 
-      item.style.cssText = `
-        border:1px solid #ddd;
-        border-radius:12px;
-        padding:12px;
-        margin-top:10px;
-      `;
+  const thisMonthBookings =
+    activeBookings.filter(
+      b=>
+        String(b.date||'')
+          .startsWith(currentMonth)
+    );
 
-      item.innerHTML = `
-        <div style="font-weight:700">
-          ${index + 1}. ${dateText}
-        </div>
+  const paidThisMonth =
+    thisMonthBookings.filter(
+      b=>!!b.paymentComplete
+    );
 
-        <div style="
-          font-size:13px;
-          margin-top:6px;
-          line-height:1.6
-        ">
-          予約 ${bookings}件<br>
-          顧客 ${customers}人<br>
-          追加売上 ${sales}件<br>
-          店販 ${retail}件
-        </div>
-      `;
+  const thisMonthBookingSales =
+    paidThisMonth.reduce(
+      (sum,b)=>
+        sum+
+        Number(b.price||0),
+      0
+    );
 
-      panel.appendChild(item);
+  const thisMonthExtraSales =
+    sales
+      .filter(
+        s=>
+          String(s.date||'')
+            .startsWith(currentMonth)
+      )
+      .reduce(
+        (sum,s)=>
+          sum+
+          Number(s.amount||0),
+        0
+      );
+
+  const thisMonthRetail =
+    retail
+      .filter(
+        r=>
+          String(r.date||'')
+            .startsWith(currentMonth)
+      )
+      .reduce(
+        (sum,r)=>
+          sum+
+          Number(r.amount||0),
+        0
+      );
+
+  const thisMonthTotal =
+    thisMonthBookingSales+
+    thisMonthExtraSales+
+    thisMonthRetail;
+
+  const allBookingSales =
+    activeBookings
+      .filter(
+        b=>!!b.paymentComplete
+      )
+      .reduce(
+        (sum,b)=>
+          sum+
+          Number(b.price||0),
+        0
+      );
+
+  const allExtraSales =
+    sales.reduce(
+      (sum,s)=>
+        sum+
+        Number(s.amount||0),
+      0
+    );
+
+  const allRetail =
+    retail.reduce(
+      (sum,r)=>
+        sum+
+        Number(r.amount||0),
+      0
+    );
+
+  const allTotal =
+    allBookingSales+
+    allExtraSales+
+    allRetail;
+
+  const dateRaw =
+    row.created_at ||
+    row.createdAt ||
+    '';
+
+  let dateText =
+    dateRaw;
+
+  try{
+    dateText =
+      new Date(dateRaw)
+        .toLocaleString(
+          'ja-JP'
+        );
+  }catch(e){}
+
+  const yen =
+    value=>
+      '¥'+
+      Number(value||0)
+        .toLocaleString('ja-JP');
+
+  const item =
+    document.createElement('div');
+
+  item.style.cssText = `
+    border:1px solid #ddd;
+    border-radius:12px;
+    padding:12px;
+    margin-top:10px;
+  `;
+
+  item.innerHTML = `
+    <div style="
+      font-weight:700;
+      font-size:16px;
+    ">
+      ${index + 1}. ${dateText}
+    </div>
+
+    <div style="
+      margin-top:8px;
+      font-size:14px;
+      line-height:1.7;
+    ">
+      予約 ${bookings.length}件 /
+      顧客 ${customers.length}人
+    </div>
+
+    <div style="
+      margin-top:8px;
+      padding:10px;
+      border-radius:10px;
+      background:#f5f5f5;
+      line-height:1.7;
+    ">
+      <b>${currentMonth} の状態</b><br>
+      今月予約 ${thisMonthBookings.length}件<br>
+      今月決済済 ${paidThisMonth.length}件<br>
+      今月売上 <b>${yen(thisMonthTotal)}</b><br>
+
+      <span style="font-size:12px">
+        技術 ${yen(thisMonthBookingSales)} /
+        追加 ${yen(thisMonthExtraSales)} /
+        店販 ${yen(thisMonthRetail)}
+      </span>
+    </div>
+
+    <div style="
+      margin-top:8px;
+      font-size:13px;
+      line-height:1.6;
+    ">
+      累計売上 ${yen(allTotal)}<br>
+      追加売上 ${sales.length}件 /
+      店販 ${retail.length}件
+    </div>
+  `;
+
+  panel.appendChild(item);
+});
     });
 
     const close =
