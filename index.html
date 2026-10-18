@@ -766,30 +766,28 @@ function stampLocalSave(reason='自動保存'){
   createRecoverySnapshot(reason);
 }
 async function openCloudBackupHistory(){
-  const key=
-    getCloudBackupKey();
+  const key=getCloudBackupKey();
 
   if(!key){
-    return alert(
-      '同期キーが設定されていません'
-    );
+    alert('同期キーが設定されていません');
+    return;
   }
 
   try{
-    const r=
-      await fetch(
-        CLOUD_BACKUP_API,
-        {
-          headers:{
-            'X-Backup-Key':key
-          }
+    const res=await fetch(
+      CLOUD_BACKUP_API,
+      {
+        headers:{
+          'X-Backup-Key':key
         }
-      );
+      }
+    );
 
     const body=
-      await r.json();
+      await res.json()
+        .catch(()=>({}));
 
-    if(!r.ok){
+    if(!res.ok){
       throw new Error(
         body.error||
         'クラウド履歴を取得できませんでした'
@@ -797,23 +795,29 @@ async function openCloudBackupHistory(){
     }
 
     const rows=
-      body.backups||[];
+      Array.isArray(body.backups)
+        ?body.backups
+        :[];
 
     const html=
       rows.length
-        ?rows.map((x,i)=>{
-          const d=
-            x.data||{};
+        ?rows.map((x,index)=>{
+          const data=
+            normalizedCloudData(
+              x.data||{}
+            );
 
           const bookings=
-            Array.isArray(d.bookings)
-              ?d.bookings.length
-              :0;
+            data.bookings.length;
 
           const customers=
-            Array.isArray(d.customers)
-              ?d.customers.length
-              :0;
+            data.customers.length;
+
+          const sales=
+            data.sales.length;
+
+          const retail=
+            data.retail.length;
 
           const created=
             x.created_at||
@@ -828,15 +832,35 @@ async function openCloudBackupHistory(){
 
               <div class="s">
                 予約 ${bookings}件 /
-                顧客 ${customers}人
+                顧客 ${customers}人 /
+                追加売上 ${sales}件 /
+                店販 ${retail}件
               </div>
+
+              <button
+                class="soft"
+                style="width:100%;margin-top:8px"
+                onclick="restoreCloudBackup(${index})"
+              >
+                このバックアップを確認
+              </button>
             </div>
           `;
         }).join('')
         :'<div class="empty">クラウドバックアップはありません</div>';
 
+    window.__cloudBackupRows=
+      rows;
+
     modal(`
       <h3>クラウドバックアップ履歴</h3>
+
+      <div
+        class="small"
+        style="margin-bottom:10px"
+      >
+        クラウドに残っている直近のバックアップです。
+      </div>
 
       ${html}
 
@@ -851,7 +875,10 @@ async function openCloudBackupHistory(){
     `);
 
   }catch(err){
-    console.error(err);
+    console.error(
+      'Cloud backup history error',
+      err
+    );
 
     alert(
       'クラウド履歴エラー\n\n'+
@@ -862,36 +889,86 @@ async function openCloudBackupHistory(){
     );
   }
 }
-  window.openCloudBackupHistory=openCloudBackupHistory;
+
+function restoreCloudBackup(index){
+  const row=
+    window.__cloudBackupRows?.[index];
+
+  if(!row){
+    alert(
+      'バックアップが見つかりません'
+    );
+    return;
+  }
+
+  const data=
+    normalizedCloudData(
+      row.data||{}
+    );
+
+  const created=
+    row.created_at||
+    row.createdAt||
+    '';
+
+  const ok=
+    confirm(
+      `${savedTimeLabel(created)} のバックアップです。\n\n`+
+      `予約 ${data.bookings.length}件\n`+
+      `顧客 ${data.customers.length}人\n\n`+
+      `この内容を復元しますか？`
+    );
+
+  if(!ok)return;
+
+  createRecoverySnapshot(
+    'クラウド復元前'
+  );
+
+  db=data;
+
+  localStorage.setItem(
+    KEY,
+    JSON.stringify(db)
+  );
+
+  localStorage.setItem(
+    LAST_SAVED_STORAGE,
+    new Date().toISOString()
+  );
+
+  cloudDirty=true;
+
+  renderAll();
+  updateLastSavedLabel();
+
+  createRecoverySnapshot(
+    'クラウド履歴から復元'
+  );
+
+  closeModal();
+
+  syncStatus(
+    'クラウド履歴から復元しました。内容確認後に同期してください'
+  );
+
+  alert(
+    '復元しました。\n内容を確認してから「今すぐ同期」を押してください。'
+  );
+}
+
 async function openRecoveryHistory(){
   try{
     const rows=
-      await Promise.race([
-        recoverySnapshots(),
-        new Promise((_,reject)=>
-          setTimeout(
-            ()=>reject(
-              new Error('バックアップ読み込みがタイムアウトしました')
-            ),
-            5000
-          )
-        )
-      ]);
+      await recoverySnapshots();
 
     const html=
       rows.length
-        ?rows.map(x=>{
-          const d=x.data||{};
-
-          const count=
-            Array.isArray(d.bookings)
-              ?d.bookings.length
-              :0;
-
-          const customers=
-            Array.isArray(d.customers)
-              ?d.customers.length
-              :0;
+        ?rows.map((x,index)=>{
+          const data=
+            normalizedCloudData(
+              x.data||{}
+            );
 
           return `
             <div class="item">
@@ -902,13 +979,24 @@ async function openRecoveryHistory(){
               </div>
 
               <div class="s">
-                予約 ${count}件 /
-                顧客 ${customers}人
+                予約 ${data.bookings.length}件 /
+                顧客 ${data.customers.length}人
               </div>
+
+              <button
+                class="soft"
+                style="width:100%;margin-top:8px"
+                onclick="restoreRecoverySnapshotByIndex(${index})"
+              >
+                この状態に戻す
+              </button>
             </div>
           `;
         }).join('')
-        :'<div class="empty">バックアップはありません</div>';
+        :'<div class="empty">端末内バックアップはありません</div>';
+
+    window.__recoveryRows=
+      rows;
 
     modal(`
       <h3>自動バックアップ履歴</h3>
@@ -932,117 +1020,83 @@ async function openRecoveryHistory(){
     );
 
     alert(
-      'バックアップ履歴エラー\n\n' +
+      'バックアップ履歴エラー\n\n'+
       (
-        err?.message ||
+        err?.message||
         String(err)
       )
     );
   }
 }
-  async function restoreRevenueFromRecovery(id){
-  let rows=[];
 
-  try{
-    rows=await recoverySnapshots();
-  }catch{
-    return alert('バックアップを読み込めませんでした');
-  }
-
+function restoreRecoverySnapshotByIndex(index){
   const snap=
-    rows.find(x=>x.id===id);
+    window.__recoveryRows?.[index];
 
   if(!snap){
-    return alert('バックアップが見つかりません');
+    alert(
+      'バックアップが見つかりません'
+    );
+    return;
   }
 
-  const oldData=
+  const data=
     normalizedCloudData(
       snap.data||{}
     );
 
   const ok=
     confirm(
-      `${savedTimeLabel(snap.createdAt)} の\n予約・売上だけ戻しますか？\n\n顧客・店販設定・ストーリー設定などは現在のまま残します。`
+      `${savedTimeLabel(snap.createdAt)} の状態に戻しますか？\n\n`+
+      `予約 ${data.bookings.length}件\n`+
+      `顧客 ${data.customers.length}人`
     );
 
   if(!ok)return;
 
-  await createRecoverySnapshot(
-    '売上部分復元前'
+  createRecoverySnapshot(
+    '復元前'
   );
 
-  db.bookings=
-    structuredClone(
-      oldData.bookings||[]
-    );
-
-  db.sales=
-    structuredClone(
-      oldData.sales||[]
-    );
-
-  db.retail=
-    structuredClone(
-      oldData.retail||[]
-    );
+  db=data;
 
   localStorage.setItem(
     KEY,
     JSON.stringify(db)
   );
 
+  localStorage.setItem(
+    LAST_SAVED_STORAGE,
+    new Date().toISOString()
+  );
+
   cloudDirty=true;
 
   renderAll();
   updateLastSavedLabel();
 
-  await createRecoverySnapshot(
-    '予約・売上のみ復元'
+  createRecoverySnapshot(
+    '端末履歴から復元'
   );
 
   closeModal();
-
-  syncStatus(
-    '予約・売上だけ復元しました。内容確認後に同期してください'
-  );
 
   alert(
-    '予約・売上だけ復元しました。\n金額を確認してください。'
+    '復元しました。\n内容確認後に「今すぐ同期」を押してください。'
   );
 }
-async function restoreRecoverySnapshot(id){
-  let rows=[];
-  try{rows=await recoverySnapshots();}
-  catch{return alert('バックアップを読み込めませんでした')}
 
-  const snap=rows.find(x=>x.id===id);
-  if(!snap)return alert('バックアップが見つかりません');
+window.openCloudBackupHistory=
+  openCloudBackupHistory;
 
-  const data=normalizedCloudData(snap.data||{});
-  const bookingCount=data.bookings.length;
-  const customerCount=data.customers.length;
+window.restoreCloudBackup=
+  restoreCloudBackup;
 
-  const ok=confirm(
-    `この状態に戻しますか？\n\n${savedTimeLabel(snap.createdAt)}\n予約 ${bookingCount}件 / 顧客 ${customerCount}人\n\n現在の状態も復元前バックアップとして残します。`
-  );
-  if(!ok)return;
+window.openRecoveryHistory=
+  openRecoveryHistory;
 
-  await createRecoverySnapshot('復元前');
-
-  db=data;
-  localStorage.setItem(KEY,JSON.stringify(db));
-  localStorage.setItem(LAST_SAVED_STORAGE,new Date().toISOString());
-  cloudDirty=true;
-  renderAll();
-  updateLastSavedLabel();
-  await createRecoverySnapshot('履歴から復元');
-  closeModal();
-  syncStatus('自動バックアップから復元しました。内容を確認後「今すぐ同期」を押してください');
-  alert('復元しました。内容を確認してから「今すぐ同期」を押してください');
-}
-
-function getCloudBackupKey(){
+window.restoreRecoverySnapshotByIndex=
+  restoreRecoverySnapshotByIndex;function getCloudBackupKey(){
   let key=localStorage.getItem(CLOUD_BACKUP_KEY_STORAGE)||'';
   if(key)return key;
 
