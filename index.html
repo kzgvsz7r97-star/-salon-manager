@@ -300,13 +300,7 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
         <button onclick="exportBackup()">バックアップ保存</button>
         <button class="soft" onclick="document.getElementById('backupImportFile').click()">バックアップ復元</button>
       </div>
-   <button
-  class="soft"
-  style="width:100%;margin-top:8px"
-  onclick="openCloudBackupHistory()"
->
-  クラウドバックアップ履歴
-</button>
+      <button class="soft" style="width:100%;margin-top:8px" onclick="openRecoveryHistory()">自動バックアップ履歴</button>
       <div id="lastSavedLabel" class="small" style="margin-top:8px">最終保存：確認中…</div>
       <div class="small" style="margin-top:2px">端末内に直近10世代を自動保存します。</div>
       <button class="blue" style="width:100%;margin-top:8px" onclick="manualCloudSync()">今すぐ同期</button>
@@ -560,8 +554,9 @@ function reminderCandidates(){
         last,
         now
       );
-if(days<30)return null;
-  
+
+    if(days<30
+      )return null;
 
     if(
       hasFutureBooking(c.name)
@@ -765,181 +760,119 @@ function stampLocalSave(reason='自動保存'){
   updateLastSavedLabel();
   createRecoverySnapshot(reason);
 }
-async function openCloudBackupHistory(){
-  const key=
-    getCloudBackupKey();
 
-  if(!key){
-    return alert(
-      '同期キーが設定されていません'
-    );
-  }
-
+async function openRecoveryHistory(){
+  let rows=[];
   try{
-    const r=
-      await fetch(
-        CLOUD_BACKUP_API,
-        {
-          headers:{
-            'X-Backup-Key':key
-          }
-        }
-      );
-
-    const body=
-      await r.json();
-
-    if(!r.ok){
-      throw new Error(
-        body.error||
-        'クラウド履歴を取得できませんでした'
-      );
-    }
-
-    const rows=
-      body.backups||[];
-
-    const html=
-      rows.length
-        ?rows.map((x,i)=>{
-          const d=
-            x.data||{};
-
-          const bookings=
-            Array.isArray(d.bookings)
-              ?d.bookings.length
-              :0;
-
-          const customers=
-            Array.isArray(d.customers)
-              ?d.customers.length
-              :0;
-
-          const created=
-            x.created_at||
-            x.createdAt||
-            '';
-
-          return `
-            <div class="item">
-              <div class="t">
-                ${esc(savedTimeLabel(created))}
-              </div>
-
-              <div class="s">
-                予約 ${bookings}件 /
-                顧客 ${customers}人
-              </div>
-            </div>
-          `;
-        }).join('')
-        :'<div class="empty">クラウドバックアップはありません</div>';
-
-    modal(`
-      <h3>クラウドバックアップ履歴</h3>
-
-      ${html}
-
-      <div class="actions">
-        <button
-          class="ghost"
-          onclick="closeModal()"
-        >
-          閉じる
-        </button>
-      </div>
-    `);
-
+    rows=await recoverySnapshots();
   }catch(err){
     console.error(err);
-
-    alert(
-      'クラウド履歴エラー\n\n'+
-      (
-        err?.message||
-        String(err)
-      )
-    );
+    return alert('自動バックアップ履歴を開けませんでした');
   }
-}
-async function openRecoveryHistory(){
-  try{
-    const rows=
-      await Promise.race([
-        recoverySnapshots(),
-        new Promise((_,reject)=>
-          setTimeout(
-            ()=>reject(
-              new Error('バックアップ読み込みがタイムアウトしました')
-            ),
-            5000
-          )
-        )
-      ]);
 
-    const html=
-      rows.length
-        ?rows.map(x=>{
-          const d=x.data||{};
+  modal(`<h3>自動バックアップ履歴</h3>
+    <div class="small" style="margin-bottom:10px">直近10世代まで、この端末内に保存しています。復元前にも現在の状態を1世代保存します。</div>
+    ${rows.length
+      ?rows.map(x=>{
+        const d=
+  normalizedCloudData(
+    x.data||{}
+  );
 
-          const count=
-            Array.isArray(d.bookings)
-              ?d.bookings.length
-              :0;
+const count=
+  Array.isArray(d.bookings)
+    ?d.bookings.length
+    :0;
 
-          const customers=
-            Array.isArray(d.customers)
-              ?d.customers.length
-              :0;
+const customers=
+  Array.isArray(d.customers)
+    ?d.customers.length
+    :0;
 
-          return `
-            <div class="item">
-              <div class="t">
-                ${esc(savedTimeLabel(x.createdAt))}
-                ・
-                ${esc(x.reason||'自動保存')}
-              </div>
+const m=
+  monthString(
+    new Date()
+  );
 
-              <div class="s">
-                予約 ${count}件 /
-                顧客 ${customers}人
-              </div>
-            </div>
-          `;
-        }).join('')
-        :'<div class="empty">バックアップはありません</div>';
-
-    modal(`
-      <h3>自動バックアップ履歴</h3>
-
-      ${html}
-
-      <div class="actions">
-        <button
-          class="ghost"
-          onclick="closeModal()"
-        >
-          閉じる
-        </button>
-      </div>
-    `);
-
-  }catch(err){
-    console.error(
-      'Recovery history error',
-      err
+const normalPaid=
+  (d.bookings||[])
+    .filter(b=>
+      monthKey(b.date)===m &&
+      isActiveBooking(b) &&
+      !b.isModel &&
+      b.paymentComplete
     );
 
-    alert(
-      'バックアップ履歴エラー\n\n' +
-      (
-        err?.message ||
-        String(err)
-      )
+const bookingSales=
+  normalPaid.reduce(
+    (sum,b)=>
+      sum+Number(b.price||0),
+    0
+  );
+
+const extraSales=
+  (d.sales||[])
+    .filter(s=>
+      monthKey(s.date)===m
+    )
+    .reduce(
+      (sum,s)=>
+        sum+Number(s.amount||0),
+      0
     );
-  }
+
+const retailSales=
+  (d.retail||[])
+    .filter(r=>
+      monthKey(r.date)===m
+    )
+    .reduce(
+      (sum,r)=>
+        sum+Number(r.amount||0),
+      0
+    );
+
+const total=
+  bookingSales+
+  extraSales+
+  retailSales;
+
+const when=
+  savedTimeLabel(
+    x.createdAt
+  );
+
+const target=
+  total===256865;
+
+return `<div class="item" ${target?'style="border:2px solid #111"':''}>
+  <div class="t">${esc(when)} ・ ${esc(x.reason||'自動保存')}</div>
+  <div class="s">
+    予約 ${count}件 / 顧客 ${customers}人<br>
+    売上 <b>${yen(total)}</b>
+    ${target?' ← 正常候補':''}
+  </div>
+  <button
+  class="soft"
+  style="width:100%;margin-top:8px"
+  onclick="restoreRecoverySnapshot('${esc(x.id)}')"
+>
+  この状態に戻す
+</button>
+
+<button
+  class="soft"
+  style="width:100%;margin-top:8px"
+  onclick="restoreRevenueFromRecovery('${esc(x.id)}')"
+>
+  予約・売上だけ戻す
+</button>
+        </div>`;
+      }).join('')
+      :'<div class="empty">自動バックアップはまだありません</div>'}
+    <div class="actions"><button class="ghost" onclick="closeModal()">閉じる</button></div>`);
 }
-  async function restoreRevenueFromRecovery(id){
+async function restoreRevenueFromRecovery(id){
   let rows=[];
 
   try{
@@ -1255,12 +1188,6 @@ function removeDeletedItems(items,deletedMap){
       Number(
         x.updatedAt||0
       );
-
-    // 旧データはupdatedAtを持っていないので、
-    // 古い削除履歴だけで勝手に消さない
-    if(!updatedAt){
-      return true;
-    }
 
     return updatedAt>deletedAt;
   });
