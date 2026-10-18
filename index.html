@@ -520,23 +520,112 @@ function staffAllowedSources(id){const p=staffById(id);return Array.isArray(p?.s
 
 function reminderCandidates(){
   const now=todayISO;
+
   return db.customers.map(c=>{
-    const own=customerBookingsByName(c.name);
-    const past=own.filter(b=>b.date<=now&&isVisitedBooking(b)).sort((a,b)=>b.date.localeCompare(a.date));
-    const lastFromBookings=past[0]?.date||'';
-    const last=[c.lastVisit||'',lastFromBookings].sort().pop();
+    const own=
+      customerBookingsByName(c.name);
+
+    const past=
+      own
+        .filter(b=>
+          b.date<=now &&
+          isVisitedBooking(b)
+        )
+        .sort(
+          (a,b)=>
+            b.date.localeCompare(a.date)
+        );
+
+    const lastFromBookings=
+      past[0]?.date||'';
+
+    const last=
+      [
+        c.lastVisit||'',
+        lastFromBookings
+      ]
+        .sort()
+        .pop();
+
     if(!last)return null;
-    const days=daysBetween(last,now);
-    if(days<45)return null;
-    if(hasFutureBooking(c.name))return null;
-    const snoozeUntil=c.reminderSnoozeUntil||'';
-    if(snoozeUntil&&snoozeUntil>now)return null;
-    return {...c,lastComputed:last,days};
-  }).filter(Boolean).sort((a,b)=>b.days-a.days);
+
+    const days=
+      daysBetween(
+        last,
+        now
+      );
+
+    if(days<30
+      )return null;
+
+    if(
+      hasFutureBooking(c.name)
+    ){
+      return null;
+    }
+
+    if(
+      c.returnContactedVisit===
+      last
+    ){
+      return null;
+    }
+
+    return {
+      ...c,
+      lastComputed:last,
+      days
+    };
+  })
+  .filter(Boolean)
+  .sort(
+    (a,b)=>
+      b.days-a.days
+  );
 }
+
 function snoozeReminder(id){
-  const c=db.customers.find(x=>x.id===id);if(!c)return;
-  const d=new Date();d.setDate(d.getDate()+7);c.reminderSnoozeUntil=localISO(d);save();
+  const c=
+    db.customers.find(
+      x=>x.id===id
+    );
+
+  if(!c)return;
+
+  const own=
+    customerBookingsByName(
+      c.name
+    );
+
+  const past=
+    own
+      .filter(b=>
+        b.date<=todayISO &&
+        isVisitedBooking(b)
+      )
+      .sort(
+        (a,b)=>
+          b.date.localeCompare(a.date)
+      );
+
+  const lastFromBookings=
+    past[0]?.date||'';
+
+  const last=
+    [
+      c.lastVisit||'',
+      lastFromBookings
+    ]
+      .sort()
+      .pop();
+
+  if(!last)return;
+
+  c.returnContactedVisit=
+    last;
+
+  save();
+}
 }
 
 $('todayLabel').textContent=new Intl.DateTimeFormat('ja-JP',{month:'long',day:'numeric',weekday:'short'}).format(new Date());
