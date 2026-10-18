@@ -309,6 +309,9 @@ button,.button{border:0;background:#111;color:#fff;border-radius:12px;padding:12
 </button>
 
 <script>
+<script>
+window.__cloudBackupRows = [];
+
 window.openCloudBackupHistoryStandalone = async function(){
   const API =
     'https://salon-manager-kzgvsz7r97-star.vercel.app/api/backup';
@@ -326,9 +329,7 @@ window.openCloudBackupHistoryStandalone = async function(){
       ) || ''
     ).trim();
 
-    if(!key){
-      return;
-    }
+    if(!key)return;
 
     localStorage.setItem(
       KEY_NAME,
@@ -363,6 +364,9 @@ window.openCloudBackupHistoryStandalone = async function(){
       Array.isArray(body.backups)
         ? body.backups
         : [];
+
+    window.__cloudBackupRows =
+      rows;
 
     if(!rows.length){
       alert(
@@ -419,221 +423,231 @@ window.openCloudBackupHistoryStandalone = async function(){
 
     panel.appendChild(title);
 
-   rows.forEach((row,index)=>{
-  const data =
-    row?.data || {};
+    rows.forEach((row,index)=>{
+      const data =
+        row?.data || {};
 
-  const bookings =
-    Array.isArray(data.bookings)
-      ? data.bookings
-      : [];
+      const bookings =
+        Array.isArray(data.bookings)
+          ? data.bookings
+          : [];
 
-  const customers =
-    Array.isArray(data.customers)
-      ? data.customers
-      : [];
+      const customers =
+        Array.isArray(data.customers)
+          ? data.customers
+          : [];
 
-  const sales =
-    Array.isArray(data.sales)
-      ? data.sales
-      : [];
+      const sales =
+        Array.isArray(data.sales)
+          ? data.sales
+          : [];
 
-  const retail =
-    Array.isArray(data.retail)
-      ? data.retail
-      : [];
+      const retail =
+        Array.isArray(data.retail)
+          ? data.retail
+          : [];
 
-  const now =
-    new Date();
+      const now =
+        new Date();
 
-  const currentMonth =
-    `${now.getFullYear()}-${String(
-      now.getMonth()+1
-    ).padStart(2,'0')}`;
+      const currentMonth =
+        `${now.getFullYear()}-${String(
+          now.getMonth()+1
+        ).padStart(2,'0')}`;
 
-  const activeBookings =
-    bookings.filter(b=>{
-      const status =
-        String(
-          b.status||
-          ''
-        ).toLowerCase();
+      const activeBookings =
+        bookings.filter(b=>{
+          const status =
+            String(
+              b.status||''
+            ).toLowerCase();
 
-      return (
-        status!=='cancelled' &&
-        status!=='canceled' &&
-        status!=='noshow'
-      );
-    });
+          return (
+            status!=='cancelled' &&
+            status!=='canceled' &&
+            status!=='noshow'
+          );
+        });
 
-  const thisMonthBookings =
-    activeBookings.filter(
-      b=>
-        String(b.date||'')
-          .startsWith(currentMonth)
-    );
-
-  const paidThisMonth =
-    thisMonthBookings.filter(
-      b=>!!b.paymentComplete
-    );
-
-  const thisMonthBookingSales =
-    paidThisMonth.reduce(
-      (sum,b)=>
-        sum+
-        Number(b.price||0),
-      0
-    );
-
-  const thisMonthExtraSales =
-    sales
-      .filter(
-        s=>
-          String(s.date||'')
-            .startsWith(currentMonth)
-      )
-      .reduce(
-        (sum,s)=>
-          sum+
-          Number(s.amount||0),
-        0
-      );
-
-  const thisMonthRetail =
-    retail
-      .filter(
-        r=>
-          String(r.date||'')
-            .startsWith(currentMonth)
-      )
-      .reduce(
-        (sum,r)=>
-          sum+
-          Number(r.amount||0),
-        0
-      );
-
-  const thisMonthTotal =
-    thisMonthBookingSales+
-    thisMonthExtraSales+
-    thisMonthRetail;
-
-  const allBookingSales =
-    activeBookings
-      .filter(
-        b=>!!b.paymentComplete
-      )
-      .reduce(
-        (sum,b)=>
-          sum+
-          Number(b.price||0),
-        0
-      );
-
-  const allExtraSales =
-    sales.reduce(
-      (sum,s)=>
-        sum+
-        Number(s.amount||0),
-      0
-    );
-
-  const allRetail =
-    retail.reduce(
-      (sum,r)=>
-        sum+
-        Number(r.amount||0),
-      0
-    );
-
-  const allTotal =
-    allBookingSales+
-    allExtraSales+
-    allRetail;
-
-  const dateRaw =
-    row.created_at ||
-    row.createdAt ||
-    '';
-
-  let dateText =
-    dateRaw;
-
-  try{
-    dateText =
-      new Date(dateRaw)
-        .toLocaleString(
-          'ja-JP'
+      const thisMonthBookings =
+        activeBookings.filter(
+          b=>
+            String(b.date||'')
+              .startsWith(currentMonth)
         );
-  }catch(e){}
 
-  const yen =
-    value=>
-      '¥'+
-      Number(value||0)
-        .toLocaleString('ja-JP');
+      const paidThisMonth =
+        thisMonthBookings.filter(
+          b=>!!b.paymentComplete
+        );
 
-  const item =
-    document.createElement('div');
+      const thisMonthBookingSales =
+        paidThisMonth.reduce(
+          (sum,b)=>
+            sum+
+            Number(b.price||0),
+          0
+        );
 
-  item.style.cssText = `
-    border:1px solid #ddd;
-    border-radius:12px;
-    padding:12px;
-    margin-top:10px;
-  `;
+      const thisMonthExtraSales =
+        sales
+          .filter(
+            s=>
+              String(s.date||'')
+                .startsWith(currentMonth)
+          )
+          .reduce(
+            (sum,s)=>
+              sum+
+              Number(s.amount||0),
+            0
+          );
 
-  item.innerHTML = `
-    <div style="
-      font-weight:700;
-      font-size:16px;
-    ">
-      ${index + 1}. ${dateText}
-    </div>
+      const thisMonthRetail =
+        retail
+          .filter(
+            r=>
+              String(r.date||'')
+                .startsWith(currentMonth)
+          )
+          .reduce(
+            (sum,r)=>
+              sum+
+              Number(r.amount||0),
+            0
+          );
 
-    <div style="
-      margin-top:8px;
-      font-size:14px;
-      line-height:1.7;
-    ">
-      予約 ${bookings.length}件 /
-      顧客 ${customers.length}人
-    </div>
+      const thisMonthTotal =
+        thisMonthBookingSales+
+        thisMonthExtraSales+
+        thisMonthRetail;
 
-    <div style="
-      margin-top:8px;
-      padding:10px;
-      border-radius:10px;
-      background:#f5f5f5;
-      line-height:1.7;
-    ">
-      <b>${currentMonth} の状態</b><br>
-      今月予約 ${thisMonthBookings.length}件<br>
-      今月決済済 ${paidThisMonth.length}件<br>
-      今月売上 <b>${yen(thisMonthTotal)}</b><br>
+      const allBookingSales =
+        activeBookings
+          .filter(
+            b=>!!b.paymentComplete
+          )
+          .reduce(
+            (sum,b)=>
+              sum+
+              Number(b.price||0),
+            0
+          );
 
-      <span style="font-size:12px">
-        技術 ${yen(thisMonthBookingSales)} /
-        追加 ${yen(thisMonthExtraSales)} /
-        店販 ${yen(thisMonthRetail)}
-      </span>
-    </div>
+      const allExtraSales =
+        sales.reduce(
+          (sum,s)=>
+            sum+
+            Number(s.amount||0),
+          0
+        );
 
-    <div style="
-      margin-top:8px;
-      font-size:13px;
-      line-height:1.6;
-    ">
-      累計売上 ${yen(allTotal)}<br>
-      追加売上 ${sales.length}件 /
-      店販 ${retail.length}件
-    </div>
-  `;
+      const allRetail =
+        retail.reduce(
+          (sum,r)=>
+            sum+
+            Number(r.amount||0),
+          0
+        );
 
-  panel.appendChild(item);
-});
-  
+      const allTotal =
+        allBookingSales+
+        allExtraSales+
+        allRetail;
+
+      const dateRaw =
+        row.created_at ||
+        row.createdAt ||
+        '';
+
+      let dateText =
+        dateRaw;
+
+      try{
+        dateText =
+          new Date(dateRaw)
+            .toLocaleString('ja-JP');
+      }catch(e){}
+
+      const yen =
+        value=>
+          '¥'+
+          Number(value||0)
+            .toLocaleString('ja-JP');
+
+      const item =
+        document.createElement('div');
+
+      item.style.cssText = `
+        border:1px solid #ddd;
+        border-radius:12px;
+        padding:12px;
+        margin-top:10px;
+      `;
+
+      item.innerHTML = `
+        <div style="
+          font-weight:700;
+          font-size:16px;
+        ">
+          ${index + 1}. ${dateText}
+        </div>
+
+        <div style="
+          margin-top:8px;
+          font-size:14px;
+          line-height:1.7;
+        ">
+          予約 ${bookings.length}件 /
+          顧客 ${customers.length}人
+        </div>
+
+        <div style="
+          margin-top:8px;
+          padding:10px;
+          border-radius:10px;
+          background:#f5f5f5;
+          line-height:1.7;
+        ">
+          <b>${currentMonth} の状態</b><br>
+          今月予約 ${thisMonthBookings.length}件<br>
+          今月決済済 ${paidThisMonth.length}件<br>
+          今月売上 <b>${yen(thisMonthTotal)}</b><br>
+
+          <span style="font-size:12px">
+            技術 ${yen(thisMonthBookingSales)} /
+            追加 ${yen(thisMonthExtraSales)} /
+            店販 ${yen(thisMonthRetail)}
+          </span>
+        </div>
+
+        <div style="
+          margin-top:8px;
+          font-size:13px;
+          line-height:1.6;
+        ">
+          累計売上 ${yen(allTotal)}<br>
+          追加売上 ${sales.length}件 /
+          店販 ${retail.length}件
+        </div>
+
+        <button
+          style="
+            width:100%;
+            margin-top:10px;
+            padding:12px;
+            border:0;
+            border-radius:10px;
+            font-weight:700;
+          "
+          onclick="restoreMissingCloudData(${index})"
+        >
+          不足データだけ復旧
+        </button>
+      `;
+
+      panel.appendChild(item);
+    });
 
     const close =
       document.createElement('button');
@@ -654,7 +668,6 @@ window.openCloudBackupHistoryStandalone = async function(){
       ()=>overlay.remove();
 
     panel.appendChild(close);
-
     overlay.appendChild(panel);
 
     overlay.onclick =
@@ -677,6 +690,143 @@ window.openCloudBackupHistoryStandalone = async function(){
       )
     );
   }
+};
+
+window.restoreMissingCloudData =
+function(index){
+  const row =
+    window.__cloudBackupRows?.[index];
+
+  if(!row){
+    alert(
+      'バックアップが見つかりません'
+    );
+    return;
+  }
+
+  const backup =
+    row.data || {};
+
+  const current =
+    JSON.parse(
+      localStorage.getItem(
+        'salonManagerV2'
+      ) || '{}'
+    );
+
+  const mergeMissing =
+    (currentArr,backupArr)=>{
+      const now =
+        Array.isArray(currentArr)
+          ? currentArr
+          : [];
+
+      const old =
+        Array.isArray(backupArr)
+          ? backupArr
+          : [];
+
+      const ids =
+        new Set(
+          now
+            .filter(x=>x?.id)
+            .map(
+              x=>String(x.id)
+            )
+        );
+
+      const added =
+        old.filter(
+          x=>
+            x?.id &&
+            !ids.has(
+              String(x.id)
+            )
+        );
+
+      return {
+        merged:[
+          ...now,
+          ...added
+        ],
+        addedCount:
+          added.length
+      };
+    };
+
+  const bookings =
+    mergeMissing(
+      current.bookings,
+      backup.bookings
+    );
+
+  const customers =
+    mergeMissing(
+      current.customers,
+      backup.customers
+    );
+
+  const sales =
+    mergeMissing(
+      current.sales,
+      backup.sales
+    );
+
+  const retail =
+    mergeMissing(
+      current.retail,
+      backup.retail
+    );
+
+  const totalAdded =
+    bookings.addedCount+
+    customers.addedCount+
+    sales.addedCount+
+    retail.addedCount;
+
+  const ok =
+    confirm(
+      `不足データを復旧しますか？\n\n`+
+      `予約 +${bookings.addedCount}件\n`+
+      `顧客 +${customers.addedCount}人\n`+
+      `追加売上 +${sales.addedCount}件\n`+
+      `店販 +${retail.addedCount}件\n\n`+
+      `現在あるデータは上書きしません。`
+    );
+
+  if(!ok)return;
+
+  if(totalAdded===0){
+    alert(
+      '不足しているデータはありませんでした'
+    );
+    return;
+  }
+
+  const restored = {
+    ...current,
+    bookings:
+      bookings.merged,
+    customers:
+      customers.merged,
+    sales:
+      sales.merged,
+    retail:
+      retail.merged
+  };
+
+  localStorage.setItem(
+    'salonManagerV2',
+    JSON.stringify(restored)
+  );
+
+  alert(
+    `復旧しました。\n\n`+
+    `合計 ${totalAdded}件追加しました。\n`+
+    `ページを再読み込みします。`
+  );
+
+  location.reload();
 };
 </script>
       <div id="lastSavedLabel" class="small" style="margin-top:8px">最終保存：確認中…</div>
