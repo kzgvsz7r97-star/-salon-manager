@@ -1195,70 +1195,27 @@ async function makeDailyStory(
     );
   }
 
-  const used=
-    new Set(
-      state.storyAuto.history
-        .map(
-          x=>
-            String(
-              x.mediaId ||
-              ''
-            )
-        )
+    // 登録写真を順番に使用する
+  const ordered=
+    [...photos].sort(
+      (a,b)=>
+        a.uploadedAt.localeCompare(b.uploadedAt)
     );
 
-  let pool=
-    photos.filter(
-      x=>
-        !used.has(
-          String(x.id)
-        )
+  const lastId=
+    String(
+      state.storyAuto.last?.mediaId ||
+      ''
     );
 
-  if(!pool.length){
-
-    const lastUsed=
-      new Map();
-
-    for(
-      const h
-      of state.storyAuto.history
-    ){
-      lastUsed.set(
-        String(
-          h.mediaId ||
-          ''
-        ),
-        String(
-          h.date ||
-          ''
-        )
-      );
-    }
-
-    pool=
-      [...photos]
-        .sort(
-          (a,b)=>
-            String(
-              lastUsed.get(
-                a.id
-              ) || ''
-            )
-            .localeCompare(
-              String(
-                lastUsed.get(
-                  b.id
-                ) || ''
-              )
-            )
-        );
-  }
+  const lastIndex=
+    ordered.findIndex(
+      x=>x.id===lastId
+    );
 
   const selected=
-    pool[
-      hashNumber(today) %
-      pool.length
+    ordered[
+      (lastIndex+1) % ordered.length
     ];
 
   const text=
