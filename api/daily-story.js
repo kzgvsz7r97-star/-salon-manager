@@ -1153,18 +1153,113 @@ async function makeDailyStory(
   }
 
   const photos=
-    await instagramPhotos(
-      process.env
-        .INSTAGRAM_ACCESS_TOKEN ||
-      ''
+    (
+      Array.isArray(
+        state.storyPhotoLibrary
+      )
+        ? state.storyPhotoLibrary
+        : []
+    )
+    .filter(
+      x=>
+        x &&
+        x.active !== false &&
+        x.storagePath
+    )
+    .map(
+      x=>({
+        id:String(x.id),
+        storagePath:
+          String(x.storagePath),
+        contentType:
+          String(
+            x.contentType ||
+            'image/jpeg'
+          ),
+        originalName:
+          String(
+            x.originalName ||
+            ''
+          ),
+        uploadedAt:
+          String(
+            x.uploadedAt ||
+            ''
+          )
+      })
     );
 
-  const selected=
-    choosePhoto(
-      photos,
-      state.storyAuto.history,
-      today
+  if(!photos.length){
+    throw new Error(
+      'ストーリー用の登録写真がありません'
     );
+  }
+
+  const used=
+    new Set(
+      state.storyAuto.history
+        .map(
+          x=>
+            String(
+              x.mediaId ||
+              ''
+            )
+        )
+    );
+
+  let pool=
+    photos.filter(
+      x=>
+        !used.has(
+          String(x.id)
+        )
+    );
+
+  if(!pool.length){
+
+    const lastUsed=
+      new Map();
+
+    for(
+      const h
+      of state.storyAuto.history
+    ){
+      lastUsed.set(
+        String(
+          h.mediaId ||
+          ''
+        ),
+        String(
+          h.date ||
+          ''
+        )
+      );
+    }
+
+    pool=
+      [...photos]
+        .sort(
+          (a,b)=>
+            String(
+              lastUsed.get(
+                a.id
+              ) || ''
+            )
+            .localeCompare(
+              String(
+                lastUsed.get(
+                  b.id
+                ) || ''
+              )
+            )
+        );
+  }
+
+  const selected=
+    pool[
+      hashNumber(today) %
+      pool.length
+    ];
 
   const text=
     storyText(
@@ -1172,23 +1267,40 @@ async function makeDailyStory(
       today
     );
 
+  const sig=
+    storySignature(
+      today
+    );
+
+  const mediaUrl=
+    'https://salon-manager-kzgvsz7r97-star.vercel.app'+
+    `/api/story-photo?date=${encodeURIComponent(today)}`+
+    `&sig=${encodeURIComponent(sig)}`;
+
   const last={
     date:today,
 
     mediaId:
       selected.id,
 
-    parentId:
-      selected.parentId||'',
+    storagePath:
+      selected.storagePath,
 
-    mediaUrl:
-      selected.mediaUrl,
+    contentType:
+      selected.contentType,
 
-    permalink:
-      selected.permalink||'',
+    originalName:
+      selected.originalName,
+
+    mediaUrl,
+
+    permalink:'',
+
+    source:
+      'library',
 
     sourceTimestamp:
-      selected.timestamp||'',
+      selected.uploadedAt,
 
     text,
 
@@ -1216,10 +1328,9 @@ async function makeDailyStory(
     state.storyAuto.history
       .push({
         date:today,
+
         mediaId:
-          selected.id,
-        permalink:
-          selected.permalink||''
+          selected.id
       });
   }
 
@@ -1234,7 +1345,9 @@ async function makeDailyStory(
     new Date()
       .toISOString();
 
-  await writeState(state);
+  await writeState(
+    state
+  );
 
   return {
     today,
