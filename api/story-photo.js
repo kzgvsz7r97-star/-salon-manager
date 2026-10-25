@@ -1,6 +1,8 @@
 import crypto from 'crypto';
 
-const ALLOWED_ORIGINS = new Set([
+const BUCKET='story-photos';
+
+const ALLOWED_ORIGINS=new Set([
   'https://kzgvsz7r97-star.github.io',
   'https://salon-manager-kzgvsz7r97-star.vercel.app'
 ]);
@@ -36,44 +38,57 @@ function setCors(req,res){
   );
 }
 
-function storageHeaders(){
+function adminAuthorized(req){
+  return (
+    !!process.env.BACKUP_KEY &&
+    req.headers['x-backup-key']===
+      process.env.BACKUP_KEY
+  );
+}
+
+function storageConfig(){
+  const url=
+    process.env.SUPABASE_URL;
+
   const key=
-    process.env
-      .SUPABASE_SECRET_KEY;
+    process.env.SUPABASE_SECRET_KEY;
+
+  if(!url||!key){
+    throw new Error(
+      'Storage is not configured'
+    );
+  }
 
   return {
-    'Content-Type':
-      'application/json',
+    url,
+    key
+  };
+}
 
+function storageHeaders(){
+  const {key}=
+    storageConfig();
+
+  return {
     apikey:key,
-
     Authorization:
       `Bearer ${key}`
   };
 }
 
 async function latestState(){
-
-  const base=
-    process.env
-      .SUPABASE_URL;
-
-  const secret=
-    process.env
-      .SUPABASE_SECRET_KEY;
-
-  if(!base||!secret){
-    throw new Error(
-      'Storage is not configured'
-    );
-  }
+  const {url}=
+    storageConfig();
 
   const r=
     await fetch(
-      `${base}/rest/v1/salon-backups?select=data&order=created_at.desc&limit=1`,
+      `${url}/rest/v1/salon-backups?select=data&order=created_at.desc&limit=1`,
       {
-        headers:
-          storageHeaders()
+        headers:{
+          ...storageHeaders(),
+          'Content-Type':
+            'application/json'
+        }
       }
     );
 
@@ -98,12 +113,9 @@ async function latestState(){
   );
 }
 
-function storySignature(
-  date
-){
+function storySignature(date){
   const secret=
-    process.env
-      .CRON_SECRET ||
+    process.env.CRON_SECRET ||
     '';
 
   if(!secret){
@@ -126,15 +138,16 @@ function validSignature(
   sig
 ){
   const expected=
-    storySignature(
-      date
-    );
+    storySignature(date);
+
+  const actual=
+    String(sig||'');
 
   if(
     !expected ||
-    !sig ||
+    !actual ||
     expected.length !==
-      String(sig).length
+      actual.length
   ){
     return false;
   }
@@ -146,7 +159,7 @@ function validSignature(
           expected
         ),
         Buffer.from(
-          String(sig)
+          actual
         )
       );
   }
@@ -155,34 +168,120 @@ function validSignature(
   }
 }
 
-function adminAuthorized(
-  req
-){
-  return (
-    !!process.env
-      .BACKUP_KEY &&
+function encodedPath(path){
+  return String(path||'')
+    .split('/')
+    .map(
+      encodeURIComponent
+    )
+    .join('/');
+}
 
-    req.headers[
-      'x-backup-key'
-    ] ===
-      process.env
-        .BACKUP_KEY
-  );
+async function fetchStoredPhoto(
+  storagePath
+){
+  const {url}=
+    storageConfig();
+
+  const path=
+    encodedPath(
+      storagePath
+    );
+
+  const r=
+    await fetch(
+      `${url}/storage/v1/object/authenticated/${BUCKET}/${path}`,
+      {
+        headers:
+          storageHeaders()
+      }
+    );
+
+  if(!r.ok){
+    const raw=
+      await r.text();
+
+    throw new Error(
+      raw ||
+      '登録写真を読み込めませんでした'
+    );
+  }
+
+  const type=
+    r.headers.get(
+      'content-type'
+    ) ||
+    'image/jpeg';
+
+  const buffer=
+    Buffer.from(
+      await r.arrayBuffer()
+    );
+
+  return {
+    type,
+    buffer
+  };
+}
+
+async function fetchLegacyPhoto(
+  imageUrl
+){
+  if(
+    !/^https:\/\//i.test(
+      String(imageUrl||'')
+    )
+  ){
+    throw new Error(
+      'Photo URL not found'
+    );
+  }
+
+  const r=
+    await fetch(
+      imageUrl,
+      {
+        headers:{
+          'User-Agent':
+            'SalonManager/1.0'
+        }
+      }
+    );
+
+  if(!r.ok){
+    throw new Error(
+      'Photo fetch failed'
+    );
+  }
+
+  const type=
+    r.headers.get(
+      'content-type'
+    ) ||
+    'image/jpeg';
+
+  const buffer=
+    Buffer.from(
+      await r.arrayBuffer()
+    );
+
+  return {
+    type,
+    buffer
+  };
 }
 
 export default async function handler(
   req,
   res
 ){
-
   setCors(
     req,
     res
   );
 
   if(
-    req.method ===
-    'OPTIONS'
+    req.method==='OPTIONS'
   ){
     return res
       .status(204)
@@ -190,8 +289,7 @@ export default async function handler(
   }
 
   if(
-    req.method !==
-    'GET'
+    req.method!=='GET'
   ){
     return res
       .status(405)
@@ -231,7 +329,6 @@ export default async function handler(
   }
 
   try{
-
     const state=
       await latestState();
 
@@ -240,13 +337,7 @@ export default async function handler(
         ?.storyAuto
         ?.last;
 
-    if(
-      !story ||
-      (
-        date &&
-        story.date !== date
-      )
-    ){
+    if(!story){
       return res
         .status(404)
         .json({
@@ -256,74 +347,55 @@ export default async function handler(
         });
     }
 
-    const imageUrl=
-      String(
-        story.mediaUrl ||
-        ''
-      );
-
     if(
-      !/^https:\/\//i
-        .test(
-          imageUrl
-        )
+      date &&
+      story.date !== date
     ){
       return res
         .status(404)
         .json({
           ok:false,
           error:
-            'Photo URL not found'
+            'Story date not found'
         });
     }
 
-    const imageResponse=
-      await fetch(
-        imageUrl,
-        {
-          headers:{
-            'User-Agent':
-              'SalonManager/1.0'
-          }
-        }
-      );
+    let photo;
 
     if(
-      !imageResponse.ok
+      story.storagePath
     ){
+      photo=
+        await fetchStoredPhoto(
+          story.storagePath
+        );
+    }
+    else if(
+      story.mediaUrl
+    ){
+      photo=
+        await fetchLegacyPhoto(
+          story.mediaUrl
+        );
+    }
+    else{
       return res
-        .status(
-          imageResponse.status
-        )
+        .status(404)
         .json({
           ok:false,
           error:
-            'Instagram photo fetch failed'
+            'Photo data not found'
         });
     }
 
-    const type=
-      imageResponse
-        .headers
-        .get(
-          'content-type'
-        ) ||
-      'image/jpeg';
-
-    const buffer=
-      Buffer.from(
-        await imageResponse
-          .arrayBuffer()
-      );
-
     res.setHeader(
       'Content-Type',
-      type
+      photo.type
     );
 
     res.setHeader(
       'Content-Length',
-      buffer.length
+      photo.buffer.length
     );
 
     res.setHeader(
@@ -334,12 +406,10 @@ export default async function handler(
     return res
       .status(200)
       .send(
-        buffer
+        photo.buffer
       );
-
   }
   catch(e){
-
     console.error(
       'story photo error',
       e
