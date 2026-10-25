@@ -5,7 +5,7 @@
   let rmMonth = monthKey(todayISO);
   let rmFilter = 'all';
 
-  const MATURITY_DAYS = 45;
+  const MATURITY_DAYS = 30;
   const KNOWN_SOURCES = [
     'SHAiRE',
     'Nailie',
@@ -806,7 +806,7 @@
         ・
         2回目実来店
         ${s.returnRate}%
-        （45日以上で判定）
+        （30日以上で判定）
         ・
         次回予約後→実来店
         ${s.keptRate}%
@@ -836,7 +836,7 @@
         キャンセル後
         ${a.recoveries.length}
         ・
-        45日
+        30日
         ${a.reminders.length}
       </div>
     `;
@@ -1112,7 +1112,7 @@
                   status-booked
                 "
               >
-                45日
+                30日
               </span>
             </div>
 
@@ -1363,7 +1363,7 @@
           </div>
           <div class="small">
             ${s.matureReturned}/${s.matureCount}
-            ・45日以上
+            ・30日以上
           </div>
         </div>
 
@@ -1390,7 +1390,7 @@
         「次回予約が取れた」
         の記録だけで集計。
         2回目実来店率は
-        初回から45日以上
+        初回から30日以上
         経過した人だけを
         母数にしています。
       </div>
@@ -1481,7 +1481,7 @@
               : ''
           }
         >
-          45日未満・判定待ち
+          30日未満・判定待ち
         </option>
 
         <option
@@ -1580,7 +1580,7 @@
                       ${
                         x.mature
                           ? ' ・ 再来判定対象'
-                          : ' ・ 45日未満'
+                          : ' ・ 30日未満'
                       }
                     </div>
 
