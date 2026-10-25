@@ -8360,5 +8360,318 @@ syncFromCloud(false);
 <script src="target-breakdown.js?v=20261008"></script>
 <script src="booking-current-month.js?v=20261008b"></script>
 <script src="retail-today.js?v=20261010c"></script>
-</body>
+<style>
+/* PC：週間予約を7日分まとめて表示 */
+@media (min-width: 900px){
+  #reservations{
+    width:min(1180px,calc(100vw - 48px));
+    margin-left:50%;
+    transform:translateX(-50%);
+  }
+
+  #reservationWeekView .week-scroll{
+    overflow:hidden;
+  }
+
+  #reservationWeekView .week-grid{
+    width:100%;
+    min-width:0;
+    grid-template-columns:52px repeat(7,minmax(0,1fr));
+    grid-template-rows:42px repeat(30,20px);
+  }
+
+  #reservationWeekView .week-dayhead{
+    font-size:11px;
+  }
+
+  #reservationWeekView .week-time{
+    font-size:9px;
+  }
+
+  #reservationWeekView .week-booking{
+    margin:1px 2px;
+    padding:2px 4px;
+    min-height:19px;
+    font-size:9px;
+    line-height:1.15;
+  }
+
+  #reservationWeekView .week-booking .wk-name{
+    font-size:9px;
+  }
+
+  #reservationWeekView .week-booking .wk-meta{
+    font-size:8px;
+    margin-top:1px;
+  }
+}
+
+.customer-spend-filters{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-bottom:10px;
+}
+
+.customer-spend-filters select{
+  grid-column:1/-1;
+  margin-top:0;
+}
+
+.customer-spend-filters input{
+  margin-bottom:0;
+}
+</style>
+
+<script>
+(() => {
+  const customerSearch =
+    document.getElementById(
+      'customerSearch'
+    );
+
+  if(
+    customerSearch &&
+    !document.getElementById(
+      'customerSpendFilters'
+    )
+  ){
+    const filters =
+      document.createElement('div');
+
+    filters.id =
+      'customerSpendFilters';
+
+    filters.className =
+      'customer-spend-filters';
+
+    filters.innerHTML = `
+      <input
+        id="customerSpendMin"
+        type="number"
+        inputmode="numeric"
+        min="0"
+        placeholder="累計売上 下限 ¥"
+        oninput="renderCustomers()"
+      >
+
+      <input
+        id="customerSpendMax"
+        type="number"
+        inputmode="numeric"
+        min="0"
+        placeholder="累計売上 上限 ¥"
+        oninput="renderCustomers()"
+      >
+
+      <select
+        id="customerSpendSort"
+        onchange="renderCustomers()"
+      >
+        <option value="recent">
+          最終来店順
+        </option>
+
+        <option value="high">
+          売上が高い順
+        </option>
+
+        <option value="low">
+          売上が低い順
+        </option>
+      </select>
+    `;
+
+    customerSearch.insertAdjacentElement(
+      'afterend',
+      filters
+    );
+  }
+
+  function customerPaidSpend(name){
+    const n=
+      normalizeName(name);
+
+    return (db.bookings||[])
+      .filter(b=>
+        normalizeName(
+          b.customer
+        )===n &&
+        b.paymentComplete &&
+        isActiveBooking(b)
+      )
+      .reduce(
+        (sum,b)=>
+          sum+
+          Number(b.price||0),
+        0
+      );
+  }
+
+  renderCustomers =
+    function(){
+
+      const q=
+        (
+          $('customerSearch')
+            ?.value||''
+        )
+          .trim()
+          .toLowerCase();
+
+      const minValue=
+        $('customerSpendMin')
+          ?.value||'';
+
+      const maxValue=
+        $('customerSpendMax')
+          ?.value||'';
+
+      const min=
+        minValue===''
+          ?null
+          :Number(minValue);
+
+      const max=
+        maxValue===''
+          ?null
+          :Number(maxValue);
+
+      const sort=
+        $('customerSpendSort')
+          ?.value||
+        'recent';
+
+      let rows=
+        (db.customers||[])
+          .map(c=>({
+            customer:c,
+            spend:
+              customerPaidSpend(
+                c.name
+              )
+          }))
+          .filter(row=>{
+            const c=
+              row.customer;
+
+            if(
+              q &&
+              !String(
+                c.name||''
+              )
+                .toLowerCase()
+                .includes(q)
+            ){
+              return false;
+            }
+
+            if(
+              min!==null &&
+              row.spend<min
+            ){
+              return false;
+            }
+
+            if(
+              max!==null &&
+              row.spend>max
+            ){
+              return false;
+            }
+
+            return true;
+          });
+
+      if(sort==='high'){
+        rows.sort(
+          (a,b)=>
+            b.spend-a.spend
+        );
+      }
+      else if(sort==='low'){
+        rows.sort(
+          (a,b)=>
+            a.spend-b.spend
+        );
+      }
+      else{
+        rows.sort(
+          (a,b)=>
+            (
+              b.customer.lastVisit||
+              ''
+            ).localeCompare(
+              a.customer.lastVisit||
+              ''
+            )
+        );
+      }
+
+      renderDuplicateCandidates();
+
+      $('customerList').innerHTML=
+        rows.length
+          ?rows.map(row=>{
+
+            const x=
+              row.customer;
+
+            const hist=
+              customerVisitHistory(
+                x.name
+              );
+
+            const visits=
+              hist.filter(
+                isVisitedBooking
+              );
+
+            const future=
+              hist
+                .filter(b=>
+                  isActiveBooking(b)&&
+                  b.date>=todayISO
+                )
+                .sort(
+                  (p,q)=>
+                    p.date.localeCompare(
+                      q.date
+                    )
+                )[0];
+
+            return `
+              <div
+                class="item"
+                onclick="openCustomerChart('${x.id}')"
+              >
+                <div class="t">
+                  ${esc(x.name)}
+                </div>
+
+                <div class="s">
+                  累計売上 ${yen(row.spend)}
+                  ・ 来店 ${visits.length}回
+                  ${
+                    x.lastVisit
+                      ?' ・ 最終 '+esc(x.lastVisit)
+                      :''
+                  }
+                  ${
+                    future
+                      ?' ・ 次回 '+esc(future.date)
+                      :''
+                  }
+                </div>
+              </div>
+            `;
+          }).join('')
+          :empty(
+            '条件に合う顧客はいません'
+          );
+    };
+
+  renderCustomers();
+})();
+</script>
 </html>
