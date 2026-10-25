@@ -1274,7 +1274,7 @@ async function makeDailyStory(
 
   const mediaUrl=
     'https://salon-manager-kzgvsz7r97-star.vercel.app'+
-    `/api/story-photo?date=${encodeURIComponent(today)}`+
+    `/api/story-library?photo=1&date=${encodeURIComponent(today)}`+
     `&sig=${encodeURIComponent(sig)}`;
 
   const last={
