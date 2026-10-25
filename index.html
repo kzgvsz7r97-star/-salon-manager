@@ -7557,25 +7557,146 @@ function canonicalProductConcern(concern,name='',category='',description='',reco
 }
 
 function migrateExtras(){
-  db.goalPlans ||= {};db.orderSettings ||= {};db.seenOrders ||= [];
-  db.syncDeleted ||= {bookings:{},customers:{},products:{},sales:{},retail:{}};
-  ['bookings','customers','products','sales','retail'].forEach(k=>db.syncDeleted[k] ||= {});
-  if(!Array.isArray(db.staffProfiles)||!db.staffProfiles.length)db.staffProfiles=[{id:'owner',name:'自分',role:'owner',active:true,sources:['SHAiRE','Nailie','minimo','Instagram','その他']}];
-  if(!db.staffProfiles.some(x=>x.role==='owner'))db.staffProfiles[0].role='owner';
-  const ownerId=ownerStaff()?.id||db.staffProfiles[0].id;
-  db.bookings.forEach(b=>{b.staffId ||= ownerId;if(!('bookingType' in b))b.bookingType='';});
-  db.retail.forEach(r=>{r.staffId ||= ownerId;});
+  const normalizeSource=value=>{
+    const v=
+      String(value||'')
+        .normalize('NFKC')
+        .trim()
+        .replace(/\s+/g,'')
+        .toLowerCase();
+
+    if(v==='shaire')return 'SHAiRE';
+    if(v==='nailie')return 'Nailie';
+    if(v==='minimo')return 'minimo';
+    if(v==='instagram')return 'Instagram';
+    if(!v)return 'その他';
+
+    return String(value||'').trim();
+  };
+
+  db.goalPlans ||= {};
+  db.orderSettings ||= {};
+  db.seenOrders ||= [];
+
+  db.syncDeleted ||= {
+    bookings:{},
+    customers:{},
+    products:{},
+    sales:{},
+    retail:{}
+  };
+
+  ['bookings','customers','products','sales','retail']
+    .forEach(k=>db.syncDeleted[k] ||= {});
+
+  if(
+    !Array.isArray(db.staffProfiles)||
+    !db.staffProfiles.length
+  ){
+    db.staffProfiles=[{
+      id:'owner',
+      name:'自分',
+      role:'owner',
+      active:true,
+      sources:[
+        'SHAiRE',
+        'Nailie',
+        'minimo',
+        'Instagram',
+        'その他'
+      ]
+    }];
+  }
+
+  db.staffProfiles.forEach(p=>{
+    if(Array.isArray(p.sources)){
+      p.sources=[
+        ...new Set(
+          p.sources.map(normalizeSource)
+        )
+      ];
+    }
+  });
+
+  if(
+    !db.staffProfiles.some(
+      x=>x.role==='owner'
+    )
+  ){
+    db.staffProfiles[0].role='owner';
+  }
+
+  const ownerId=
+    ownerStaff()?.id||
+    db.staffProfiles[0].id;
+
+  db.bookings.forEach(b=>{
+    b.staffId ||= ownerId;
+
+    if(!('bookingType' in b)){
+      b.bookingType='';
+    }
+
+    b.source=
+      normalizeSource(b.source);
+  });
+
+  db.retail.forEach(r=>{
+    r.staffId ||= ownerId;
+  });
+
   db.products.forEach((p,index)=>{
     p.id ||= uid();
-    p.category=canonicalProductCategory(p.category,p.name);
-    p.concern=canonicalProductConcern(p.concern,p.name,p.category,p.description,p.recommended);
-    if(!Number.isFinite(Number(p.sortOrder)))p.sortOrder=index;
-    p.sortOrder=Number(p.sortOrder);
-    p.description ||= '';p.recommended ||= '';p.usage ||= '';p.cost=Number(p.cost||0);
-    p.supplierUrl ||= p.externalUrl||'';p.fulfillment='salon';p.externalUrl='';p.stock=0;
+
+    p.category=
+      canonicalProductCategory(
+        p.category,
+        p.name
+      );
+
+    p.concern=
+      canonicalProductConcern(
+        p.concern,
+        p.name,
+        p.category,
+        p.description,
+        p.recommended
+      );
+
+    if(
+      !Number.isFinite(
+        Number(p.sortOrder)
+      )
+    ){
+      p.sortOrder=index;
+    }
+
+    p.sortOrder=
+      Number(p.sortOrder);
+
+    p.description ||= '';
+    p.recommended ||= '';
+    p.usage ||= '';
+    p.cost=Number(p.cost||0);
+
+    p.supplierUrl ||=
+      p.externalUrl||'';
+
+    p.fulfillment='salon';
+    p.externalUrl='';
+    p.stock=0;
   });
-  db.products.sort((a,b)=>Number(a.sortOrder||0)-Number(b.sortOrder||0));
-  db.products.forEach((p,index)=>p.sortOrder=index);
+
+  db.products.sort(
+    (a,b)=>
+      Number(a.sortOrder||0)-
+      Number(b.sortOrder||0)
+  );
+
+  db.products.forEach(
+    (p,index)=>
+      p.sortOrder=index
+  );
 }
 function safeHTTPS(value){try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password?u.href:'';}catch{return '';}}
 function instagramURL(value){
