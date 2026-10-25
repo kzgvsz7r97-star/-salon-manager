@@ -394,7 +394,7 @@ export default async function handler(
       }
 
       res.setHeader('Content-Type',type);
-      res.setHeader('Cache-Control','private, max-age=300');
+     res.setHeader('Cache-Control','no-store');
 
       return res.status(200).send(buffer);
 
