@@ -20,55 +20,85 @@
     return b ? Math.round(a / b * 100) : 0;
   }
 
-  function sourceStatsForMonth(month, source) {
-    const s = analysisStats(month);
+ function sourceStatsForMonth(month, source) {
+  const s = analysisStats(month);
 
-    const newVisits =
-      s.newVisits.filter(
-        b => sourceOf(b) === source
-      );
+  const newVisits =
+    s.newVisits.filter(
+      b => sourceOf(b) === source
+    );
 
-    const revenue =
-      newVisits.reduce(
-        (sum, b) => sum + Number(b.price || 0),
-        0
-      );
+  const paidBookings =
+    s.all.filter(
+      b =>
+        sourceOf(b) === source &&
+        b.paymentComplete &&
+        isActiveBooking(b)
+    );
 
-    const nextTaken =
-      newVisits.filter(
-        nextBookingTakenForBooking
-      ).length;
+  const revenue =
+    paidBookings.reduce(
+      (sum, b) =>
+        sum + Number(b.price || 0),
+      0
+    );
 
-    const journeys =
-      s.journeys.filter(
-        j => sourceOf(j.first) === source
-      );
+  const nextTaken =
+    newVisits.filter(
+      nextBookingTakenForBooking
+    ).length;
 
-    const mature =
-      journeys.filter(j => j.mature);
+  const journeys =
+    s.journeys.filter(
+      j => sourceOf(j.first) === source
+    );
 
-    const returned =
-      mature.filter(j => !!j.second).length;
+  const mature =
+    journeys.filter(j => j.mature);
 
-    return {
-      newCount: newVisits.length,
-      revenue,
-      avg:
+  const returned =
+    mature.filter(
+      j => !!j.second
+    ).length;
+
+  return {
+    newCount:
+      newVisits.length,
+
+    revenue,
+
+    avg:
+      paidBookings.length
+        ? Math.round(
+            revenue /
+            paidBookings.length
+          )
+        : 0,
+
+    nextTaken,
+
+    nextRate:
+      pct(
+        nextTaken,
         newVisits.length
-          ? Math.round(revenue / newVisits.length)
-          : 0,
-      nextTaken,
-      nextRate:
-        pct(nextTaken, newVisits.length),
-      matureCount: mature.length,
-      returned,
-      secondRate:
-        pct(returned, mature.length),
-      waiting:
-        journeys.length - mature.length
-    };
-  }
+      ),
 
+    matureCount:
+      mature.length,
+
+    returned,
+
+    secondRate:
+      pct(
+        returned,
+        mature.length
+      ),
+
+    waiting:
+      journeys.length -
+      mature.length
+  };
+}
   function recentMonths(endMonth) {
     const end =
       new Date(
