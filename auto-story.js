@@ -392,12 +392,15 @@
         success++;
 
       }
-      catch(e){
+         catch(e){
+        console.error('story photo upload',e);
 
-        console.error(
-          'story photo upload',
-          e
+        alert(
+          '写真登録エラー：\n' +
+          String(e?.message || e).slice(0,300)
         );
+
+        break;
       }
     }
 
