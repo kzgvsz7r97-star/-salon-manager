@@ -62,7 +62,7 @@
   ){
     const r=
       await fetch(
-        `${API}/api/story-photo?date=${encodeURIComponent(date)}&sig=${encodeURIComponent(sig)}`
+      `${API}/api/story-library?photo=1&date=${encodeURIComponent(date)}&sig=${encodeURIComponent(sig)}`
       );
 
     if(!r.ok){
