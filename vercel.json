@@ -3,6 +3,10 @@
     {
       "path": "/api/monthly-line",
       "schedule": "0 1 1 * *"
+    },
+    {
+      "path": "/api/daily-story",
+      "schedule": "0 22 * * *"
     }
   ]
 }
