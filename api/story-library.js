@@ -308,7 +308,105 @@ export default async function handler(
       .status(204)
       .end();
   }
+  // 登録済み写真をストーリー用に取得
+  if(
+    req.method==='GET' &&
+    req.query?.photo==='1'
+  ){
+    const date=String(req.query?.date||'');
+    const sig=String(req.query?.sig||'');
+    const secret=process.env.CRON_SECRET||'';
 
+    const expected=
+      secret && /^\d{4}-\d{2}-\d{2}$/.test(date)
+        ? crypto
+            .createHmac('sha256',secret)
+            .update(`story-auto:${date}`)
+            .digest('hex')
+        : '';
+
+    const valid=
+      /^[0-9a-f]{64}$/i.test(sig) &&
+      expected.length===sig.length &&
+      crypto.timingSafeEqual(
+        Buffer.from(expected,'hex'),
+        Buffer.from(sig,'hex')
+      );
+
+    if(!valid){
+      return res.status(401).json({
+        ok:false,
+        error:'Unauthorized'
+      });
+    }
+
+    try{
+      const state=await latestState();
+      const story=state.storyAuto?.last;
+
+      if(!story || story.date!==date){
+        return res.status(404).json({
+          ok:false,
+          error:'Story not found'
+        });
+      }
+
+      const path=String(story.storagePath||'');
+
+      if(!/^uploads\/[a-zA-Z0-9._-]+$/.test(path)){
+        return res.status(404).json({
+          ok:false,
+          error:'Photo not found'
+        });
+      }
+
+      const {url}=base();
+
+      const photo=await fetch(
+        `${url}/storage/v1/object/authenticated/${BUCKET}/${path}`,
+        {
+          headers:authHeaders()
+        }
+      );
+
+      if(!photo.ok){
+        return res.status(502).json({
+          ok:false,
+          error:'Photo retrieval failed'
+        });
+      }
+
+      const type=
+        photo.headers.get('content-type') ||
+        story.contentType ||
+        'image/jpeg';
+
+      if(!/^image\/(jpeg|png|webp)(;|$)/i.test(type)){
+        throw new Error('Invalid image type');
+      }
+
+      const buffer=Buffer.from(
+        await photo.arrayBuffer()
+      );
+
+      if(buffer.length>6*1024*1024){
+        throw new Error('Image too large');
+      }
+
+      res.setHeader('Content-Type',type);
+      res.setHeader('Cache-Control','private, max-age=300');
+
+      return res.status(200).send(buffer);
+
+    }catch(e){
+      console.error('Story photo error',e);
+
+      return res.status(500).json({
+        ok:false,
+        error:'Photo fetch failed'
+      });
+    }
+  }
   if(!authorized(req)){
     return res
       .status(401)
