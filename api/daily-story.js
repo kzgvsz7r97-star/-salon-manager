@@ -1195,28 +1195,62 @@ async function makeDailyStory(
     );
   }
 
-    // 登録写真を順番に使用する
-  const ordered=
-    [...photos].sort(
-      (a,b)=>
-        a.uploadedAt.localeCompare(b.uploadedAt)
-    );
 
-  const lastId=
-    String(
-      state.storyAuto.last?.mediaId ||
-      ''
-    );
+  // 登録順に写真を並べる
+  const ordered=[...photos].sort(
+    (a,b)=>a.uploadedAt.localeCompare(b.uploadedAt)
+  );
 
-  const lastIndex=
-    ordered.findIndex(
-      x=>x.id===lastId
-    );
+  const history=state.storyAuto.history||[];
+
+  const lastId=String(
+    state.storyAuto.last?.mediaId||''
+  );
+
+  // 直近に使用した写真IDを取得
+  const recentIds=[
+    lastId,
+    ...history.slice().reverse().map(
+      x=>String(x.mediaId||'')
+    )
+  ].filter(Boolean);
+
+  const uniqueRecent=[...new Set(recentIds)];
+
+  // 枚数に応じて除外する写真数を調整
+  const avoidCount=Math.min(
+    3,
+    ordered.length-1
+  );
+
+  const excluded=new Set(
+    uniqueRecent.slice(0,avoidCount)
+  );
+
+  // 直近の写真を除いた候補
+  let candidates=ordered.filter(
+    x=>!excluded.has(x.id)
+  );
+
+  if(!candidates.length){
+    candidates=ordered;
+  }
+
+  // 最後に使用した写真の次から選択
+  const lastIndex=ordered.findIndex(
+    x=>x.id===lastId
+  );
 
   const selected=
-    ordered[
-      (lastIndex+1) % ordered.length
-    ];
+    Array.from(
+      {length:ordered.length},
+      (_,i)=>ordered[
+        (lastIndex+1+i)%ordered.length
+      ]
+    ).find(
+      x=>candidates.some(c=>c.id===x.id)
+    )||candidates[0];
+
 
   const text=
     storyText(
