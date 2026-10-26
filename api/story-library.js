@@ -522,9 +522,29 @@ const story=requestedId
         });
       }
 
+
       const {type,buffer,ext}=parseImageData(
         req.body?.imageData
       );
+
+      const imageHash=crypto
+        .createHash('sha256')
+        .update(buffer)
+        .digest('hex');
+
+      // 同じ画像が登録済みなら再利用
+      const duplicate=state.storyPhotoLibrary.find(
+        x=>x.imageHash===imageHash
+      );
+
+      if(duplicate){
+        return res.status(200).json({
+          ok:true,
+          photo:duplicate,
+          count:state.storyPhotoLibrary.length,
+          alreadyRegistered:true
+        });
+      }
 
       await ensureBucket();
 
@@ -533,8 +553,10 @@ const story=requestedId
       const latest=await latestState();
       latest.storyPhotoLibrary=library(latest);
 
+      // 再試行・重複登録を再確認
       const found=latest.storyPhotoLibrary.find(
-        x=>String(x.id)===requestId
+        x=>String(x.id)===requestId ||
+           x.imageHash===imageHash
       );
 
       if(found){
@@ -552,6 +574,7 @@ const story=requestedId
         id:requestId,
         storagePath:path,
         contentType:type,
+        imageHash,
         originalName:String(req.body?.name||''),
         uploadedAt:new Date().toISOString(),
         active:true
@@ -566,6 +589,7 @@ const story=requestedId
         count:latest.storyPhotoLibrary.length
       });
     }
+
 
 
     if(action==='toggle'){
