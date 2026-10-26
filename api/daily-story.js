@@ -1441,11 +1441,13 @@ async function makeDailyStory(
       today
     );
 
+
   const mediaUrl=
-  'https://salon-manager-kzgvsz7r97-star.vercel.app'+
-  `/api/story-library?photo=1&date=${encodeURIComponent(today)}`+
-  `&id=${encodeURIComponent(selected.id)}`+
-  `&sig=${encodeURIComponent(sig)}`;
+    'https://salon-manager-kzgvsz7r97-star.vercel.app'+
+    `/api/story-library?completed=1`+
+    `&date=${encodeURIComponent(today)}`+
+    `&sig=${encodeURIComponent(sig)}`;
+
   const last={
     date:today,
 
