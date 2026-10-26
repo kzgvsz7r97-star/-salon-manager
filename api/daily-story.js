@@ -1,6 +1,16 @@
 
+
 import crypto from 'crypto';
 import sharp from 'sharp';
+import { createRequire } from 'node:module';
+import { Resvg } from '@resvg/resvg-js';
+
+const require = createRequire(import.meta.url);
+
+const storyFontPath = require.resolve(
+  '@expo-google-fonts/noto-sans-jp/400Regular/NotoSansJP_400Regular.ttf'
+);
+
 
 
 const ALLOWED_ORIGINS = new Set([
