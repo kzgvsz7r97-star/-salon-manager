@@ -1207,6 +1207,16 @@ function mergeDbSafe(localData,remoteData,baseData){
     lineMenuStats:mergeObjectSafe(local.lineMenuStats,remote.lineMenuStats,base?.lineMenuStats),
     seenOrders:[...new Set([...(remote.seenOrders||[]),...(local.seenOrders||[])])],
     staffProfiles:mergeArraySafe(local.staffProfiles,remote.staffProfiles,base?.staffProfiles),
+    storyPhotoLibrary:mergeArraySafe(
+  local.storyPhotoLibrary,
+  remote.storyPhotoLibrary,
+  base?.storyPhotoLibrary
+),
+storyAuto:mergeObjectSafe(
+  local.storyAuto,
+  remote.storyAuto,
+  base?.storyAuto
+),
     syncDeleted,
     bookings:removeDeletedItems(mergeArraySafe(local.bookings,remote.bookings,base?.bookings),syncDeleted.bookings),
     customers:removeDeletedItems(mergeArraySafe(local.customers,remote.customers,base?.customers),syncDeleted.customers),
