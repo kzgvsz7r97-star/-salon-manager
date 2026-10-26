@@ -1419,6 +1419,23 @@ async function makeDailyStory(
       today
     );
 
+  // 選択した登録写真を取得
+  const photoBuffer=await loadStoryPhoto(
+    selected.storagePath
+  );
+
+  // 写真と文章を合成
+  const completedBuffer=await createCompletedStory(
+    photoBuffer,
+    text
+  );
+
+  // 完成画像をSupabaseに保存
+  const completedPath=await saveCompletedStory(
+    completedBuffer,
+    today
+  );
+
   const sig=
     storySignature(
       today
