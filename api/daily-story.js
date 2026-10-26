@@ -1126,6 +1126,47 @@ function appUrl(today){
 
 
 
+async function loadStoryPhoto(storagePath){
+
+  const base=process.env.SUPABASE_URL;
+  const key=process.env.SUPABASE_SECRET_KEY;
+
+  if(!base||!key){
+    throw new Error('Storage is not configured');
+  }
+
+  const path=String(storagePath||'');
+
+  if(!/^uploads\/[a-zA-Z0-9._-]+$/.test(path)){
+    throw new Error('Invalid story photo path');
+  }
+
+  const encoded=path
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/');
+
+  const response=await fetch(
+    `${base}/storage/v1/object/authenticated/story-photos/${encoded}`,
+    {
+      headers:{
+        apikey:key,
+        Authorization:`Bearer ${key}`
+      }
+    }
+  );
+
+  if(!response.ok){
+    throw new Error(
+      `写真読み込みエラー：${response.status}`
+    );
+  }
+
+  return Buffer.from(
+    await response.arrayBuffer()
+  );
+}
+
 async function makeDailyStory(
   state,
   {
