@@ -1237,6 +1237,49 @@ async function createCompletedStory(photoBuffer, text){
     .toBuffer();
 }
 
+async function saveCompletedStory(imageBuffer, date){
+
+  const base=process.env.SUPABASE_URL;
+  const key=process.env.SUPABASE_SECRET_KEY;
+
+  if(!base||!key){
+    throw new Error('Storage is not configured');
+  }
+
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){
+    throw new Error('Invalid story date');
+  }
+
+  if(!Buffer.isBuffer(imageBuffer)){
+    throw new Error('Invalid story image');
+  }
+
+  const id=crypto.randomUUID();
+  const path=`completed/${date}-${id}.jpg`;
+
+  const response=await fetch(
+    `${base}/storage/v1/object/story-photos/${path}`,
+    {
+      method:'POST',
+      headers:{
+        apikey:key,
+        Authorization:`Bearer ${key}`,
+        'Content-Type':'image/jpeg',
+        'x-upsert':'false'
+      },
+      body:imageBuffer
+    }
+  );
+
+  if(!response.ok){
+    throw new Error(
+      `完成画像の保存に失敗：${response.status}`
+    );
+  }
+
+  return path;
+}
+
 async function makeDailyStory(
   state,
   {
