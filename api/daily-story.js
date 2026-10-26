@@ -1167,6 +1167,76 @@ async function loadStoryPhoto(storagePath){
   );
 }
 
+async function createCompletedStory(photoBuffer, text){
+
+  const width=1080;
+  const height=1920;
+  const photoHeight=1410;
+
+  // 元写真を切り抜かずに配置
+  const photo=await sharp(photoBuffer)
+    .rotate()
+    .resize(width,photoHeight,{
+      fit:'contain',
+      background:'#161616'
+    })
+    .jpeg({quality:94})
+    .toBuffer();
+
+  const escapeXml=value=>String(value)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&apos;');
+
+  const lines=String(text||'')
+    .split('\n')
+    .map(x=>x.trim())
+    .filter(Boolean);
+
+  const maxLines=12;
+  const visible=lines.slice(0,maxLines);
+
+  const fontSize=30;
+  const lineHeight=39;
+
+  const textElements=visible.map((line,i)=>`
+    <text
+      x="80"
+      y="${1510+i*lineHeight}"
+      font-family="Noto Sans CJK JP, sans-serif"
+      font-size="${fontSize}"
+      fill="#ffffff"
+    >${escapeXml(line)}</text>
+  `).join('');
+
+  const overlay=Buffer.from(`
+    <svg xmlns="http://www.w3.org/2000/svg"
+         width="${width}" height="${height}">
+      <rect x="0" y="1410"
+            width="1080" height="510"
+            fill="#161616"/>
+      ${textElements}
+    </svg>
+  `);
+
+  return sharp({
+    create:{
+      width,
+      height,
+      channels:3,
+      background:'#161616'
+    }
+  })
+    .composite([
+      {input:photo,top:0,left:0},
+      {input:overlay,top:0,left:0}
+    ])
+    .jpeg({quality:92})
+    .toBuffer();
+}
+
 async function makeDailyStory(
   state,
   {
