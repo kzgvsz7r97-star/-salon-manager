@@ -1166,9 +1166,18 @@ async function loadStoryPhoto(storagePath){
     }
   );
 
+
   if(!response.ok){
-    
-async function createCompletedStory(photoBuffer, text){
+    throw new Error(
+      `写真読み込みエラー：${response.status}`
+    );
+  }
+
+  return Buffer.from(
+    await response.arrayBuffer()
+  );
+}
+
 
   const width=1080;
   const height=1920;
