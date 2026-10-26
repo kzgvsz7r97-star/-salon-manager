@@ -369,27 +369,39 @@
             file
           );
 
-        await jsonFetch(
-          `${API}/api/story-library`,
-          {
-            method:'POST',
+       const body=JSON.stringify({
+  action:'upload',
+  name:file.name,
+  imageData
+});
 
-            headers:{
-              'Content-Type':
-                'application/json',
+for(let attempt=1;attempt<=3;attempt++){
+  try{
+    await jsonFetch(
+      `${API}/api/story-library`,
+      {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'X-Backup-Key':key
+        },
+        body
+      }
+    );
+    break;
+  }catch(e){
+    if(attempt===3)throw e;
 
-              'X-Backup-Key':
-                key
-            },
+    if(status){
+      status.textContent=
+        `写真を再試行中 ${i+1}/${files.length}（${attempt}/2）`;
+    }
 
-            body:
-              JSON.stringify({
-                action:'upload',
-                name:file.name,
-                imageData
-              })
-          }
-        );
+    await new Promise(
+      resolve=>setTimeout(resolve,attempt*1000)
+    );
+  }
+}
 
         success++;
 
