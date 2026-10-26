@@ -489,68 +489,78 @@ const story=requestedId
     state.storyPhotoLibrary=
       library(state);
 
+
     if(action==='upload'){
+
+      const requestId=String(
+        req.body?.requestId||''
+      );
+
+      if(!/^[0-9a-f-]{36}$/i.test(requestId)){
+        return res.status(400).json({
+          ok:false,
+          error:'Invalid upload request ID'
+        });
+      }
+
+      const existing=state.storyPhotoLibrary.find(
+        x=>String(x.id)===requestId
+      );
+
+      if(existing){
+        return res.status(200).json({
+          ok:true,
+          photo:existing,
+          count:state.storyPhotoLibrary.length,
+          alreadyRegistered:true
+        });
+      }
+
+      const {type,buffer,ext}=parseImageData(
+        req.body?.imageData
+      );
 
       await ensureBucket();
 
-      const {
-        type,
-        buffer,
-        ext
-      }=
-        parseImageData(
-          req.body?.imageData
-        );
+      const path=`uploads/${requestId}.${ext}`;
 
-      const id=
-        crypto.randomUUID();
+      const latest=await latestState();
+      latest.storyPhotoLibrary=library(latest);
 
-      const path=
-        `uploads/${Date.now()}-${id}.${ext}`;
-
-      await uploadObject(
-        path,
-        type,
-        buffer
+      const found=latest.storyPhotoLibrary.find(
+        x=>String(x.id)===requestId
       );
 
+      if(found){
+        return res.status(200).json({
+          ok:true,
+          photo:found,
+          count:latest.storyPhotoLibrary.length,
+          alreadyRegistered:true
+        });
+      }
+
+      await uploadObject(path,type,buffer);
+
       const item={
-        id,
+        id:requestId,
         storagePath:path,
         contentType:type,
-
-        originalName:
-          String(
-            req.body?.name ||
-            ''
-          ),
-
-        uploadedAt:
-          new Date()
-            .toISOString(),
-
+        originalName:String(req.body?.name||''),
+        uploadedAt:new Date().toISOString(),
         active:true
       };
 
-      state.storyPhotoLibrary
-        .push(item);
+      latest.storyPhotoLibrary.push(item);
+      await writeState(latest);
 
-      await writeState(
-        state
-      );
-
-      return res
-        .status(200)
-        .json({
-          ok:true,
-          photo:item,
-
-          count:
-            state
-              .storyPhotoLibrary
-              .length
-        });
+      return res.status(200).json({
+        ok:true,
+        photo:item,
+        count:latest.storyPhotoLibrary.length
+      });
     }
+
 
     if(action==='toggle'){
 
