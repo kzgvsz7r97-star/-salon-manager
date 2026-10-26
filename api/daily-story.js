@@ -1167,31 +1167,11 @@ async function loadStoryPhoto(storagePath){
   );
 
   if(!response.ok){
-    throw new Error(
-      `写真読み込みエラー：${response.status}`
-    );
-  }
-
-  return Buffer.from(
-    await response.arrayBuffer()
-  );
-}
-
+    
 async function createCompletedStory(photoBuffer, text){
 
   const width=1080;
   const height=1920;
-  const photoHeight=1410;
-
-  // 元写真を切り抜かずに配置
-  const photo=await sharp(photoBuffer)
-    .rotate()
-    .resize(width,photoHeight,{
-      fit:'contain',
-      background:'#161616'
-    })
-    .jpeg({quality:94})
-    .toBuffer();
 
   const escapeXml=value=>String(value)
     .replace(/&/g,'&amp;')
@@ -1200,42 +1180,148 @@ async function createCompletedStory(photoBuffer, text){
     .replace(/"/g,'&quot;')
     .replace(/'/g,'&apos;');
 
-  const lines=String(text||'')
+  const sourceLines=String(text||'')
+    .replace(/\r/g,'')
     .split('\n')
     .map(x=>x.trim())
     .filter(Boolean);
 
-  const maxLines=12;
-  const visible=lines.slice(0,maxLines);
+  // 日本語と英数字の文字幅を概算
+  function textWidth(value,size){
+    let width=0;
 
-  const fontSize=30;
-  const lineHeight=39;
+    for(const ch of value){
+      width+=/^[\x00-\x7F]$/.test(ch)
+        ?size*0.58
+        :size;
+    }
 
-  const textElements=visible.map((line,i)=>`
-    <text
-      x="80"
-      y="${1510+i*lineHeight}"
-      font-family="Noto Sans CJK JP, sans-serif"
-      font-size="${fontSize}"
-      fill="#ffffff"
-    >${escapeXml(line)}</text>
-  `).join('');
+    return width;
+  }
 
-  const overlay=Buffer.from(`
+  // 長い文章を自動改行
+  function wrapLine(line,size){
+    const result=[];
+    let current='';
+
+    for(const ch of line){
+      if(
+        current &&
+        textWidth(current+ch,size)>940
+      ){
+        result.push(current);
+        current=ch;
+      }else{
+        current+=ch;
+      }
+    }
+
+    if(current)result.push(current);
+    return result;
+  }
+
+  // 文章量に応じて文字サイズを調整
+  let layout=null;
+
+  for(const size of [44,42,40,38,36,34,32,30]){
+    const rows=sourceLines.flatMap(
+      line=>wrapLine(line,size)
+    );
+
+    const lineHeight=Math.ceil(size*1.4);
+    const needed=rows.length*lineHeight+130;
+
+    if(needed<=850){
+      layout={
+        rows,
+        size,
+        lineHeight,
+        panelHeight:Math.max(610,needed)
+      };
+      break;
+    }
+  }
+
+  if(!layout){
+    throw new Error(
+      'ストーリーの文字量が多すぎます'
+    );
+  }
+
+  const photoHeight=height-layout.panelHeight;
+
+  // 元写真の縦横比を維持
+  const photo=await sharp(photoBuffer)
+    .rotate()
+    .resize(width,photoHeight,{
+      fit:'contain',
+      background:'#151515'
+    })
+    .jpeg({quality:94})
+    .toBuffer();
+
+  // 日本語フォントを使用して文字を描画
+  const textElements=layout.rows.map(
+    (line,i)=>{
+      const isHeading=
+        line==='おすすめの方' ||
+        line==='前回来店目安';
+
+      const y=
+        photoHeight+76+
+        i*layout.lineHeight;
+
+      return `
+        <text
+          x="70"
+          y="${y}"
+          font-family="Noto Sans JP"
+          font-size="${layout.size}"
+          font-weight="400"
+          fill="${isHeading?'#d9cfc6':'#ffffff'}"
+        >${escapeXml(line)}</text>
+      `;
+    }
+  ).join('');
+
+  const svg=`
     <svg xmlns="http://www.w3.org/2000/svg"
          width="${width}" height="${height}">
-      <rect x="0" y="1410"
-            width="1080" height="510"
-            fill="#161616"/>
+      <rect
+        x="0"
+        y="${photoHeight}"
+        width="${width}"
+        height="${layout.panelHeight}"
+        fill="#151515"
+      />
       ${textElements}
     </svg>
-  `);
+  `;
+
+  const overlay=new Resvg(svg,{
+    font:{
+      fontFiles:[storyFontPath],
+      loadSystemFonts:false,
+      defaultFontFamily:'Noto Sans JP'
+    }
+  }).render().asPng();
 
   return sharp({
     create:{
       width,
       height,
       channels:3,
+      background:'#151515'
+    }
+  })
+    .composite([
+      {input:photo,top:0,left:0},
+      {input:overlay,top:0,left:0}
+    ])
+    .jpeg({quality:92})
+    .toBuffer();
+}
+
       background:'#161616'
     }
   })
