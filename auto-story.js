@@ -416,11 +416,16 @@
             file
           );
 
-       const body=JSON.stringify({
-  action:'upload',
-  name:file.name,
+
+const requestId = crypto.randomUUID();
+
+const body = JSON.stringify({
+  action: 'upload',
+  requestId,
+  name: file.name,
   imageData
 });
+
 
 for(let attempt=1;attempt<=3;attempt++){
   try{
