@@ -233,7 +233,54 @@
       )
       .onclick=
         generateManual;
+    const testBtn=document.createElement('button');
+    testBtn.type='button';
+    testBtn.className='ghost';
+    testBtn.textContent='LINE通知テスト';
 
+    testBtn.onclick=async()=>{
+      const key=backupKey();
+
+      if(!key){
+        alert('クラウド同期キーが未設定です');
+        return;
+      }
+
+      testBtn.disabled=true;
+      testBtn.textContent='LINE送信中...';
+
+      try{
+        const result=await jsonFetch(
+          `${API}/api/daily-story`,
+          {
+            method:'POST',
+            headers:{
+              'Content-Type':'application/json',
+              'X-Backup-Key':key
+            },
+            body:JSON.stringify({
+              action:'send-test'
+            })
+          }
+        );
+
+        if(result.skipped){
+          throw new Error('自動ストーリーが無効です');
+        }
+
+        alert('送信処理が完了しました。LINEを確認してください');
+      }catch(e){
+        alert('LINE通知エラー：'+e.message);
+      }finally{
+        testBtn.disabled=false;
+        testBtn.textContent='LINE通知テスト';
+      }
+    };
+
+    host.insertBefore(
+      testBtn,
+      document.getElementById('storyLibraryCount')
+    );
     refreshLibraryCount();
   }
 
