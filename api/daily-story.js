@@ -1323,16 +1323,7 @@ async function createCompletedStory(photoBuffer, text){
 }
 
     
-  
-      background:'#161616'
-    }
-  })
-    .composite([
-      {input:photo,top:0,left:0},
-      {input:overlay,top:0,left:0}
-    ])
-    .jpeg({quality:92})
-    .toBuffer();
+
 }
 
 
