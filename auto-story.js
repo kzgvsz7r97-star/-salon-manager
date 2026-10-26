@@ -402,7 +402,7 @@
           String(e?.message || e).slice(0,300)
         );
 
-        break;
+       continue;
       }
     }
 
