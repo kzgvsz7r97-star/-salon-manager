@@ -1323,6 +1323,7 @@ async function createCompletedStory(photoBuffer, text){
 }
 
     
+  
       background:'#161616'
     }
   })
@@ -1333,6 +1334,7 @@ async function createCompletedStory(photoBuffer, text){
     .jpeg({quality:92})
     .toBuffer();
 }
+
 
 
 async function saveCompletedStory(imageBuffer, date){
