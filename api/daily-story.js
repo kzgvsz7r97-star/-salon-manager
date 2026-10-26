@@ -1507,9 +1507,11 @@ export default async function handler(
     // 手動テスト時はLINEを送らない
     if(!manual){
 
-      if(
-        result.already
-      ){
+     if(
+  result.already &&
+  state.storyAuto?.lastSentAt &&
+  isoJst(new Date(state.storyAuto.lastSentAt)) === result.today
+){
         return res
           .status(200)
           .json({
