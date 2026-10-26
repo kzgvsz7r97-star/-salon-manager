@@ -1546,14 +1546,12 @@ ${link}`
         ]
       );
 
-      state.storyAuto
-        .lastSentAt=
-        new Date()
-          .toISOString();
+     if(!manual){
+  state.storyAuto.lastSentAt =
+    new Date().toISOString();
 
-      await writeState(
-        state
-      );
+  await writeState(state);
+}
     }
 
     return res
