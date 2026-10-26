@@ -1124,6 +1124,12 @@ function appUrl(today){
   return u.toString();
 }
 
+  const end=
+    addDaysISO(
+      today,
+      2
+    );
+
 async function makeDailyStory(
   state,
   {
