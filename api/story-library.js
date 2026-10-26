@@ -314,6 +314,101 @@ export default async function handler(
       .status(204)
       .end();
   }
+  
+  // LINE送信用の完成画像を取得
+  if(
+    req.method==='GET' &&
+    req.query?.completed==='1'
+  ){
+    const date=String(req.query?.date||'');
+    const sig=String(req.query?.sig||'');
+    const secret=process.env.CRON_SECRET||'';
+
+    const expected=
+      secret && /^\d{4}-\d{2}-\d{2}$/.test(date)
+        ? crypto
+            .createHmac('sha256',secret)
+            .update(`story-auto:${date}`)
+            .digest('hex')
+        : '';
+
+    const valid=
+      /^[0-9a-f]{64}$/i.test(sig) &&
+      expected.length===64 &&
+      crypto.timingSafeEqual(
+        Buffer.from(expected,'hex'),
+        Buffer.from(sig,'hex')
+      );
+
+    if(!valid){
+      return res.status(401).json({
+        ok:false,
+        error:'Unauthorized'
+      });
+    }
+
+    try{
+      const state=await latestState();
+      const story=state.storyAuto?.last;
+
+      if(!story || story.date!==date){
+        return res.status(404).json({
+          ok:false,
+          error:'Story not found'
+        });
+      }
+
+      const path=String(
+        story.completedPath||''
+      );
+
+      if(!/^completed\/[a-zA-Z0-9._-]+\.jpg$/.test(path)){
+        return res.status(404).json({
+          ok:false,
+          error:'Completed image not found'
+        });
+      }
+
+      const {url}=base();
+
+      const photo=await fetch(
+        `${url}/storage/v1/object/authenticated/${BUCKET}/${path}`,
+        {
+          headers:authHeaders()
+        }
+      );
+
+      if(!photo.ok){
+        return res.status(502).json({
+          ok:false,
+          error:'Image retrieval failed'
+        });
+      }
+
+      const buffer=Buffer.from(
+        await photo.arrayBuffer()
+      );
+
+      if(buffer.length>10*1024*1024){
+        throw new Error('Image too large');
+      }
+
+      res.setHeader('Content-Type','image/jpeg');
+      res.setHeader('Cache-Control','no-store');
+
+      return res.status(200).send(buffer);
+
+    }catch(e){
+      console.error('Completed story error',e);
+
+      return res.status(500).json({
+        ok:false,
+        error:'Completed image fetch failed'
+      });
+    }
+  }
+
+
   // 登録済み写真をストーリー用に取得
   if(
     req.method==='GET' &&
