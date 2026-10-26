@@ -341,8 +341,27 @@ export default async function handler(
     }
 
     try{
-      const state=await latestState();
-      const story=state.storyAuto?.last;
+     const state=await latestState();
+
+const requestedId=String(req.query?.id||'');
+
+const registered=Array.isArray(state.storyPhotoLibrary)
+  ? state.storyPhotoLibrary.find(
+      x=>String(x.id)===requestedId &&
+         x.active!==false &&
+         x.storagePath
+    )
+  : null;
+
+const story=requestedId
+  ? registered
+    ? {
+        date,
+        storagePath:registered.storagePath,
+        contentType:registered.contentType
+      }
+    : null
+  : state.storyAuto?.last;
 
       if(!story || story.date!==date){
         return res.status(404).json({
