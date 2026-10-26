@@ -1179,6 +1179,8 @@ async function loadStoryPhoto(storagePath){
 }
 
 
+async function createCompletedStory(photoBuffer, text){
+
   const width=1080;
   const height=1920;
 
