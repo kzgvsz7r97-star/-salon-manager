@@ -61,7 +61,7 @@
   sig,
   id
 ){
-  ){
+
     const r=
       await fetch(
      `${API}/api/story-library?photo=1&date=${encodeURIComponent(date)}&id=${encodeURIComponent(id)}&sig=${encodeURIComponent(sig)}`
