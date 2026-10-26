@@ -1463,6 +1463,8 @@ async function makeDailyStory(
     originalName:
       selected.originalName,
 
+    completedPath,
+
     mediaUrl,
 
     permalink:'',
