@@ -274,12 +274,18 @@ async function uploadObject(
       }
     );
 
+
+  if(r.status===409){
+    return;
+  }
+
   if(!r.ok){
     throw new Error(
       await r.text() ||
       '画像保存に失敗しました'
     );
   }
+
 }
 
 function library(state){
