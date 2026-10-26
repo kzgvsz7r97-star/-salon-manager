@@ -56,13 +56,15 @@
     return body;
   }
 
-  async function loadPhotoBlob(
-    date,
-    sig
+ async function loadPhotoBlob(
+  date,
+  sig,
+  id
+){
   ){
     const r=
       await fetch(
-      `${API}/api/story-library?photo=1&date=${encodeURIComponent(date)}&sig=${encodeURIComponent(sig)}`
+     `${API}/api/story-library?photo=1&date=${encodeURIComponent(date)}&id=${encodeURIComponent(id)}&sig=${encodeURIComponent(sig)}`
       );
 
     if(!r.ok){
@@ -482,10 +484,11 @@
     }
 
     const blobUrl=
-      await loadPhotoBlob(
-        date,
-        sig
-      );
+  await loadPhotoBlob(
+    date,
+    sig,
+    story.mediaId
+  );
 
     const img=
       document.getElementById(
