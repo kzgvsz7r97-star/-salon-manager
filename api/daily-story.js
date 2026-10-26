@@ -1430,8 +1430,7 @@ export default async function handler(
     }
 
     if(
-      req.body?.action!==
-      'test'
+     !['test','send-test'].includes(req.body?.action)
     ){
       return res
         .status(400)
@@ -1505,7 +1504,7 @@ export default async function handler(
       );
 
     // 手動テスト時はLINEを送らない
-    if(!manual){
+ if(!manual || req.body?.action==='send-test'){
 
      if(
   result.already &&
