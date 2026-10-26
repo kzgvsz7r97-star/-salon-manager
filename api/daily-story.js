@@ -707,11 +707,13 @@ function storyText(
       )
     );
 
+
   const end=
     addDaysISO(
       today,
-      6
+      2
     );
+
 
   const base=
     storyAvailabilityText(
