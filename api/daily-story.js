@@ -1,4 +1,7 @@
+
 import crypto from 'crypto';
+import sharp from 'sharp';
+
 
 const ALLOWED_ORIGINS = new Set([
   'https://kzgvsz7r97-star.github.io',
