@@ -1883,6 +1883,94 @@ function renderReservationWeek(){
   });
   host.innerHTML=html;
 }
+  
+(function setupWeekNavigation(){
+  const area=document.querySelector(
+    '#reservationWeekView .week-scroll'
+  );
+  if(!area || area.dataset.weekSwipeReady)return;
+  area.dataset.weekSwipeReady='1';
+
+  let start=null;
+  let ignoreClickUntil=0;
+
+  area.addEventListener('touchstart',e=>{
+    if(e.touches.length!==1 || window.__weekDragActive){
+      start=null;
+      return;
+    }
+    start={
+      x:e.touches[0].clientX,
+      y:e.touches[0].clientY
+    };
+  },{passive:true});
+
+  area.addEventListener('touchend',e=>{
+    if(!start || !e.changedTouches.length ||
+       window.__weekDragActive){
+      start=null;
+      return;
+    }
+
+    const dx=e.changedTouches[0].clientX-start.x;
+    const dy=e.changedTouches[0].clientY-start.y;
+    start=null;
+
+    if(Math.abs(dx)<65 ||
+       Math.abs(dx)<Math.abs(dy)*1.4)return;
+
+    ignoreClickUntil=Date.now()+450;
+    changeReservationWeek(dx<0?1:-1);
+  },{passive:true});
+
+  area.addEventListener('touchcancel',()=>{
+    start=null;
+  });
+
+  area.addEventListener('click',e=>{
+    if(Date.now()<ignoreClickUntil){
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  },true);
+
+  let wheelAmount=0;
+  let lastWheel=0;
+  let lastSwitch=0;
+
+  area.addEventListener('wheel',e=>{
+    if(window.__weekDragActive)return;
+
+    if(!e.shiftKey &&
+       Math.abs(e.deltaX)<=Math.abs(e.deltaY)*1.15)return;
+
+    const dx=Math.abs(e.deltaX)>0
+      ?e.deltaX
+      :e.shiftKey?e.deltaY:0;
+
+    if(Math.abs(dx)<0.5)return;
+
+    e.preventDefault();
+
+    const now=Date.now();
+    if(now-lastWheel>300)wheelAmount=0;
+    lastWheel=now;
+
+    if(now-lastSwitch<650)return;
+
+    const unit=e.deltaMode===1?16:
+      e.deltaMode===2?200:1;
+
+    wheelAmount+=dx*unit;
+
+    if(Math.abs(wheelAmount)>=80){
+      changeReservationWeek(wheelAmount>0?1:-1);
+      lastSwitch=now;
+      wheelAmount=0;
+    }
+  },{passive:false});
+})();
+
 function customerVisitHistory(name){
   const n=normalizeName(name);
   return db.bookings.filter(x=>normalizeName(x.customer)===n).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
