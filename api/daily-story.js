@@ -1184,6 +1184,14 @@ async function createCompletedStory(photoBuffer, text){
   const width=1080;
   const height=1920;
 
+  const panelX=Math.round(width*0.06);
+  const panelWidth=Math.round(width*0.88);
+  const panelBottom=Math.round(height*0.06);
+  const panelPaddingX=28;
+  const panelPaddingY=24;
+  const panelRadius=28;
+  const maxPanelHeight=Math.round(height*0.32);
+
   const escapeXml=value=>String(value)
     .replace(/&/g,'&amp;')
     .replace(/</g,'&lt;')
@@ -1191,63 +1199,109 @@ async function createCompletedStory(photoBuffer, text){
     .replace(/"/g,'&quot;')
     .replace(/'/g,'&apos;');
 
-  const sourceLines=String(text||'')
-    .replace(/\r/g,'')
-    .split('\n')
-    .map(x=>x.trim())
-    .filter(Boolean);
-
-  // 日本語と英数字の文字幅を概算
   function textWidth(value,size){
-    let width=0;
+    let total=0;
 
-    for(const ch of value){
-      width+=/^[\x00-\x7F]$/.test(ch)
-        ?size*0.58
-        :size;
+    for(const ch of String(value||'')){
+      total+=/^[\x00-\x7F]$/.test(ch)
+        ? size*0.58
+        : size;
     }
 
-    return width;
+    return total;
   }
 
-  // 長い文章を自動改行
-  function wrapLine(line,size){
-    const result=[];
+  function wrapLine(line,size,maxWidth){
+    if(!line)return [''];
+
+    const rows=[];
     let current='';
 
     for(const ch of line){
+      const test=current+ch;
+
       if(
         current &&
-        textWidth(current+ch,size)>940
+        textWidth(test,size)>maxWidth
       ){
-        result.push(current);
+        rows.push(current);
         current=ch;
       }else{
-        current+=ch;
+        current=test;
       }
     }
 
-    if(current)result.push(current);
-    return result;
+    if(current)rows.push(current);
+
+    return rows;
   }
 
-  // 文章量に応じて文字サイズを調整
+  const rawLines=String(text||'')
+    .replace(/\r/g,'')
+    .split('\n')
+    .map(x=>x.trim());
+
+  const maxTextWidth=
+    panelWidth-panelPaddingX*2;
+
   let layout=null;
 
-  for(const size of [44,42,40,38,36,34,32,30]){
-    const rows=sourceLines.flatMap(
-      line=>wrapLine(line,size)
-    );
+  for(const size of [46,44,42,40,38,36,34,32,30]){
+    const rows=[];
 
-    const lineHeight=Math.ceil(size*1.4);
-    const needed=rows.length*lineHeight+130;
+    rawLines.forEach(line=>{
+      if(!line){
+        rows.push({
+          text:'',
+          kind:'space'
+        });
+        return;
+      }
 
-    if(needed<=850){
-      layout={
-        rows,
+      const wrapped=wrapLine(
+        line,
         size,
+        maxTextWidth
+      );
+
+      wrapped.forEach((part,index)=>{
+        rows.push({
+          text:part,
+          kind:
+            line==='おすすめの方' ||
+            line==='前回来店目安'
+              ? 'heading'
+              : line.startsWith('•')
+                ? 'bullet'
+                : 'body',
+          first:index===0
+        });
+      });
+    });
+
+    const lineHeight=
+      Math.round(size*1.42);
+
+    const contentHeight=
+      rows.reduce(
+        (sum,row)=>sum+(
+          row.kind==='space'
+            ? Math.round(lineHeight*.55)
+            : lineHeight
+        ),
+        0
+      );
+
+    const panelHeight=
+      contentHeight+
+      panelPaddingY*2;
+
+    if(panelHeight<=maxPanelHeight){
+      layout={
+        size,
+        rows,
         lineHeight,
-        panelHeight:Math.max(610,needed)
+        panelHeight
       };
       break;
     }
@@ -1259,53 +1313,68 @@ async function createCompletedStory(photoBuffer, text){
     );
   }
 
-  const photoHeight=height-layout.panelHeight;
+  const panelY=
+    height-panelBottom-layout.panelHeight;
 
-  // 元写真の縦横比を維持
   const photo=await sharp(photoBuffer)
     .rotate()
-    .resize(width,photoHeight,{
-      fit:'contain',
-      background:'#151515'
+    .resize(width,height,{
+      fit:'cover',
+      position:'centre'
     })
     .jpeg({quality:94})
     .toBuffer();
 
-  // 日本語フォントを使用して文字を描画
-  const textElements=layout.rows.map(
-    (line,i)=>{
-      const isHeading=
-        line==='おすすめの方' ||
-        line==='前回来店目安';
+  let currentY=
+    panelY+panelPaddingY+layout.size*.06;
 
-      const y=
-        photoHeight+76+
-        i*layout.lineHeight;
-
-      return `
-        <text
-          x="70"
-          y="${y}"
-          font-family="Noto Sans JP"
-          font-size="${layout.size}"
-          font-weight="400"
-          fill="${isHeading?'#d9cfc6':'#ffffff'}"
-        >${escapeXml(line)}</text>
-      `;
+  const textSvg=layout.rows.map(row=>{
+    if(row.kind==='space'){
+      currentY+=Math.round(
+        layout.lineHeight*.55
+      );
+      return '';
     }
-  ).join('');
+
+    const fill=
+      row.kind==='heading'
+        ? '#111111'
+        : '#111111';
+
+    const weight=
+      row.kind==='heading'
+        ? '700'
+        : '600';
+
+    const node=`
+      <text
+        x="${panelX+panelPaddingX}"
+        y="${currentY}"
+        font-family="Noto Sans JP"
+        font-size="${layout.size}"
+        font-weight="${weight}"
+        fill="${fill}"
+      >${escapeXml(row.text)}</text>
+    `;
+
+    currentY+=layout.lineHeight;
+    return node;
+  }).join('');
 
   const svg=`
     <svg xmlns="http://www.w3.org/2000/svg"
          width="${width}" height="${height}">
       <rect
-        x="0"
-        y="${photoHeight}"
-        width="${width}"
+        x="${panelX}"
+        y="${panelY}"
+        width="${panelWidth}"
         height="${layout.panelHeight}"
-        fill="#151515"
+        rx="${panelRadius}"
+        ry="${panelRadius}"
+        fill="#ffffff"
+        fill-opacity="0.30"
       />
-      ${textElements}
+      ${textSvg}
     </svg>
   `;
 
@@ -1317,17 +1386,13 @@ async function createCompletedStory(photoBuffer, text){
     }
   }).render().asPng();
 
-  return sharp({
-    create:{
-      width,
-      height,
-      channels:3,
-      background:'#151515'
-    }
-  })
+  return sharp(photo)
     .composite([
-      {input:photo,top:0,left:0},
-      {input:overlay,top:0,left:0}
+      {
+        input:overlay,
+        top:0,
+        left:0
+      }
     ])
     .jpeg({quality:92})
     .toBuffer();
