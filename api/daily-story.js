@@ -1325,8 +1325,10 @@ async function createCompletedStory(photoBuffer, text){
     .jpeg({quality:94})
     .toBuffer();
 
+
   let currentY=
-    panelY+panelPaddingY+layout.size*.06;
+    panelY+panelPaddingY+layout.size;
+
 
   const textSvg=layout.rows.map(row=>{
     if(row.kind==='space'){
