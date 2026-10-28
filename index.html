@@ -1971,6 +1971,158 @@ function renderReservationWeek(){
   },{passive:false});
 })();
 
+
+(function setupWeekBookingDrag(){
+  const area=document.querySelector('#reservationWeekView .week-scroll');
+  if(!area||area.dataset.bookingDragReady)return;
+  area.dataset.bookingDragReady='1';
+
+  const css=document.createElement('style');
+  css.textContent='#reservationWeekGrid .week-booking{touch-action:none;user-select:none;-webkit-user-select:none}';
+  document.head.appendChild(css);
+
+  let pending=null;
+  let timer=null;
+  let ghost=null;
+  let suppressClickUntil=0;
+
+  function stopTimer(){
+    if(timer!==null)clearTimeout(timer);
+    timer=null;
+  }
+
+  function cleanup(){
+    const wasDragging=!!pending?.active;
+    stopTimer();
+    ghost?.remove();
+    ghost=null;
+    pending=null;
+    if(wasDragging){
+      suppressClickUntil=Date.now()+700;
+      setTimeout(()=>{window.__weekDragActive=false;},650);
+    }
+  }
+
+  function moveGhost(x,y){
+    if(!ghost)return;
+    ghost.style.left=(x+14)+'px';
+    ghost.style.top=(y+14)+'px';
+  }
+
+  function activate(){
+    if(!pending||pending.active)return;
+    pending.active=true;
+    window.__weekDragActive=true;
+    ghost=document.createElement('div');
+    ghost.textContent=pending.card.innerText||'予約を移動';
+    ghost.style.cssText='position:fixed;z-index:99999;pointer-events:none;background:#fff;border:2px solid #111;border-radius:12px;padding:10px;max-width:210px;box-shadow:0 6px 24px #0003;font-size:12px;white-space:pre-line;color:#111;';
+    document.body.appendChild(ghost);
+    moveGhost(pending.x,pending.y);
+  }
+
+  area.addEventListener('pointerdown',e=>{
+    if(e.button!==0||pending)return;
+    const card=e.target.closest('.week-booking');
+    if(!card||!area.contains(card))return;
+    const match=(card.getAttribute('onclick')||'').match(/^editBooking\('([^']+)'\)$/);
+    if(!match)return;
+    pending={id:match[1],card,pointerId:e.pointerId,pointerType:e.pointerType,x:e.clientX,y:e.clientY,active:false};
+    if(e.pointerType!=='mouse')timer=setTimeout(activate,420);
+  });
+
+  document.addEventListener('pointermove',e=>{
+    if(!pending||pending.pointerId!==e.pointerId)return;
+    const distance=Math.hypot(e.clientX-pending.x,e.clientY-pending.y);
+    if(!pending.active){
+      if(pending.pointerType==='mouse'&&distance>9)activate();
+      else if(pending.pointerType!=='mouse'&&distance>16){cleanup();return;}
+    }
+    if(pending?.active){
+      e.preventDefault();
+      moveGhost(e.clientX,e.clientY);
+    }
+  },{passive:false});
+
+  document.addEventListener('pointerup',e=>{
+    if(!pending||pending.pointerId!==e.pointerId)return;
+    const id=pending.id;
+    const active=pending.active;
+    const startX=pending.x,startY=pending.y;
+    cleanup();
+    if(!active||Math.hypot(e.clientX-startX,e.clientY-startY)<14)return;
+
+    const heads=[...area.querySelectorAll('.week-dayhead')];
+    const dayIndex=heads.findIndex(el=>{
+      const r=el.getBoundingClientRect();
+      return e.clientX>=r.left&&e.clientX<r.right;
+    });
+    const slot=area.querySelector('.week-slot');
+    if(dayIndex<0||!slot)return;
+    const rect=slot.getBoundingClientRect();
+    if(rect.height<=0)return;
+    const row=Math.floor((e.clientY-rect.top)/rect.height);
+    if(row<0||row>=30)return;
+
+    const booking=db.bookings.find(b=>String(b.id)===String(id));
+    if(!booking)return;
+    const oldStart=timeToMin(booking.time);
+    const oldEnd=timeToMin(booking.end);
+    const duration=oldEnd>oldStart?oldEnd-oldStart:120;
+    const startMin=8*60+row*30;
+    const endMin=startMin+duration;
+    if(endMin>23*60){
+      alert('移動後の終了時間が23:00を超えます');
+      return;
+    }
+
+    const date=dateOnly(reservationWeekStart)||dateOnly(startOfWeekISO(todayISO));
+    date.setDate(date.getDate()+dayIndex);
+    const newDate=localISO(date);
+    const newStart=minToClock(startMin);
+    const newEnd=minToClock(endMin);
+    if(booking.date===newDate&&booking.time===newStart)return;
+
+    const staffId=booking.staffId||ownerStaff()?.id||'';
+    const overlap=db.bookings.some(other=>{
+      if(String(other.id)===String(id)||!isActiveBooking(other)||other.date!==newDate)return false;
+      if((other.staffId||ownerStaff()?.id||'')!==staffId)return false;
+      const s=timeToMin(other.time);
+      const t=timeToMin(other.end);
+      return startMin<(t>s?t:s+120)&&endMin>s;
+    });
+    if(overlap){
+      alert('同じ担当者の予約と時間が重複しています。移動できません。');
+      return;
+    }
+
+    const parent=db.bookings.find(b=>String(b.nextBookingId||'')===String(id));
+    if(parent&&newDate<=parent.date){
+      alert('次回予約は今回の予約より後の日付にしてください');
+      return;
+    }
+
+    if(!confirm(`${booking.customer||'予約'}\n${booking.date} ${booking.time}〜${booking.end||''}\n↓\n${newDate} ${newStart}〜${newEnd}\n\nこの日時に変更しますか？`))return;
+    booking.date=newDate;
+    booking.time=newStart;
+    booking.end=newEnd;
+    if(parent){
+      parent.nextBookingDate=newDate;
+      parent.nextBookingTime=newStart;
+    }
+    save();
+  });
+
+  document.addEventListener('pointercancel',e=>{
+    if(pending&&pending.pointerId===e.pointerId)cleanup();
+  });
+
+  area.addEventListener('click',e=>{
+    if(Date.now()<suppressClickUntil&&e.target.closest('.week-booking')){
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  },true);
+})();
 function customerVisitHistory(name){
   const n=normalizeName(name);
   return db.bookings.filter(x=>normalizeName(x.customer)===n).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
