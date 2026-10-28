@@ -2123,6 +2123,224 @@ function renderReservationWeek(){
     }
   },true);
 })();
+
+(function setupBookingMenuDurations(){
+  const defaults={
+    '前髪カット':30,
+    'カット':60,
+    'カラー':90,
+    'ケアカラー':90,
+    'カット+カラー':120,
+    'カット+ケアカラー':120,
+    'ダブルカラー':240,
+    'カット+ダブルカラー':240,
+    '縮毛矯正':240,
+    'カット+縮毛矯正':240,
+    '前髪縮毛矯正':60,
+    'トリートメント':60,
+    'カット+トリートメント':90
+  };
+
+  const normalizeName=s=>String(s||'')
+    .normalize('NFKC')
+    .replace(/[＋+]/g,'+')
+    .replace(/\s+/g,'')
+    .toLowerCase();
+
+  const saved=()=>db.orderSettings?.menuDurations||{};
+  const catalog=()=>({...defaults,...saved()});
+
+  function getDuration(name){
+    const key=normalizeName(name);
+    if(!key)return 0;
+    const entry=Object.entries(catalog())
+      .find(([label])=>normalizeName(label)===key);
+    const minutes=Number(entry?.[1]||0);
+    return Number.isFinite(minutes)&&minutes>0?minutes:0;
+  }
+
+  function endTime(start,minutes){
+    if(!/^\d{2}:\d{2}$/.test(start||''))return '';
+    const n=timeToMin(start)+minutes;
+    return minutes>0&&n<1440?minToClock(n):'';
+  }
+
+  window.openMenuDurationSettings=function(){
+    const entries=Object.entries(catalog());
+    modal(`<h3>メニュー別の施術時間</h3>
+      <div class="small" style="margin-bottom:10px">
+        15分刻みで設定。変更した時間は次回予約にも使われます。
+      </div>
+      <div style="max-height:47vh;overflow-y:auto">
+        ${entries.map(([name,mins])=>`
+          <div class="row" style="align-items:center;margin-bottom:8px">
+            <label style="flex:1;margin:0">${esc(name)}</label>
+            <input class="menu-duration-input"
+              data-menu-name="${esc(name)}"
+              type="number" min="15" max="600" step="15"
+              value="${Number(mins)}"
+              style="width:95px;margin:0">
+            <span>分</span>
+          </div>`).join('')}
+      </div>
+      <h3 style="margin-top:14px">メニューを追加</h3>
+      <input id="newDurationMenuName" placeholder="例：カットカラーTR">
+      <div class="row" style="align-items:center">
+        <input id="newDurationMinutes" type="number" min="15" max="600"
+          step="15" placeholder="所要時間（分）">
+        <span>分</span>
+      </div>
+      <div class="actions">
+        <button class="ghost" id="closeMenuDurations">閉じる</button>
+        <button id="saveMenuDurations">設定を保存</button>
+      </div>`);
+
+    $('closeMenuDurations').onclick=closeModal;
+    $('saveMenuDurations').onclick=()=>{
+      const next={...saved()};
+      const valid=n=>Number.isInteger(n)&&n>=15&&n<=600&&n%15===0;
+      for(const field of document.querySelectorAll('.menu-duration-input')){
+        const n=Number(field.value);
+        if(!valid(n)){
+          alert(`${field.dataset.menuName} の時間を15分刻みで入力してください`);
+          return;
+        }
+        next[field.dataset.menuName]=n;
+      }
+      const name=$('newDurationMenuName').value.trim();
+      const raw=$('newDurationMinutes').value;
+      if(name||raw){
+        const n=Number(raw);
+        if(!name||!valid(n)){
+          alert('追加メニューの名前と施術時間を確認してください');
+          return;
+        }
+        next[name]=n;
+      }
+      db.orderSettings ||= {};
+      db.orderSettings.menuDurations=next;
+      save();
+      closeModal();
+    };
+  };
+
+  const toolbar=document.querySelector(
+    '#reservationWeekView .row.auto'
+  );
+  if(toolbar&&!document.getElementById('menuDurationSettingsBtn')){
+    const button=document.createElement('button');
+    button.id='menuDurationSettingsBtn';
+    button.type='button';
+    button.className='ghost';
+    button.textContent='メニュー時間設定';
+    button.onclick=window.openMenuDurationSettings;
+    toolbar.appendChild(button);
+  }
+
+  function installMenuPicker(){
+    const main=$('fMenu');
+    if(!main||main.dataset.menuTimeBound)return;
+    main.dataset.menuTimeBound='1';
+
+    const list=document.createElement('datalist');
+    list.id='bookingMenuDurationChoices';
+    list.innerHTML=Object.keys(catalog())
+      .map(name=>`<option value="${esc(name)}"></option>`)
+      .join('');
+    $('sheet').appendChild(list);
+
+    main.setAttribute('list',list.id);
+    main.setAttribute('autocomplete','off');
+    main.addEventListener('input',()=>{
+      const duration=getDuration(main.value);
+      if(!duration)return;
+      const computed=endTime($('fTime')?.value,duration);
+      if(computed)$('fEnd').value=computed;
+    });
+    $('fTime')?.addEventListener('change',()=>{
+      const duration=getDuration(main.value);
+      if(!duration)return;
+      const computed=endTime($('fTime').value,duration);
+      if(computed)$('fEnd').value=computed;
+    });
+
+    const next=$('fNextMenu');
+    if(!next)return;
+    next.setAttribute('list',list.id);
+    next.setAttribute('autocomplete','off');
+    const preview=document.createElement('div');
+    preview.className='small';
+    preview.style.margin='6px 0 10px';
+    next.closest('.row')?.insertAdjacentElement('afterend',preview);
+
+    const show=()=>{
+      const duration=getDuration(next.value);
+      const start=$('fNextTime')?.value||'';
+      if(!duration){
+        preview.textContent='未登録のメニューは前回の施術時間を使います';
+        return;
+      }
+      const finish=endTime(start,duration);
+      preview.textContent=finish
+        ?`次回の施術時間：${duration}分（${start}〜${finish}）`
+        :`施術時間：${duration}分。開始時間を確認してください`;
+    };
+    next.addEventListener('input',show);
+    $('fNextTime')?.addEventListener('input',show);
+    show();
+  }
+
+  const sheet=$('sheet');
+  if(sheet){
+    new MutationObserver(installMenuPicker)
+      .observe(sheet,{childList:true});
+    installMenuPicker();
+  }
+
+  const oldNextEndTime=nextBookingEndTime;
+  nextBookingEndTime=function(start,end,nextStart){
+    const minutes=getDuration($('fNextMenu')?.value||'');
+    return minutes
+      ?endTime(nextStart,minutes)||oldNextEndTime(start,end,nextStart)
+      :oldNextEndTime(start,end,nextStart);
+  };
+
+  const oldSaveBooking=saveBooking;
+  saveBooking=function(id){
+    if($('fNext')?.checked){
+      const date=$('fNextDate')?.value||'';
+      const time=$('fNextTime')?.value||'';
+      const menu=$('fNextMenu')?.value||'';
+      const duration=getDuration(menu);
+      if(date&&time&&duration){
+        const finish=endTime(time,duration);
+        if(!finish){
+          alert('次回予約が日付をまたぎます。開始時間を変更してください');
+          return;
+        }
+        const current=db.bookings.find(b=>String(b.id)===String(id));
+        const linkedId=String(current?.nextBookingId||'');
+        const staff=$('fStaff')?.value||ownerStaff()?.id||'';
+        const start=timeToMin(time);
+        const end=start+duration;
+        const conflict=db.bookings.some(b=>{
+          if(!isActiveBooking(b)||b.date!==date||
+             String(b.id)===linkedId)return false;
+          if((b.staffId||ownerStaff()?.id||'')!==staff)return false;
+          const bStart=timeToMin(b.time);
+          let bEnd=timeToMin(b.end);
+          if(bEnd<=bStart)bEnd=bStart+120;
+          return start<bEnd&&end>bStart;
+        });
+        if(conflict){
+          alert('次回予約が別の予約と重複しています。時間を変更してください');
+          return;
+        }
+      }
+    }
+    return oldSaveBooking(id);
+  };
+})();
 function customerVisitHistory(name){
   const n=normalizeName(name);
   return db.bookings.filter(x=>normalizeName(x.customer)===n).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
